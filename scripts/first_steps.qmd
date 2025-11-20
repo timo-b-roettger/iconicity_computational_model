@@ -1,0 +1,236 @@
+---
+title: "first_steps"
+format: html
+editor: visual
+---
+
+# Communication Game Simulation
+
+## Set up
+
+```{r}
+
+# libraries
+library(dplyr)
+library(ggplot2)
+
+# seed
+# set.seed(123)
+
+```
+
+## Parameters
+
+```{r}
+
+# general parameters
+n_referents <- 10
+n_small <- 5
+n_large <- 5
+n_rounds <- 2000
+drift_sd <- 0.05
+learn_rate <- 0.01
+
+# referent properties
+referents <- tibble(
+  id = 1:n_referents,
+  type = c(rep("small", n_small), rep("large", n_large))
+)
+
+# initial signals
+signals <- tibble(
+  id = referents$id,
+  x = rep(0.5, n_referents),
+  y = rep(0.5, n_referents)
+)
+
+# initial learning status of referents (after training)
+## each agent has initial probability ~ 0.5 ± noise (based on beta[2,2])
+agentA_guess <- rbeta(n_referents, 2, 2)
+agentB_guess <- rbeta(n_referents, 2, 2)
+```
+
+## Functions
+
+```{r}
+
+# distance-based ease function
+## small referents easier near [0,0]
+## large referents easier near [1,1]
+## currently distance measures range from 0.014 (max distance), to 1 (min distance)
+### NOTE: Discuss and justify distance function (maybe euclidean)
+signal_ease <- function(sig, type) {
+  target <- if (type == "small") c(0, 0) else c(1, 1)
+  dist <- sqrt((sig[1] - target[1])^2 + (sig[2] - target[2])^2)
+  ease <- exp(-3 * dist)   # sharp drop with distance
+  ease
+}
+
+
+# interpretation probability
+## final guess probability = previous guessing rate + signal fit (iconicity bias)
+guess_probability <- function(agent_guess, signal_xy, ref_type) {
+  ease <- signal_ease(signal_xy, ref_type)
+
+  ## learned ability plus signal ease, capped at 1
+  ## ease is reduced by a factor of 0.2 which represents the strength of iconicity affecting guessing
+  p <- agent_guess + 0.2 * ease
+  p[p > 1] <- 1. ## NOTE: really sloppy and should probably use a function that operates with logits or something
+  p
+}
+
+
+# drift function
+## adds gaussian drift to the signal 
+apply_drift <- function(sig) {
+  sig + rnorm(2, 0, drift_sd)
+}
+
+```
+
+## Main interaction loop
+
+```{r}
+
+# set up tibble to populate
+history <- tibble(
+  t = integer(n_rounds),
+  speaker = character(n_rounds),
+  listener = character(n_rounds),
+  referent = integer(n_rounds),
+  type = character(n_rounds),
+  success = integer(n_rounds),
+  p_correct = numeric(n_rounds),
+  signal_x = numeric(n_rounds),
+  signal_y = numeric(n_rounds)
+  )
+
+
+# main for loop
+for (t in 1:n_rounds) {
+
+  ## speakers/listeners are taking turn
+  if (t %% 2 == 1) {
+    speaker <- "A"
+    listener <- "B"
+    speaker_guess <- agentA_guess
+    listener_guess <- agentB_guess
+  } else {
+    speaker <- "B"
+    listener <- "A"
+    speaker_guess <- agentB_guess
+    listener_guess <- agentA_guess
+  }
+
+  # randomly pick one referent
+  r <- sample(1:n_referents, 1)
+  r_type <- referents$type[r]
+
+  # retrieve its signal
+  sig <- signals %>% filter(id == r) %>% select(x, y) %>% as.numeric()
+
+  # listener computes probability of correct guess
+  p_correct <- guess_probability(listener_guess[r], sig, r_type)
+
+  # actual outcome
+  success <- rbinom(1, 1, p_correct)
+
+  # learning: speaker improves signal association
+  speaker_guess[r] <- speaker_guess[r] + learn_rate
+  #if (speaker_guess[r] > 0.5) speaker_guess[r] <- 0.5  # cap learned component
+
+  # listener also learns
+  if (success == 1) {
+    listener_guess[r] <- listener_guess[r] + learn_rate
+    #if (listener_guess[r] > 0.5) listener_guess[r] <- 0.5
+  }
+  ## NOTE: have to think of the relationship between learning rate, producing the pair vs. hearing the pair, and successful vs. unsuccessful guessing. 
+
+  # if the guess was successful, the signal does not need to change
+  # if the guess was unsuccessful, the signal drifts
+  if (success == 0) {
+    new_sig <- apply_drift(sig)
+    signals$x[r] <- new_sig[1]
+    signals$y[r] <- new_sig[2]
+  }
+
+  # update guessing probability based on learning
+  if (speaker == "A") {
+    agentA_guess <- speaker_guess
+    agentB_guess <- listener_guess
+  } else {
+    agentB_guess <- speaker_guess
+    agentA_guess <- listener_guess
+  }
+
+  # log trials
+  history$t[t] <- as.integer(t)
+  history$speaker[t] <- as.character(speaker)
+  history$listener[t] <- as.character(listener)
+  history$referent[t] <- as.integer(r)
+  history$type[t] <- as.character(r_type)
+  history$success[t] <- as.integer(success)
+  history$p_correct[t] <- as.numeric(p_correct)
+  history$signal_x[t] <- as.numeric(signals$x[r])
+  history$signal_y[t] <- as.numeric(signals$y[r])
+}
+```
+
+## Plot results
+
+```{r}
+
+# Success rate over time
+ggplot(history, aes(t, success)) +
+  geom_point(alpha = 0.01) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = TRUE) +
+  labs(title = "Success Rate Over Time", y = "Success", x = "Round") +
+  theme_minimal()
+
+# Signal space 
+ggplot(history, aes(signal_x, signal_y, color = type)) +
+  geom_point(alpha = 0.2) +
+  labs(title = "Evolution of Signal Space", x = "x", y = "y") +
+  scale_x_continuous(limits = c(0,1)) + 
+  scale_y_continuous(limits = c(0,1)) + 
+  theme_minimal()
+
+# Signal space t=1 vs. t=2000
+history |> 
+  mutate(bins = cut(t, breaks = 100, labels = FALSE)) |> 
+  filter(bins %in% c(1,100)) |> 
+  group_by(bins, referent, type) |> 
+  summarise(signal_x = mean(signal_x),
+            signal_y = mean(signal_y)) |> 
+  ggplot(aes(signal_x, signal_y, color = as.ordered(bins), shape = type)) +
+    geom_point(size = 3, alpha = 1) +
+    geom_hline(yintercept = 0.5, lty = "dashed", alpha = 0.2) +
+    geom_vline(xintercept = 0.5, lty = "dashed", alpha = 0.2) +
+    labs(title = "Evolution of Signal Space", x = "x", y = "y") +
+    facet_grid(type~.) +
+    scale_x_continuous(limits = c(0,1)) + 
+    scale_y_continuous(limits = c(0,1)) + 
+    theme_minimal()
+
+
+# Signal over time
+history |> 
+  mutate(bins = cut(t, breaks = 5, labels = FALSE)) |> 
+  group_by(bins, referent, type) |> 
+  summarise(signal_x = mean(signal_x),
+            signal_y = mean(signal_y)) |> 
+  ggplot(aes(signal_x, signal_y, color = as.ordered(bins), shape = type)) +
+    geom_path(aes(group = referent),
+            size = 3,
+            lineend = "round",
+            linejoin = "round")  +
+    #geom_point(alpha = 1) +
+    geom_hline(yintercept = 0.5, lty = "dashed", alpha = 0.2) +
+    geom_vline(xintercept = 0.5, lty = "dashed", alpha = 0.2) +
+    labs(title = "Evolution of Signal Space", x = "x", y = "y") +
+    facet_grid(type~.) +
+    scale_x_continuous(limits = c(0,1)) + 
+    scale_y_continuous(limits = c(0,1)) + 
+    theme_minimal()
+
+```
