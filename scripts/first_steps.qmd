@@ -31,8 +31,8 @@ n_small <- 5
 n_large <- 5
 n_rounds <- 2000
 drift_sd <- 0.1
-learn_rate <- 0.01
-iconicity_boost <- 0.5 # multiplicator for distance to iconic prototypes
+learn_rate <- 0.005
+iconicity_boost <- 2 # multiplicator for distance to iconic prototypes
 
 # referent properties
 referents <- tibble(
@@ -73,16 +73,15 @@ signal_ease <- function(sig, type) {
   ease
 }
 
-
 # interpretation probability
 ## final guess probability = previous guessing rate + signal fit (iconicity bias)
 guess_probability <- function(agent_guess, signal_xy, ref_type) {
   ease <- signal_ease(signal_xy, ref_type)
 
   ## learned ability plus signal ease, capped at 1
-  ## ease is reduced by a factor of 0.2 which represents the strength of iconicity affecting guessing
+  ## ease is reduced by a factor of iconicity_boost which represents the strength of iconicity affecting guessing
   p <- agent_guess + iconicity_boost * ease
-  p[p > 1] <- 1. ## NOTE: really sloppy and should probably use a function that operates with logits or something
+  p[p > 0.95] <- 0.95 ## NOTE: really sloppy and should probably use a function that operates with logits or something, but this keeps a lapse rate of 5% atm
   p
 }
 
@@ -90,7 +89,7 @@ guess_probability <- function(agent_guess, signal_xy, ref_type) {
 # drift function
 ## adds gaussian drift to the signal 
 apply_drift <- function(sig) {
-  pmin(sig + rnorm(2, 0, drift_sd),1)
+  pmax(pmin(sig + rnorm(2, 0, drift_sd), 1),0)
   #pmin(sig, 1)
 }
 
@@ -237,41 +236,41 @@ ggplot(iconicity, aes(x = bins,
   scale_y_continuous(limits = c(0,1),
                      breaks = c(0,0.25,0.5,0.75,1)) + 
   labs(title = "Iconicity Over Time", 
-       y = "Iconicity", 
+       y = "Iconicity (low = iconic, high = anti-iconic)", 
        x = "Rounds in 100s") +
   #scale_y_continuous(limits = c(0,1)) + 
   theme_minimal()
 
 
 # Signal over time
-# history |> 
-#   mutate(bins = cut(t, breaks = c(1,100,200,500,1000,2000), labels = FALSE)) |> 
-#   group_by(bins, referent, type) |> 
-#   summarise(signal_x = mean(signal_x),
-#             signal_y = mean(signal_y)) |> 
-#   ggplot(aes(signal_x, 
-#              signal_y, 
-#              color = as.ordered(bins), 
-#              group = referent)) +
-#     #geom_arrow() +
-#     geom_path(lineend = "round",
-#               size = 2) +
-#     #geom_point(alpha = 1) +
-#     geom_hline(yintercept = 0.5, 
-#                lty = "dashed", 
-#                alpha = 0.2) +
-#     geom_vline(xintercept = 0.5, 
-#                lty = "dashed", 
-#                alpha = 0.2) +
-#     facet_wrap(~type, ncol = 2) +
-#     labs(title = "Evolution of Signal Space", 
-#          x = "x", 
-#          y = "y",
-#          colour = "interaction round") +
-#     scale_colour_discrete(labels = c(1,100,200,500,1000,2000),
-#                           palette = "viridis") +
-#     scale_x_continuous(limits = c(0,1)) + 
-#     ylim(0,1) +
-#     theme_minimal()
+history |>
+  mutate(bins = cut(t, breaks = c(1,100,200,500,1000,2000), labels = FALSE)) |>
+  group_by(bins, type) |>
+  summarise(signal_x = mean(signal_x),
+            signal_y = mean(signal_y)) |>
+  ggplot(aes(signal_x,
+             signal_y,
+             color = as.ordered(bins),
+             group = type)) +
+    #geom_arrow() +
+    geom_path(lineend = "round",
+              size = 2) +
+    #geom_point(alpha = 1) +
+    geom_hline(yintercept = 0.5,
+               lty = "dashed",
+               alpha = 0.2) +
+    geom_vline(xintercept = 0.5,
+               lty = "dashed",
+               alpha = 0.2) +
+    facet_wrap(~type, ncol = 2) +
+    labs(title = "Evolution of Signal Space",
+         x = "x",
+         y = "y",
+         colour = "interaction round") +
+    scale_colour_discrete(labels = c(1,100,200,500,1000,2000),
+                          palette = "viridis") +
+    scale_x_continuous(limits = c(0,1)) +
+    ylim(0,1) +
+    theme_minimal()
 
 ```
