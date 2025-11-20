@@ -1,5 +1,5 @@
 ---
-title: "first_steps"
+title: "computational model for reference game"
 format: html
 editor: visual
 ---
@@ -13,6 +13,8 @@ editor: visual
 # libraries
 library(dplyr)
 library(ggplot2)
+#devtools::install_github("teunbrand/ggarrow")
+library(ggarrow)
 
 # seed
 # set.seed(123)
@@ -28,8 +30,9 @@ n_referents <- 10
 n_small <- 5
 n_large <- 5
 n_rounds <- 2000
-drift_sd <- 0.05
+drift_sd <- 0.1
 learn_rate <- 0.01
+iconicity_boost <- 0.5 # multiplicator for distance to iconic prototypes
 
 # referent properties
 referents <- tibble(
@@ -46,8 +49,12 @@ signals <- tibble(
 
 # initial learning status of referents (after training)
 ## each agent has initial probability ~ 0.5 ± noise (based on beta[2,2])
-agentA_guess <- rbeta(n_referents, 2, 2)
-agentB_guess <- rbeta(n_referents, 2, 2)
+agentA_guess <- rbeta(n_referents, 2, 4)
+agentB_guess <- rbeta(n_referents, 2, 4)
+
+# alternatives: 0.4  = (2,3)
+# alternatives: 0.33 = (2,4)
+
 ```
 
 ## Functions
@@ -74,7 +81,7 @@ guess_probability <- function(agent_guess, signal_xy, ref_type) {
 
   ## learned ability plus signal ease, capped at 1
   ## ease is reduced by a factor of 0.2 which represents the strength of iconicity affecting guessing
-  p <- agent_guess + 0.2 * ease
+  p <- agent_guess + iconicity_boost * ease
   p[p > 1] <- 1. ## NOTE: really sloppy and should probably use a function that operates with logits or something
   p
 }
@@ -83,7 +90,8 @@ guess_probability <- function(agent_guess, signal_xy, ref_type) {
 # drift function
 ## adds gaussian drift to the signal 
 apply_drift <- function(sig) {
-  sig + rnorm(2, 0, drift_sd)
+  pmin(sig + rnorm(2, 0, drift_sd),1)
+  #pmin(sig, 1)
 }
 
 ```
@@ -182,12 +190,16 @@ for (t in 1:n_rounds) {
 
 # Success rate over time
 ggplot(history, aes(t, success)) +
-  geom_point(alpha = 0.01) +
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = TRUE) +
-  labs(title = "Success Rate Over Time", y = "Success", x = "Round") +
+  geom_smooth(method = "glm", 
+              method.args = list(family = "binomial"), 
+              se = TRUE) +
+  labs(title = "Success Rate Over Time", 
+       y = "Success", 
+       x = "Round") +
+  scale_y_continuous(limits = c(0,1)) + 
   theme_minimal()
 
-# Signal space 
+# Signal space use
 ggplot(history, aes(signal_x, signal_y, color = type)) +
   geom_point(alpha = 0.2) +
   labs(title = "Evolution of Signal Space", x = "x", y = "y") +
@@ -195,42 +207,71 @@ ggplot(history, aes(signal_x, signal_y, color = type)) +
   scale_y_continuous(limits = c(0,1)) + 
   theme_minimal()
 
-# Signal space t=1 vs. t=2000
-history |> 
-  mutate(bins = cut(t, breaks = 100, labels = FALSE)) |> 
-  filter(bins %in% c(1,100)) |> 
-  group_by(bins, referent, type) |> 
+# Calculate distance across bins
+iconicity <- history |> 
+  mutate(bins = cut(t, breaks = 20, labels = FALSE)) |> 
+  group_by(type, referent, bins) |> 
   summarise(signal_x = mean(signal_x),
             signal_y = mean(signal_y)) |> 
-  ggplot(aes(signal_x, signal_y, color = as.ordered(bins), shape = type)) +
-    geom_point(size = 3, alpha = 1) +
-    geom_hline(yintercept = 0.5, lty = "dashed", alpha = 0.2) +
-    geom_vline(xintercept = 0.5, lty = "dashed", alpha = 0.2) +
-    labs(title = "Evolution of Signal Space", x = "x", y = "y") +
-    facet_grid(type~.) +
-    scale_x_continuous(limits = c(0,1)) + 
-    scale_y_continuous(limits = c(0,1)) + 
-    theme_minimal()
+  mutate(iconicity = ifelse(type == "small",
+                            sqrt((signal_x - 0)^2 + (signal_y - 0)^2),
+                            sqrt((signal_x - 1)^2 + (signal_y - 1)^2)),
+         iconicity_prop = iconicity / 1.414214)
+
+iconicity_agg <- iconicity |> 
+  group_by(type, bins) |> 
+  summarise(iconicity_prop = mean(iconicity_prop))
+
+# Iconicity over time
+ggplot(iconicity, aes(x = bins, 
+                      y = iconicity_prop,
+                      group = referent,
+                      color = type)) +
+  geom_path(size = 1, alpha = 0.2) +
+  geom_path(data = iconicity_agg,
+            aes(group = type),
+            size = 2) +
+  #facet_wrap(~referent) +
+  geom_hline(yintercept = 0.5, 
+               lty = "dashed") +
+  scale_y_continuous(limits = c(0,1),
+                     breaks = c(0,0.25,0.5,0.75,1)) + 
+  labs(title = "Iconicity Over Time", 
+       y = "Iconicity", 
+       x = "Rounds in 100s") +
+  #scale_y_continuous(limits = c(0,1)) + 
+  theme_minimal()
 
 
 # Signal over time
-history |> 
-  mutate(bins = cut(t, breaks = 5, labels = FALSE)) |> 
-  group_by(bins, referent, type) |> 
-  summarise(signal_x = mean(signal_x),
-            signal_y = mean(signal_y)) |> 
-  ggplot(aes(signal_x, signal_y, color = as.ordered(bins), shape = type)) +
-    geom_path(aes(group = referent),
-            size = 3,
-            lineend = "round",
-            linejoin = "round")  +
-    #geom_point(alpha = 1) +
-    geom_hline(yintercept = 0.5, lty = "dashed", alpha = 0.2) +
-    geom_vline(xintercept = 0.5, lty = "dashed", alpha = 0.2) +
-    labs(title = "Evolution of Signal Space", x = "x", y = "y") +
-    facet_grid(type~.) +
-    scale_x_continuous(limits = c(0,1)) + 
-    scale_y_continuous(limits = c(0,1)) + 
-    theme_minimal()
+# history |> 
+#   mutate(bins = cut(t, breaks = c(1,100,200,500,1000,2000), labels = FALSE)) |> 
+#   group_by(bins, referent, type) |> 
+#   summarise(signal_x = mean(signal_x),
+#             signal_y = mean(signal_y)) |> 
+#   ggplot(aes(signal_x, 
+#              signal_y, 
+#              color = as.ordered(bins), 
+#              group = referent)) +
+#     #geom_arrow() +
+#     geom_path(lineend = "round",
+#               size = 2) +
+#     #geom_point(alpha = 1) +
+#     geom_hline(yintercept = 0.5, 
+#                lty = "dashed", 
+#                alpha = 0.2) +
+#     geom_vline(xintercept = 0.5, 
+#                lty = "dashed", 
+#                alpha = 0.2) +
+#     facet_wrap(~type, ncol = 2) +
+#     labs(title = "Evolution of Signal Space", 
+#          x = "x", 
+#          y = "y",
+#          colour = "interaction round") +
+#     scale_colour_discrete(labels = c(1,100,200,500,1000,2000),
+#                           palette = "viridis") +
+#     scale_x_continuous(limits = c(0,1)) + 
+#     ylim(0,1) +
+#     theme_minimal()
 
 ```
