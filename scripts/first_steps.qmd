@@ -11,10 +11,8 @@ editor: visual
 ```{r}
 
 # libraries
-library(dplyr)
+library(tidyverse)
 library(ggplot2)
-#devtools::install_github("teunbrand/ggarrow")
-library(ggarrow)
 
 # seed
 # set.seed(123)
@@ -26,34 +24,20 @@ library(ggarrow)
 ```{r}
 
 # general parameters
-n_referents <- 10
-n_small <- 5
-n_large <- 5
-n_rounds <- 2000
-drift_sd <- 0.1
-learn_rate <- 0.005
-iconicity_boost <- 2 # multiplicator for distance to iconic prototypes
+n_sim <- 10 # number of simulations
+n_referents <- 10 # number of unique referents in guessing game
+n_small <- 5 # number of small referents
+n_large <- 5 # number of large referents
+n_rounds <- 2000 # number of interaction rounds
+drift_sd <- 0.1 # amount of variation introduced during production
+learn_rate <- 0.005 # amount of added memory strengthening for words per round
+iconicity_boost <- 1 # multiplicator for distance to iconic prototypes
 
 # referent properties
 referents <- tibble(
   id = 1:n_referents,
   type = c(rep("small", n_small), rep("large", n_large))
-)
-
-# initial signals
-signals <- tibble(
-  id = referents$id,
-  x = rep(0.5, n_referents),
-  y = rep(0.5, n_referents)
-)
-
-# initial learning status of referents (after training)
-## each agent has initial probability ~ 0.5 ± noise (based on beta[2,2])
-agentA_guess <- rbeta(n_referents, 2, 4)
-agentB_guess <- rbeta(n_referents, 2, 4)
-
-# alternatives: 0.4  = (2,3)
-# alternatives: 0.33 = (2,4)
+) 
 
 ```
 
@@ -69,28 +53,47 @@ agentB_guess <- rbeta(n_referents, 2, 4)
 signal_ease <- function(sig, type) {
   target <- if (type == "small") c(0, 0) else c(1, 1)
   dist <- sqrt((sig[1] - target[1])^2 + (sig[2] - target[2])^2)
-  ease <- exp(-3 * dist)   # sharp drop with distance
+  ease <- exp(-2 * dist)   # the -2 value controls the sharpness of the drop with distance
   ease
 }
+
+# explore result of this function
+# grid <- expand.grid(
+#   x = seq(0, 1, length.out = 50),
+#   y = seq(0, 1, length.out = 50),
+#   type = c("small", "large")
+# )
+# 
+# # make heat map
+# grid <- grid %>%
+#   rowwise() %>%
+#   mutate(ease = signal_ease(c(x, y), type)) %>%
+#   ungroup() 
+#   
+# ggplot(grid,
+#        aes(x = x, y = y, fill = ease)) +
+#   geom_tile() +
+#   facet_wrap(.~type) +
+#   scale_fill_continuous(palette = "viridis")
+
 
 # interpretation probability
 ## final guess probability = previous guessing rate + signal fit (iconicity bias)
 guess_probability <- function(agent_guess, signal_xy, ref_type) {
   ease <- signal_ease(signal_xy, ref_type)
 
-  ## learned ability plus signal ease, capped at 1
-  ## ease is reduced by a factor of iconicity_boost which represents the strength of iconicity affecting guessing
+  # learned ability plus signal ease, capped at 1
+  ## the added learning boost of ease is reduced by a factor of iconicity_boost which represents the strength of iconicity affecting guessing
   p <- agent_guess + iconicity_boost * ease
   p[p > 0.95] <- 0.95 ## NOTE: really sloppy and should probably use a function that operates with logits or something, but this keeps a lapse rate of 5% atm
   p
 }
 
-
 # drift function
 ## adds gaussian drift to the signal 
 apply_drift <- function(sig) {
+  # pmax and pmin cap it to 0 and 1
   pmax(pmin(sig + rnorm(2, 0, drift_sd), 1),0)
-  #pmin(sig, 1)
 }
 
 ```
@@ -100,20 +103,53 @@ apply_drift <- function(sig) {
 ```{r}
 
 # set up tibble to populate
-history <- tibble(
-  t = integer(n_rounds),
-  speaker = character(n_rounds),
-  listener = character(n_rounds),
-  referent = integer(n_rounds),
-  type = character(n_rounds),
-  success = integer(n_rounds),
-  p_correct = numeric(n_rounds),
-  signal_x = numeric(n_rounds),
-  signal_y = numeric(n_rounds)
-  )
+# history <- tibble(
+#   n = integer(n_sim),
+#   t = integer(n_rounds),
+#   speaker = character(n_rounds),
+#   listener = character(n_rounds),
+#   referent = integer(n_rounds),
+#   type = character(n_rounds),
+#   success = integer(n_rounds),
+#   p_correct = numeric(n_rounds),
+#   signal_x = numeric(n_rounds),
+#   signal_y = numeric(n_rounds)
+#   )
 
+history <- data.frame(
+  round     = integer(),
+  trial     = integer(),
+  referent  = integer(),
+  speaker   = character(),
+  listener  = character(),
+  type      = character(),
+  p_correct = numeric(),
+  success   = numeric(),
+  signal_x  = numeric(),
+  signal_y  = numeric(),
+  stringsAsFactors = FALSE
+)
 
-# main for loop
+# main for loop over interactions
+for (n in 1:n_sim) {
+  
+# initial signals
+signals <- tibble(
+  id = referents$id,
+  x = rep(0.5, n_referents),
+  y = rep(0.5, n_referents)
+)
+
+# initial learning status of referents (after training)
+## each agent has initial probability ~ 0.3 ± noise
+agentA_guess <- rbeta(n_referents, 2, 4)
+agentB_guess <- rbeta(n_referents, 2, 4)
+
+# alternatives: 0.5  = (2,2)
+# alternatives: 0.4  = (2,3)
+# alternatives: 0.33 = (2,4)
+
+# main for loop within interaction
 for (t in 1:n_rounds) {
 
   ## speakers/listeners are taking turn
@@ -171,106 +207,118 @@ for (t in 1:n_rounds) {
   }
 
   # log trials
-  history$t[t] <- as.integer(t)
-  history$speaker[t] <- as.character(speaker)
-  history$listener[t] <- as.character(listener)
-  history$referent[t] <- as.integer(r)
-  history$type[t] <- as.character(r_type)
-  history$success[t] <- as.integer(success)
-  history$p_correct[t] <- as.numeric(p_correct)
-  history$signal_x[t] <- as.numeric(signals$x[r])
-  history$signal_y[t] <- as.numeric(signals$y[r])
-}
+  # history$n[n] <- as.integer(n)
+  # history$t[t] <- as.integer(t)
+  # history$speaker[t] <- as.character(speaker)
+  # history$listener[t] <- as.character(listener)
+  # history$referent[t] <- as.integer(r)
+  # history$type[t] <- as.character(r_type)
+  # history$success[t] <- as.integer(success)
+  # history$p_correct[t] <- as.numeric(p_correct)
+  # history$signal_x[t] <- as.numeric(signals$x[r])
+  # history$signal_y[t] <- as.numeric(signals$y[r])
+  # history$ease[t] <- as.numeric(ease)
+  history <- rbind(
+      history,
+      data.frame(
+        sim      = n,
+        round    = t,
+        referent = r,
+        speaker  = speaker,
+        listener = listener,
+        type     = r_type,
+        p_correct = p_correct,
+        success  = success,
+        signal_x = signals$x[r],
+        signal_y = signals$y[r]
+      )
+  )
+  
+} # end of n_rounds loop
+
+} # end of nsim loop  
+  
 ```
 
 ## Plot results
 
 ```{r}
 
+# Aggregate
+accuracy_all <- history |> 
+  group_by(round) |> 
+  summarise(success = mean(success))
+
+accuracy <- history |> 
+  group_by(sim, round) |> 
+  summarise(success = mean(success))
+
 # Success rate over time
-ggplot(history, aes(t, success)) +
+ggplot(accuracy, aes(round, success)) +
   geom_smooth(method = "glm", 
               method.args = list(family = "binomial"), 
               se = TRUE) +
   labs(title = "Success Rate Over Time", 
        y = "Success", 
        x = "Round") +
+  facet_wrap(. ~ sim) +
   scale_y_continuous(limits = c(0,1)) + 
   theme_minimal()
+
+```
+
+```{r}
 
 # Signal space use
 ggplot(history, aes(signal_x, signal_y, color = type)) +
   geom_point(alpha = 0.2) +
   labs(title = "Evolution of Signal Space", x = "x", y = "y") +
+  facet_wrap(. ~ sim) +
   scale_x_continuous(limits = c(0,1)) + 
   scale_y_continuous(limits = c(0,1)) + 
+  scale_fill_continuous(palette = "viridis") +
   theme_minimal()
 
-# Calculate distance across bins
+```
+
+```{r}
+
+# Calculate iconicity across bins
 iconicity <- history |> 
-  mutate(bins = cut(t, breaks = 20, labels = FALSE)) |> 
-  group_by(type, referent, bins) |> 
+  mutate(bins = cut(round, breaks = 20, labels = FALSE)) |> 
+  group_by(bins, type, sim) |> 
   summarise(signal_x = mean(signal_x),
-            signal_y = mean(signal_y)) |> 
-  mutate(iconicity = ifelse(type == "small",
-                            sqrt((signal_x - 0)^2 + (signal_y - 0)^2),
-                            sqrt((signal_x - 1)^2 + (signal_y - 1)^2)),
-         iconicity_prop = iconicity / 1.414214)
+            signal_y = mean(signal_y)) 
+
+iconicity <- iconicity |> 
+  mutate(target_x = ifelse(type == "small", 0, 1),
+         target_y = ifelse(type == "small", 0, 1),
+         dist = sqrt((signal_x - target_x)^2 + (signal_y - target_y)^2),
+         iconicity = exp(-2*dist)) |> 
+  group_by(bins, sim) |> 
+  summarise(iconicity = mean(iconicity)) 
 
 iconicity_agg <- iconicity |> 
-  group_by(type, bins) |> 
-  summarise(iconicity_prop = mean(iconicity_prop))
+  group_by(bins) |> 
+  summarise(iconicity = mean(iconicity)) 
 
 # Iconicity over time
 ggplot(iconicity, aes(x = bins, 
-                      y = iconicity_prop,
-                      group = referent,
-                      color = type)) +
+                      y = iconicity,
+                      group = sim)) +
   geom_path(size = 1, alpha = 0.2) +
   geom_path(data = iconicity_agg,
-            aes(group = type),
+            aes(group = 1),
             size = 2) +
-  #facet_wrap(~referent) +
-  geom_hline(yintercept = 0.5, 
+  # starting point with signal = [0.5,0.5]
+  geom_hline(yintercept = 0.2431167, 
                lty = "dashed") +
   scale_y_continuous(limits = c(0,1),
                      breaks = c(0,0.25,0.5,0.75,1)) + 
   labs(title = "Iconicity Over Time", 
-       y = "Iconicity (low = iconic, high = anti-iconic)", 
+       y = "Iconicity (high = iconic, low = not iconic)", 
        x = "Rounds in 100s") +
   #scale_y_continuous(limits = c(0,1)) + 
   theme_minimal()
-
-
-# Signal over time
-history |>
-  mutate(bins = cut(t, breaks = c(1,100,200,500,1000,2000), labels = FALSE)) |>
-  group_by(bins, type) |>
-  summarise(signal_x = mean(signal_x),
-            signal_y = mean(signal_y)) |>
-  ggplot(aes(signal_x,
-             signal_y,
-             color = as.ordered(bins),
-             group = type)) +
-    #geom_arrow() +
-    geom_path(lineend = "round",
-              size = 2) +
-    #geom_point(alpha = 1) +
-    geom_hline(yintercept = 0.5,
-               lty = "dashed",
-               alpha = 0.2) +
-    geom_vline(xintercept = 0.5,
-               lty = "dashed",
-               alpha = 0.2) +
-    facet_wrap(~type, ncol = 2) +
-    labs(title = "Evolution of Signal Space",
-         x = "x",
-         y = "y",
-         colour = "interaction round") +
-    scale_colour_discrete(labels = c(1,100,200,500,1000,2000),
-                          palette = "viridis") +
-    scale_x_continuous(limits = c(0,1)) +
-    ylim(0,1) +
-    theme_minimal()
 
 ```
