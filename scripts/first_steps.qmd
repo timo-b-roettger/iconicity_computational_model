@@ -188,7 +188,7 @@ for (t in 1:n_rounds) {
   # if the guess was successful, the signal does not need to change
   # if the guess was unsuccessful, the signal drifts
   if (success == 0) {
-    listener_guess[r] <- listener_guess[r] + learn_rate
+    #listener_guess[r] <- listener_guess[r] + learn_rate
     new_sig <- apply_drift(sig)
     signals$x[r] <- new_sig[1]
     signals$y[r] <- new_sig[2]
@@ -270,13 +270,13 @@ ggplot(history, aes(signal_x, signal_y, color = type)) +
 ```{r}
 
 # Calculate iconicity across bins
-iconicity <- history |> 
+hist_agg <- history |> 
   mutate(bins = cut(round, breaks = 20, labels = FALSE)) |> 
   group_by(bins, type, sim) |> 
   summarise(signal_x = mean(signal_x),
             signal_y = mean(signal_y)) 
 
-iconicity <- iconicity |> 
+iconicity <- hist_agg |> 
   mutate(target_x = ifelse(type == "small", 0, 1),
          target_y = ifelse(type == "small", 0, 1),
          dist = sqrt((signal_x - target_x)^2 + (signal_y - target_y)^2),
