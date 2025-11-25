@@ -28,7 +28,7 @@ n_sim <- 10 # number of simulations
 n_referents <- 6 # number of unique referents in guessing game
 n_small <- n_referents/2 # number of small referents
 n_large <- n_referents/2 # number of large referents
-n_rounds <- 2000 # number of interaction rounds
+n_rounds <- 1000 # number of interaction rounds
 drift_sd <- 0.05 # amount of variation introduced during production
 learn_rate <- 0.005 # amount of added memory strengthening for words per round
 iconicity_boost <- 0.2 # multiplicator for distance to iconic prototypes
@@ -53,28 +53,28 @@ referents <- tibble(
 signal_ease <- function(sig, type) {
   target <- if (type == "small") c(0, 0) else c(1, 1)
   dist <- sqrt((sig[1] - target[1])^2 + (sig[2] - target[2])^2)
-  ease <- exp(-2 * dist)   # the -2 value controls the sharpness of the drop with distance
+  ease <- exp(-1 * dist)   # the -2 value controls the sharpness of the drop with distance
   ease
 }
 
 # show heatmap of ease relative to signal space
-# grid <- expand.grid(
-#   x = seq(0, 1, length.out = 50),
-#   y = seq(0, 1, length.out = 50),
-#   type = c("small", "large")
-# )
-# 
-# # make heat map
-# grid <- grid %>%
-#   rowwise() %>%
-#   mutate(ease = signal_ease(c(x, y), type)) %>%
-#   ungroup() 
-#   
-# ggplot(grid,
-#        aes(x = x, y = y, fill = ease)) +
-#   geom_tile() +
-#   facet_wrap(.~type) +
-#   scale_fill_continuous(palette = "viridis")
+grid <- expand.grid(
+  x = seq(0, 1, length.out = 50),
+  y = seq(0, 1, length.out = 50),
+  type = c("small", "large")
+)
+
+# make heat map
+grid <- grid %>%
+  rowwise() %>%
+  mutate(ease = signal_ease(c(x, y), type)) %>%
+  ungroup()
+
+ggplot(grid,
+       aes(x = x, y = y, fill = ease)) +
+  geom_tile() +
+  facet_wrap(. ~type) +
+  scale_fill_continuous(palette = "viridis")
 
 
 # interpretation probability
