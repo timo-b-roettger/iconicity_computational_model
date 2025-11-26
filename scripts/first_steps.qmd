@@ -74,7 +74,7 @@ ggplot(grid,
        aes(x = x, y = y, fill = ease)) +
   geom_tile() +
   facet_wrap(. ~type) +
-  scale_fill_continuous(palette = "viridis")
+  scale_fill_viridis_c()
 
 
 # interpretation probability
@@ -157,7 +157,7 @@ for (t in 1:n_rounds) {
   r_type <- referents$type[r]
 
   # retrieve its signal: 
-  ## either just pick the signal from last round (perfect memmory of signal)
+  ## either just pick the signal from last round (perfect memory of signal)
   #sig <- signals %>% filter(id == r) %>% select(x, y) %>% as.numeric()
   ## alternatively: retrieve it's previous signal if memory strength good enough
   if (speaker_guess[r] > 0.5) {
@@ -262,7 +262,7 @@ ggplot(history, aes(signal_x, signal_y, color = type)) +
   facet_wrap(. ~ sim) +
   scale_x_continuous(limits = c(0,1)) + 
   scale_y_continuous(limits = c(0,1)) + 
-  scale_fill_continuous(palette = "viridis") +
+  scale_color_viridis_d(begin = 0.1, end = 0.9) +
   theme_minimal()
 
 ```

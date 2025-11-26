@@ -42,6 +42,7 @@ library(ggplot2)
   * How does iconicity play out in production/perception c.f. learning of f-m pairs?
 * Signal drift: in a model that includes acoustics, is drift equal for all cues? Is it a ratio of the category variance or merely random gaussian noise?
 * Transform guessing probability into log-odds (and then back-transform to probability space)
+* The cap = .95 should be in logits
 
 ```{r functions, include=FALSE}
 
@@ -94,15 +95,20 @@ The emergence of iconicity is formalized as a learnability bias that favors sign
 Some signals are easier to learn/guess depending on their spatial proximity to iconic prototypes.
 Prototype small = c(0,0), large = c(1,1); as defined in a contained space.
 
-### Signal ease
-Smaller referents closer to their prototype (=c(0,0)) are easier to guess, and vice versa. Signal ease is an attractor that expresses distance to iconicity target/prototype, multiplied with iconicity boost to adjust for larger influence of iconicity.
+### Distance-based signal ease
+Small referents closer to their prototype, [0,0], are easier to guess, and large referents are easier to guess near [1,1]. Distance drop off sharply (exponentially) when moving away from targets. Signal ease is an attractor that expresses distance to iconicity target/prototype, multiplied with iconicity boost to adjust for larger influence of iconicity. The distance metric is Euclidean distance <!--Consider other distances?-->
 
 ### Probability of correct guess
-p(correct guess) = listener memory + signal, type --> learned ability (priors) + iconicity boost * signal ease
+p(correct guess) = previous guessing rate + signal fit (incl. iconicity bias) --> learned ability (priors) + iconicity boost * signal ease. The added learning boost of ease is reduced by a factor 'iconicity_boost' which represents the strength of iconicity affecting guessing. This is a constant that can be changed by the researcher to account for the strength of iconicity.
 Bounded at .95 to account for .05 noise/lapse. Implemented as drawing from a random beta distribution.
+The initial learning state of the learner (after training) is summarized to an averaged probability of ~.33. These are established by drawing n random values from a beta distribution with a mu=.333 and sigma=.032.
+
+### Learning
+Learning rate = .005. This is added to the listener guess at each round. If guess is correct (as sampled from a binomial distribution), the same rate is added to the listener guess again.
 
 ### Signal drift
-If communication fails, signal drifts randomly by adding 2D Gaussian noise.
+If communication fails, signal drifts randomly by adding 2D Gaussian noise. This is sampled from a distribution with mu=0, sigma=.05 (atm), and bounded to [0,1]. This simulates the amount of variation in production (currently, undirectional, meaning that it shifts the signal randomly in the space but stays relatively close to the original signal [.5,.5]; one might reasonably suppose that the signal might instead drift in some predefined direction).
+the signal drifts but is it repeated to the listener? Meaning, it will continuously be worse as a signal? <!--Don't get this entirely?-->
 
 ```{r}
 
