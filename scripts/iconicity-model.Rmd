@@ -1,0 +1,115 @@
+---
+title: "Anna's working draft for iconicity model"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  bookdown::html_document2: default
+  bookdown::pdf_document2: default
+bibliography: latex-stuff/iconicity_lit.bib
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+
+# Set knit defaults for code chunks
+opts_chunk$set(
+  dev = 'png', # default format of figures
+  comment="",
+  echo=FALSE, warning=TRUE, message=FALSE,
+  cache=FALSE)
+
+# some useful formatting functions for output of knitting
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+
+color_block = function(color) {
+  function(x, options) sprintf('\\color{%s}\\begin{verbatim}%s\\end{verbatim}\\color{black}',
+                               color, x)
+}
+knitr::knit_hooks$set(error = color_block('red'))
+knitr::knit_hooks$set(warning = color_block('orange'))
+```
+
+```{r libraries, include=FALSE}
+library(tidyverse)  # data wrangling and plotting
+library(ggplot2)
+```
+
+# TO DO
+* One general model for both interaction and generational overturn - what needs tweeking?
+  * How does iconicity play out in production/perception c.f. learning of f-m pairs?
+* Signal drift: in a model that includes acoustics, is drift equal for all cues? Is it a ratio of the category variance or merely random gaussian noise?
+* Transform guessing probability into log-odds (and then back-transform to probability space)
+
+```{r functions, include=FALSE}
+
+
+```
+
+# Modelling iconicity
+General principles to observe [@dona-schouwstra2024].
+For computational models simulating the emergence of iconicity across generations, parameters of interest across generations are population size, generational overturn; for modelling individual agent behavior, learning rate and innovation tendency. Iconicity can be represented on a system-level (as a property of the system, in relation to arbitrariness, systematicity and combinatoriality), or in form-meaning pairs. The vertical transmission across generations is implemented as iterated learning.
+For simulating the emergence of iconicity resulting from interactions within a population, agent based models are often used. Focus is to formalize cognitive processes and effects of population properties, size and social network structure. The horizontal transmission between agents is implemented in language games. The adaptive behavior of interlocutors supposedly takes place via some learning algorithm that can either be rule-based or sometimes modeled as a neural network.^[Models of neural networks have shown that adding an attention mechanism to the model, meant to simulate the cognitive enhancing of some parts of the input, makes the model learn faster with iconicity (syntax models).] In models of generational overturn, iconicity can be operationalized as a mapping between a set of culturally salient features and forms (formalized as sequences of n bits). The shared cultural context is represented by participants being in the same group (chain), and observations are made as to the specific patterns/features that emerges within group/chain. When interaction/identification is unsuccessful, the receiver gets one bit update on form of target concept. The mean degree of iconicity and lexical variation is calculated at each trial (between 0-1). Populations with more agents often display more lexical variability at earlier stages, but a steeper decrease in iconicity over time.
+
+Arbitrariness assumes that form-meaning pairs are unpredictable and lack inherent connection. This is often measured by confusability index, and can be affected by interaction and feedback (more arbitrariness leads to higher complexity)---a push from communicative interaction to become more efficient can lead to increased arbitrariness. Systematicity suggests that related meanings are expressed with forms that share elements, as measures by internal consistency within participants and usuage of functional markers. Systematicity supposedly does not compete with iconicity but rather coexists. Combinatoriality, however, conflicts with iconicity in that it assumes building blocks with no meaning attached---languages consists of a limited inventory of sounds that can be combined in whatever format to represent meaning. While combinatoriality aids transmission efficiency, iconicity aids referential efficiency. 
+
+@dona-schouwstra2024 suggest that future studies should aim to characterize the formal properties of the co-existence of iconicity with systematicity and combinatoriality.
+
+## Experiment data
+* Lexical learning in an interaction game between Agent A and Agent B.
+* Prior to game play, both agents are trained on the form-meaning pairs up to a certain threshold.
+* Interaction round:
+  * agent A and agent B takes turns alternating roles of listener and speaker
+  * speaker gets a random referent (picture and consonant context) and produces a signal
+  * listener selects the perceived referent from a grid of 4 options
+  * each form-meaning pair is presented 3 times for each agent in each condition (speaking, listening)?
+  * on each trial, listeners receive feedback on their guess (negative or positive)---to do, add feedback to speaker as well
+
+## Model specification
+Formalized parameters of the model.
+
+### Lexical representation
+A combination of two vectors: one with category information, one with cue information---c(F1,F2) in the simplest case (could be expanded to include formant trajectories, duration, f0).
+
+### Categorization/recognition/learning
+Learning involves uncertainty---imperfect learning. Can be formalized as the input being pertubated by noise and participants lapsing. Here, noise is added to trials where interaction fails, formalized as signal drift.
+Uncertainty during learning is structured---lexical competition by attractors (already existing vowel categories in Norwegian). Open question how much weight attached to each attractor, and whether all existing categories are possible (cued by consonant context?). How are these attractors defined---what cue values are assigned to the prototypes?
+There is motor noise, neural noise, environmental noise for both production and perception of target representations. Production/perception noise is likely unstructured and slightly off the represented values of L (like gaussian noise).
+Ideally, noise, lapse and iconicity should be fit to the data when running the model?
+
+Learning of form-meaning pairs is formalized as guessing rate. Strength of guess rate is a function of previous learning/listener memory (priors), the characteristics of the signal and the referent type. Added to this is iconicity as learnability bias; e.g., if smaller referents are closer to their spatial prototype, their are easier to guess, and vice versa.
+
+At each round, guessing rate/probability of listener and speaker is updated based on learning. If internal guess strength > .5 (=correct), speaker retrieves signal for referent and the signal remains the same. If the guess < .5 (=incorrect), there is no recall and the draws a new signal near c(.5,.5) with noise. This is formalized as the signal drifting randomly. In either case, the guessing probability increases at each round, more so on correct than incorrect trials, but there is always learning.
+
+### Iconicity
+The emergence of iconicity is formalized as a learnability bias that favors signals that are more closely located to their target in a 2-dimensional space; some form-meaning pairs are thus easier to learn/guess depending on their spatial proximity to iconic prototypes. Prototypes are either small or large as defined in a contained space (yet not acoustic).
+
+```{r}
+```
+
+## Model implementation
+### Iconicity bias
+Some signals are easier to learn/guess depending on their spatial proximity to iconic prototypes.
+Prototype small = c(0,0), large = c(1,1); as defined in a contained space.
+
+### Signal ease
+Smaller referents closer to their prototype (=c(0,0)) are easier to guess, and vice versa. Signal ease is an attractor that expresses distance to iconicity target/prototype, multiplied with iconicity boost to adjust for larger influence of iconicity.
+
+### Probability of correct guess
+p(correct guess) = listener memory + signal, type --> learned ability (priors) + iconicity boost * signal ease
+Bounded at .95 to account for .05 noise/lapse. Implemented as drawing from a random beta distribution.
+
+### Signal drift
+If communication fails, signal drifts randomly by adding 2D Gaussian noise.
+
+```{r}
+
+```
+
+
+
+
+
+
