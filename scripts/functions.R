@@ -3,6 +3,15 @@
 
 # Functions ------------------------------------------------------------------
 ## Functions for iconicity simulation ----------------------------------------
+# Have this outside main function for plotting reasons
+prototype_point <- function(type) if (type == "small") c(0,0) else c(1,1)
+signal_ease <- function(sig, type) {
+  target <- prototype_point(type)
+  dist <- sqrt((sig[1] - target[1])^2 + (sig[2] - target[2])^2)
+  exp(-1 * dist)
+}
+
+# Main interaction loop function
 run_interaction_sim <- function(
   data,
   n_sim = 10, # number of simulations
@@ -16,7 +25,7 @@ run_interaction_sim <- function(
   prod_bias = 0.15, # baseline production bias toward prototype
   reinforcement_rate = 0.05, #how strongly stored signals move toward produced signal on success
   failure_step = 0.03, # how much stored signal moves toward prototype on failure
-  lapse = 0.05 # soft lapese in guess_probability
+  lapse = 0.05 # soft lapse in guess_probability
 ) {
 
   # assign input data frame to history internally
@@ -52,7 +61,7 @@ run_interaction_sim <- function(
     p_final
   }
   # produce a token (produced signal) given stored signal and speaker skill
-  # - speaker_skill in [0,1] can modulate how biased production is
+  # - speaker_skill in [0,1] can modulate how biased production is; speaker skill = the speaker's current probability of correctly identifying that referent
   produce_signal <- function(sig_prev, ref_type, speaker_skill) {
     target <- prototype_point(ref_type)
     # Example: less-skilled speakers produce more prototypical forms (you can flip this)
