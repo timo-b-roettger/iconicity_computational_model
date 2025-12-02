@@ -40,7 +40,6 @@ library(patchwork)  # combining plots
 
 # TO DO
 * One general model for both interaction and generational overturn - what needs tweeking?
-  * How does iconicity play out in production/perception c.f. learning of f-m pairs?
 * Signal drift: in a model that includes acoustics, is drift equal for all cues? Is it a ratio of the category variance or merely random gaussian noise?
 
 ```{r functions, include=FALSE}
@@ -117,17 +116,17 @@ It is conceivable that learnability bias is not enough for iconicity to emerge. 
   * signal update: currently, the only dynamic shaping force on the signal is random Gaussian noise when communication fails. This means that there is no directional pressure pushing small signals to move towards [0,0] or large signals to move towards [1,1], i.e., no push of signals towards the iconic target (no directional evolution). This is also true for speakers: when the speaker is confident, the signal is copied exactly, meaning there is no refinement of the signal; when the speaker is unsure, the signal drifts. So there is no production bias towards more iconic signals.
   * learning update: the guess probabilities improve over time while signal drift decreases (no drift on correct trials), this means that the signal tends to freeze near its initial state [.5,.5].
   * the iconicity bias: iconicity is implemented through the ease function which improves listeners' probability of correct guesses, but it does not affect the likelihood of the speaker producing good-guess signals.
-  
+
 Possible changes:
   * add a production bias toward iconic prototypes, e.g., when selecting a signal, sample with mean shifted toward [0,0] or [1,1]: this will affect signal generation becoming more iconic over time
   * make failed signals adjust toward the prototype, not random drift: this affects signal correction on failure (i.e., a more subtle source of bias)
   * add cultural selection bias where successful signals get reinforced: this affects memory update
 
-Production bias: implemented as a bias towards prototype in production as dependent on the speaker's current probability of correctly identifying the target. When speakers are more skilled, the bias is smaller and a signal closer to stored value is produced; when speakers are less skilled, bias is larger and speakers produce a more prototypical signal.
+Production bias: implemented as a bias towards prototype in production as dependent on the speaker's current probability of correctly identifying the target. When speakers are more skilled, the bias is smaller and a signal closer to stored value is produced; when speakers are less skilled, bias is larger and speakers produce a more prototypical signal. The bias is applied prior to calculating the posterior probability, hence, it only affects the signal being produced not the stored representation.
 
-Signal drift: on incorrect trials, the stored signal is updated by moving it a small fixed step toward the iconic prototype for that referent type. In addition to this deterministic shift, small Gaussian noise is added. Thus, signal drift on failure is directional toward the prototype (iconicity) but includes random variation from noise.
+Signal/failure drift: on incorrect trials, the stored signal is updated by moving it a small fixed step toward the iconic prototype for that referent type. In addition to this deterministic shift, small Gaussian noise is added. Thus, signal drift on failure is directional toward the prototype (iconicity) but includes random variation from noise. The failure drift could be interpreted as an articulatory bias, i.e., an intentional iconicity parameter on behalf of the speaker when noticing that communication fails?
 
-Cultural selection bias: implemented as a reinforcement rate on successful trials. The learned/stored signal is updated toward the speaker's produced signal by a fixed proportion. This biases learning toward forms that have been successful in communication, strengthening emergent conventions over time.
+Cultural selection bias: implemented as a reinforcement rate on successful trials. The learned/stored signal is updated toward the speaker's produced signal by a fixed proportion. This biases learning toward forms that have been successful in communication, strengthening emergent conventions over time (by reinforcing forms that are already successful in the community and consolidating new forms). It affects memory update on successful trials, moving the stored signal toward the produced signal on success, affecting the shared memory of signals.<!--Is this a strategy of making the signal more iconic to make it more learnable in the communicative game?-->
 
 Setting production bias = 0, reinforcement rate = 0, iconicity boost = 0 has no effect on the emergence of iconicity. Setting failure_step = 0, however, introduces no iconicity. This seems to suggest that the strongest effect on the emergence of iconicity is in whether the signal drifts toward the prototype on incorrect trials.
 
@@ -151,6 +150,11 @@ d.empty <- data.frame(
 d.history <- d.empty %>%
   run_interaction_sim(n_sim = 10, n_rounds = 1000)
 #, prod_bias = 0, reinforcement_rate = 0, iconicity_boost = 0, failure_step = 0
+
+d.history <- d.empty %>%
+  run_interaction_sim(n_sim = 10, n_rounds = 1000)
+run_interaction_sim_separate_memory
+
 ```
 
 ```{r iconicity}
@@ -238,12 +242,17 @@ p.learned.signals + p.produced.signals
 ## Grid over the parameter space
 In order to investigate what parameter settings generate the largest overall iconicity across trials and simulations, we generated a grid search over four model parameters: production bias toward prototypes, strength of iconicity in comprehension (iconicity boost), strength of cultural selection (reinforcement rate), and rate of learning in log-odds space (learning rate). The grid search runs the interaction model for each combination, and computes how iconic the signals become by the end of learning.
 
+Figure XX suggest that the more I learn for free (learn_rate), the less iconic I become. This would suggest that iconicity might not continue to grow in a language, at least not as a learning mechanism (only as a strategy to make the language more learnable for the interlocutor).
+
+To explore: a memory bias toward more iconic forms? Making the signals more iconic does not seem to make iconicity emerge, merely increase learning rate. Currently, the model does not implement a mechanism whereby the memory of the signal form is reinforced as a function of its iconicity directly. Iconicity improves the guess probability (speaker skill) but not the stored representation. That is, iconic forms are easier to understand but they do not improve memory of the signal form. However, there is direct memory bias on failure--the update_signal_on_failure function moves memory representation toward prototype on incorrect trials. Indirectly, there is iconicity bias on produced signals--the produced signals get reinforced on success, leading to production drifting toward iconic prototypes. Those forms are easier to interpret (signal_ease), yielding more successes and memory updates towards what was produced (so indirect bias via production bias).
+
 ```{r}
 # Generate a parameter grid to explore
 d.param_grid <- expand.grid(
   prod_bias = seq(0, 0.3, length.out = 6),
   iconicity_boost = seq(0, 0.4, length.out = 6),
   reinforcement_rate = seq(0, 0.1, length.out = 6),
+  failure_step = seq(0, 0.06, length.out = 6),
   learn_rate = seq(0, 0.01, length.out = 6))
 
 d.grid_results <- data.frame()
@@ -260,7 +269,7 @@ compute_iconicity <- function(d.history, n_rounds) {
       .groups = "drop"
     )
 
-  d.iconicity <- d.hist_agg %>%
+  d.iconicity.grid <- d.hist_agg %>%
     mutate(
       target_x = ifelse(type == "small", 0, 1),
       target_y = ifelse(type == "small", 0, 1),
@@ -271,7 +280,7 @@ compute_iconicity <- function(d.history, n_rounds) {
 
   # return average iconicity in final 20% of bins
   final_bins <- max(d.iconicity$bins) * 0.8
-  mean(d.iconicity$iconicity[d.iconicity$bins >= final_bins])
+  mean(d.iconicity.grid$iconicity[d.iconicity.grid$bins >= final_bins])
 }
 
 for (i in 1:nrow(d.param_grid)) {
@@ -286,26 +295,26 @@ for (i in 1:nrow(d.param_grid)) {
     p_correct = numeric(), success = integer(),
     stored_x = numeric(), stored_y = numeric(),
     produced_x = numeric(), produced_y = numeric(),
-    stringsAsFactors = FALSE
-  )
+    stringsAsFactors = FALSE)
 
   # run the model
   hist <- run_interaction_sim(
     data = empty_df,
-    n_sim = 5,            # small number for medium-fast grid search
+    n_sim = 4,            # small number for medium-fast grid search
     n_referents = 6,
-    n_rounds = 800,       # enough time for iconicity to emerge
+    n_rounds = 600,       # enough time for iconicity to emerge
     drift_sd = 0.05,
+    #learn_rate = 0.005,
     learn_rate = params$learn_rate,
     iconicity_boost = params$iconicity_boost,
     prod_bias = params$prod_bias,
     reinforcement_rate = params$reinforcement_rate,
-    lapse = 0.05
-  )
+    failure_step = params$failure_step,
+    lapse = 0.05)
 
   
   # compute iconicity
-  mean_iconicity <- compute_iconicity(hist, n_rounds = 800)
+  mean_iconicity <- compute_iconicity(hist, n_rounds = 400)
 
   # store results
   d.grid_results <- rbind(
@@ -314,10 +323,9 @@ for (i in 1:nrow(d.param_grid)) {
       prod_bias = params$prod_bias,
       iconicity_boost = params$iconicity_boost,
       reinforcement_rate = params$reinforcement_rate,
+      failure_step = params$failure_step,
       learn_rate = params$learn_rate,
-      iconicity = mean_iconicity
-    )
-  )
+      iconicity = mean_iconicity))
 
   print(paste("Completed parameter set", i, "of", nrow(param_grid)))
 }
@@ -343,19 +351,21 @@ saveRDS(d.grid_results, file = "iconicity-model_files/grid-search.rds")
 #     fill = "Final Iconicity")
 
 #Read in model file
-d.grid_results <- readRDS("iconicity-model_files/grid-search.rds")
+d.grid_results.old <- readRDS("iconicity-model_files/grid-search.rds")
 
 custom_labeller <- function(df) {
   paste0(
     "reinforcement_rate = ", df$reinforcement_rate,
-    ", learning_rate = ", df$learn_rate
+    ", learning_rate = ", df$learn_rate 
   )
 }
 
 
 # plot for different param settings
-d.grid_results %>%
+d.grid_results %>% 
+  filter(failure_step == .024) %>%
   #rename variables for plotting reasons
+  #rename("reinforcement" = reinforcement_rate, "failure" = failure_step) %>%
   rename("reinforcement" = reinforcement_rate, "learning" = learn_rate) %>%
   ggplot(
     aes(
@@ -364,12 +374,19 @@ d.grid_results %>%
       fill = iconicity,
       color = ifelse(iconicity != max(iconicity), "red", "black"))) +
   geom_tile() +
+  geom_tile(
+    data = . %>%
+      filter(iconicity >= 0.24 & iconicity <= 0.26),
+    color = "yellow", 
+    size = .3, 
+    fill = NA) +
   geom_point(
     data = . %>%
       filter(iconicity == max(iconicity)),
     shape = 4) +
   scale_color_manual(values = c("red", "black")) +
   scale_fill_viridis_c() +
+  #facet_grid(reinforcement ~ failure, labeller = label_both) +
   facet_grid(reinforcement ~ learning, labeller = label_both) +
   theme_minimal() +
   guides(color = "none") +
@@ -380,6 +397,14 @@ d.grid_results %>%
     fill = "Iconicity")
 ```
 
+## Separate memories for agents
+The model in its current implementation assumes a shared language--the produced and learned signals (memory) are shared by both agents. Agents have identical internal representations and both produce signals derived from that same representation (sig_prev is the same for both agents). Their skill differences only modulates bias, not the underlying signal representation.
+
+
+```{r}
+
+
+```
 
 
 
