@@ -177,26 +177,25 @@ run_interaction_sim <- function(
   return(history)
 }
 
+
 # Main interaction loop function with separate memories for agents
 run_interaction_sim_separate_memory <- function(
-    data,
-    n_sim = 10,
-    n_referents = 6,
-    n_small = n_referents/2,
-    n_large = n_referents/2,
-    n_rounds = 1000,
-    drift_sd = 0.05,
-    learn_rate = 0.005,
-    iconicity_boost = 0.2,
-    prod_bias = 0.15,
-    reinforcement_rate = 0.05,
-    failure_step = 0.03,
-    lapse = 0.05
+  data,
+  n_sim = 10,
+  n_referents = 6,
+  n_small = n_referents/2,
+  n_large = n_referents/2,
+  n_rounds = 1000,
+  drift_sd = 0.05,
+  learn_rate = 0.005,
+  iconicity_boost = 0.2,
+  prod_bias = 0.15,
+  reinforcement_rate = 0.05,
+  failure_step = 0.03,
+  lapse = 0.05
 ) {
   
   history <- data
-  
-  #--- Helper functions --------------------------------------------------------
   
   clamp01 <- function(x) pmax(0, pmin(1, x))
   
@@ -237,14 +236,10 @@ run_interaction_sim_separate_memory <- function(
   update_guess_logodds <- function(p_old, learn_rate)
     plogis(qlogis(p_old) + learn_rate)
   
-  #---------------------------------------------------------------------------
-  
   referents <- tibble(
     id = 1:n_referents,
     type = c(rep("small", n_small), rep("large", n_large))
   )
-  
-  #--- MAIN SIM ----------------------------------------------------------------
   
   for (n in 1:n_sim) {
     
@@ -263,7 +258,6 @@ run_interaction_sim_separate_memory <- function(
     
     for (t in 1:n_rounds) {
       
-      #--- SPEAKER/LISTENER ROLES --------------------------------------------
       if (t %% 2 == 1) {
         speaker <- "A"; listener <- "B"
         speaker_guess <- agentA_guess
@@ -298,8 +292,6 @@ run_interaction_sim_separate_memory <- function(
       # listener learns only on success
       if (success == 1)
         listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
-      
-      #--- MEMORY UPDATES -----------------------------------------------------
       
       # speaker memory update
       new_sig_speaker <- if (success == 1) {
@@ -338,8 +330,6 @@ run_interaction_sim_separate_memory <- function(
         agentA_guess <- listener_guess
       }
       
-      #--- LOGGING ------------------------------------------------------------
-      
       history <- rbind(
         history,
         data.frame(
@@ -363,5 +353,4 @@ run_interaction_sim_separate_memory <- function(
   }
   
   return(history)
-}      
-
+}

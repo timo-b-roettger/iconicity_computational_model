@@ -150,11 +150,6 @@ d.empty <- data.frame(
 d.history <- d.empty %>%
   run_interaction_sim(n_sim = 10, n_rounds = 1000)
 #, prod_bias = 0, reinforcement_rate = 0, iconicity_boost = 0, failure_step = 0
-
-d.history <- d.empty %>%
-  run_interaction_sim(n_sim = 10, n_rounds = 1000)
-run_interaction_sim_separate_memory
-
 ```
 
 ```{r iconicity}
@@ -402,9 +397,91 @@ The model in its current implementation assumes a shared language--the produced 
 
 
 ```{r}
+# Run model with separate memories for agents
+d.history.sep.memories <- d.empty %>%
+  run_interaction_sim_separate_memory(n_sim = 10, n_rounds = 1000)
 
+d.sep.memories.long <- d.history.sep.memories %>%
+  mutate(
+    # each row becomes two rows: A-memory and B-memory
+    speaker_label = speaker,
+    listener_label = listener) %>%
+  select(sim, round, type,
+         speaker_label, listener_label,
+         speaker_stored_x, speaker_stored_y,
+         listener_stored_x, listener_stored_y,
+         produced_x, produced_y) %>%
+  # pivot longer over the stored memories
+  pivot_longer(
+    cols = c(speaker_stored_x, speaker_stored_y,
+             listener_stored_x, listener_stored_y),
+    names_to = c("role", ".value"),
+    # names look like "speaker_stored_x" → role = speaker, stored_x = value
+    names_pattern = "(speaker|listener)_stored_(x|y)") %>%
+  rename(stored_x = x, stored_y = y)
+
+d.iconicity.sep.memories <- d.sep.memories.long %>%
+  mutate(bins = cut(round, breaks = 20, labels = FALSE)) %>%
+  group_by(bins, type, sim, role) %>%
+  summarise(
+    x_learned = mean(stored_x),
+    y_learned = mean(stored_y),
+    x_produced = mean(produced_x),
+    y_produced = mean(produced_y),
+    .groups = "drop") %>%
+  pivot_longer(
+    cols = starts_with(c("x", "y")),
+    names_to = c("signal", "process"),
+    values_to = "value",
+    names_sep = "_") %>%
+  pivot_wider(
+    names_from = signal,
+    values_from = value) %>%
+  mutate(
+    target_x = ifelse(type == "small", 0, 1),
+    target_y = ifelse(type == "small", 0, 1),
+    dist = sqrt((x - target_x)^2 + (y - target_y)^2),
+    iconicity = exp(-2 * dist)) %>%
+  group_by(bins, sim, process, role) %>%
+  summarise(iconicity = mean(iconicity), .groups = "drop")
 
 ```
+
+```{r}
+p.learned.iconicity.sep.memories <- d.iconicity.sep.memories %>%
+  filter(process == "learned") %>%
+  group_by(bins, sim, role) %>% 
+  summarise(iconicity = mean(iconicity)) %>%
+  ggplot(
+    aes(x = bins, 
+        y = iconicity, 
+        group = interaction(sim, role), 
+        color = role)) +
+  geom_path(size = 0.9, alpha = 0.2) +
+  geom_path(data = . %>% 
+              group_by(bins, role) %>%
+              summarise(iconicity = mean(iconicity), .groups = "drop"), 
+            aes(group = role, color = role), size = 1.5) +
+  geom_hline(yintercept = exp(-2 * sqrt((0.5)^2 + (0.5)^2)), lty = "dashed") +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
+  labs(title = "Iconicity over time (learned tokens, separate memories)",
+       y = "Iconicity (high = iconic)", x = "Bins (rounds in 100s)") +
+  theme_minimal()
+
+p.produced.iconicity.sep.memories <- p.learned.iconicity.sep.memories %+%
+  (d.iconicity.sep.memories %>%
+     filter(process == "produced") %>%
+     group_by(bins, sim, role) %>% 
+     summarise(iconicity = mean(iconicity))) +
+  labs(title = "Iconicity over time (produced signals, separate memories)") +
+  guides(color = "none")
+
+p.learned.iconicity.sep.memories + p.produced.iconicity.sep.memories
+```
+
+
+
+
 
 
 
