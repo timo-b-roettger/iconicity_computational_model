@@ -120,18 +120,6 @@ run_interaction_sim <- function(
       r <- sample(1:n_referents, 1)
       r_type <- referents$type[r]
       
-      # retrieve its signal: 
-      ## either just pick the signal from last round (perfect memory of signal)
-      #sig <- signals %>% filter(id == r) %>% select(x, y) %>% as.numeric()
-      ## alternatively: retrieve it's previous signal if memory strength good enough
-      # if (speaker_guess[r] > 0.5) {
-      #   sig <- signals %>% filter(id == r) %>% select(x, y) %>% as.numeric()
-      #   # if not randomly draw around center
-      #   } else {sig <- c(rnorm(1, 0.5, 0.1), c(rnorm(1, 0.5, 0.1)))
-      #   ## another alternative could be to draw from existing categories, which would make the signal bounce around
-      # }
-      # # this resets the signal drift until learned 
-      
       # get stored signal, shared by both agents (one representation per referent)
       sig_prev <- c(signals$x[r], signals$y[r])
       # produce a token (speaker generates a signal)
@@ -143,9 +131,9 @@ run_interaction_sim <- function(
       # learning: speaker improves guess rate, in logodds space
       speaker_guess[r] <- update_guess_logodds(speaker_guess[r], learn_rate)
       # listener also learns due to feedback
-      if (success == 1) listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
+      listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
 
-      # signal memory updates: success -> reinforce toward produced form; failure -> nudge toward prototype
+      # signal memory updates: success -> reinforce toward produced form; failure -> nudge toward prototype (or drift)
       new_sig <- if(success == 1) {
         reinforce_signal(sig_prev, sig_prod)
       } else {
@@ -156,9 +144,11 @@ run_interaction_sim <- function(
       signals$y[r] <- new_sig[2]
       # update guessing probability based on learning
       if (speaker == "A") {
-        agentA_guess <- speaker_guess; agentB_guess <- listener_guess
+        agentA_guess <- speaker_guess
+        agentB_guess <- listener_guess
       } else {
-        agentB_guess <- speaker_guess; agentA_guess <- listener_guess
+        agentB_guess <- speaker_guess
+        agentA_guess <- listener_guess
       }
       # log trials
       history <- rbind(
@@ -289,9 +279,8 @@ run_interaction_sim_separate_memory <- function(
       # update speaker skill
       speaker_guess[r] <- update_guess_logodds(speaker_guess[r], learn_rate)
       
-      # listener learns only on success
-      if (success == 1)
-        listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
+      # listener skill update
+      listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
       
       # speaker memory update
       new_sig_speaker <- if (success == 1) {
@@ -354,3 +343,36 @@ run_interaction_sim_separate_memory <- function(
   
   return(history)
 }
+
+# Code for generating grid search in the parameter space
+compute_iconicity <- function(history, n_bins = 20, cutoff = 0.8) {
+  
+  # bin rounds
+  hist_agg <- history %>%
+    mutate(bins = cut(round, breaks = n_bins, labels = FALSE)) %>%
+    group_by(bins, type, sim) %>%
+    summarise(
+      x = mean(stored_x),
+      y = mean(stored_y),
+      .groups = "drop"
+    )
+  
+  # compute distance effect
+  hist_icon <- hist_agg %>%
+    mutate(
+      target_x = ifelse(type == "small", 0, 1),
+      target_y = ifelse(type == "small", 0, 1),
+      dist      = sqrt((x - target_x)^2 + (y - target_y)^2),
+      iconicity = exp(-2 * dist)
+    ) %>%
+    group_by(bins, sim) %>%
+    summarise(iconicity = mean(iconicity), .groups = "drop")
+  
+  # final bins threshold
+  last_bin <- max(hist_icon$bins)
+  threshold <- last_bin * cutoff
+  
+  # return mean iconicity in final 20% of bins
+  mean(hist_icon$iconicity[hist_icon$bins >= threshold])
+}
+
