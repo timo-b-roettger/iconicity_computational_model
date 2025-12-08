@@ -30,9 +30,6 @@ run_interaction_sim <- function(
 
   # assign input data frame to history internally
   history <- data
-
-  n_small <- n_referents / 2
-  n_large <- n_referents / 2
   
   #clamp to [0,1]
   clamp01 <- function(x) pmax(0, pmin(1, x))

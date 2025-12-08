@@ -38,8 +38,10 @@ base.height = 2.5
 
 ```{r libraries, include=FALSE}
 library(tidyverse)  # data wrangling and plotting
+library(magrittr)   # for all pipes
 library(ggplot2)
 library(patchwork)  # combining plots
+library(broom)      # for regression analysis
 ```
 
 # TO DO
@@ -55,9 +57,8 @@ RESET_MODELS = F        # switch on/off whether model is re-run
 ```
 
 # Modelling iconicity
-General principles to observe [@dona-schouwstra2024].
-For computational models simulating the emergence of iconicity across generations, parameters of interest across generations are population size, generational overturn; for modelling individual agent behavior, learning rate and innovation tendency. Iconicity can be represented on a system-level (as a property of the system, in relation to arbitrariness, systematicity and combinatoriality), or in form-meaning pairs. 
-The vertical transmission across generations is often implemented as iterated learning. For simulating the emergence of iconicity resulting from interactions *within* a population, agent-based models are often used. Focus is to formalize cognitive processes and effects of population properties, size and social network structure. The horizontal transmission between agents is often implemented in language games. The adaptive behavior of interlocutors supposedly takes place via a learning algorithm that can be rule-based or sometimes modeled as a neural network.^[Models of neural networks have shown that adding an attention mechanism to the model, to simulate the cognitive enhancing of some parts of the input, makes the model learn faster with iconicity than without (syntax models).] In models of generational overturn, iconicity can be operationalized as a mapping between a set of culturally salient features and forms (formalized as sequences of n bits). The shared cultural context is represented by participants being in the same group (chain), and observations are made as to the specific patterns/features that emerges within group/chain. When interaction/identification is unsuccessful, the receiver gets one bit update on form of target concept. The mean degree of iconicity and lexical variation is calculated at each trial (between 0-1). Populations with more agents often display more lexical variability at earlier stages, but a steeper decrease in iconicity over time.
+General principles to observe [@dona-schouwstra2024]: For computational models simulating the emergence of iconicity across generations, parameters of interest across generations are population size, generational overturn; for modelling individual agent behavior, learning rate and innovation tendency. Iconicity can be represented on a system-level (as a property of the system, in relation to arbitrariness, systematicity and combinatoriality), or in form-meaning pairs. 
+The vertical transmission across generations is often implemented as iterated learning. For simulating the emergence of iconicity resulting from interactions *within* a population, agent-based models are often used. Focus is to formalize cognitive processes and effects of population properties, size and social network structure. The horizontal transmission between agents is often implemented in language games. The adaptive behavior of interlocutors supposedly happens through a learning algorithm that can be rule-based or sometimes modeled as a neural network.^[Models of neural networks have shown that adding an attention mechanism to the model, to simulate the cognitive enhancing of some parts of the input, makes the model learn faster with iconicity than without (syntax models).] In models of generational overturn, iconicity can be operationalized as a mapping between a set of culturally salient features and forms (formalized as sequences of n bits). The shared cultural context is represented by participants being in the same group (chain), and observations are made as to the specific patterns/features that emerges within group/chain. When interaction/identification is unsuccessful, the receiver gets one bit update on form of target concept. The mean degree of iconicity and lexical variation is calculated at each trial (between 0-1). Populations with more agents often display more lexical variability at earlier stages, but a steeper decrease in iconicity over time.
 
 Arbitrariness assumes that form-meaning pairs are unpredictable and lack inherent connection. This is often measured by confusability index, and can be affected by interaction and feedback (more arbitrariness leads to higher complexity)---a push from communicative interaction to become more efficient can lead to increased arbitrariness. Systematicity suggests that related meanings are expressed with forms that share elements, as measures by internal consistency within participants and usage of functional markers. Systematicity supposedly does not compete with iconicity but rather coexists. Combinatoriality, however, conflicts with iconicity in that it assumes building blocks with no meaning attached---languages consists of a limited inventory of sounds that can be combined in whatever format to represent meaning. While combinatoriality aids transmission efficiency, iconicity aids referential efficiency.^[@dona-schouwstra2024 suggest that future studies should aim to characterize the formal properties of the co-existence of iconicity with systematicity and combinatoriality.]
 
@@ -75,7 +76,7 @@ Arbitrariness assumes that form-meaning pairs are unpredictable and lack inheren
 Formalized parameters of the model.
 
 ### Lexical representation
-A combination of two vectors: one with category information---c(small, big), one with cue information---c(F1,F2) in the simplest case (could/should be expanded to include formant trajectories, duration, f0). These constitute form-meaning pairs of the artificial language. The consonant context is fixed for each target referent, which means that it is only the vowel that changes.
+A combination of two vectors: one with category information---c(small, big), one with cue information---c(F1,F2) in the simplest case (could/should be expanded to include formant trajectories, duration, f0). These constitute form-meaning pairs of the artificial language. The consonant context is fixed for each target referent, hence, only the vowel changes.
 
 ### Categorization/recognition/learning
 Learning of the form-meaning pairs is formalized as guessing rate. The strength of guess rate is a function of previous learning/listener memory (priors), the characteristics of the signal and the referent type. At each round, guessing rate/probability of listener and speaker is updated based on learning. If internal guess strength > .5 (=correct), the speaker retrieves the signal for the referent and the signal remains the same. If the guess < .5 (=incorrect), there is no recall and the speaker draws a new signal near c(.5,.5) with noise. Regardless of being incorrect or correct, the guessing probability increases at each round, more so on correct than incorrect trials; hence, there is always learning.
@@ -121,11 +122,13 @@ If communication fails and listener guess is incorrect, the signal drifts random
 
 ### No emergence of iconicity?
 It is conceivable that learnability bias is not enough for iconicity to emerge. Possible additional mechanisms include:
+
   * signal update: currently, the only dynamic shaping force on the signal is random Gaussian noise when communication fails. This means that there is no directional pressure pushing small signals to move towards [0,0] or large signals to move towards [1,1], i.e., no push of signals towards the iconic target (no directional evolution). This is also true for speakers: when the speaker is confident, the signal is copied exactly, meaning there is no refinement of the signal; when the speaker is unsure, the signal drifts. So there is no production bias towards more iconic signals.
   * learning update: the guess probabilities improve over time while signal drift decreases (no drift on correct trials), this means that the signal tends to freeze near its initial state [.5,.5].
   * the iconicity bias: iconicity is implemented through the ease function which improves listeners' probability of correct guesses, but it does not affect the likelihood of the speaker producing good-guess signals.
 
 Possible changes:
+
   * add a production bias toward iconic prototypes, e.g., when selecting a signal, sample with mean shifted toward [0,0] or [1,1]: this will affect signal generation becoming more iconic over time
   * make failed signals adjust toward the prototype, not random drift: this affects signal correction on failure (i.e., a more subtle source of bias)
   * add cultural selection bias where successful signals get reinforced: this affects memory update
@@ -159,16 +162,33 @@ d.empty <- data.frame(
   produced_y = numeric(),
   stringsAsFactors = FALSE)
 
-d.history <- d.empty %>%
-  run_interaction_sim(n_sim = 10, n_rounds = 1000)
-#, prod_bias = 0, reinforcement_rate = 0, iconicity_boost = 0, failure_step = 0
+# If in logodds space, the learnrate should change from .005
+learn_rate_prob <- 0.005
+# Approx starting point for agents
+p0 <- 0.3
+learn_rate_logit <- qlogis(p0 + learn_rate_prob) - qlogis(p0)
+
+# Generate one data frame with different simulations where params are switched on/off
+d.simulation <- rbind(
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = learn_rate_logit) %>%
+    mutate(parameter_space = "allParams"),
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = learn_rate_logit, prod_bias = 0) %>%
+    mutate(parameter_space = "noProdBias"),
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = learn_rate_logit, failure_step = 0) %>%
+    mutate(parameter_space = "noFailureStep"),
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = learn_rate_logit, reinforcement_rate = 0) %>%
+    mutate(parameter_space = "noReinforcement"),
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = 0) %>%
+    mutate(parameter_space = "noLearning"))
+
 ```
 
 ```{r iconicity}
 # you can compute iconicity either from stored signals or produced tokens
-d.iconicity <- d.history %>%
+d.iconicity <- d.simulation %>%
+  group_by(parameter_space) %>%
   mutate(bins = cut(round, breaks = 20, labels = FALSE)) %>%
-  group_by(bins, type, sim) %>%
+  group_by(parameter_space, bins, type, sim) %>%
   summarise(
     x_learned = mean(stored_x),
     y_learned = mean(stored_y),
@@ -188,28 +208,48 @@ d.iconicity <- d.history %>%
     target_y = ifelse(type == "small", 0, 1),
     dist = sqrt((x - target_x)^2 + (y - target_y)^2),
     iconicity = exp(-2 * dist)) %>%
-  group_by(bins, sim, process) %>%
+  group_by(parameter_space, bins, sim, process) %>%
     summarise(iconicity = mean(iconicity), .groups = "drop")
+
+```
+
+```{r}
+# Plot success rate over time across simulation within parameter space
+d.simulation %>%
+  #group_by(parameter_space, round) %>%
+  #summarise(success = mean(success)) %>%
+  ggplot(
+    aes(x = round, y = success)) +
+  geom_smooth(method = "glm", 
+              method.args = list(family = "binomial"), 
+              se = TRUE) +
+  labs(title = "Success rate over time (across simulations)", 
+       y = "Success", 
+       x = "Round") +
+  facet_grid( ~ parameter_space) +
+  scale_y_continuous(limits = c(0,1)) + 
+  theme_minimal()
 ```
 
 ```{r iconicity-plot, fig.width=base.width*4, fig.height=base.height*3, fig.align='center', out.width='80%'}
 #iconicity trajectories
 p.learned.iconicity <- d.iconicity %>%
   filter(process == "learned") %>%
-  group_by(bins, sim) %>% 
+  group_by(parameter_space, bins, sim) %>% 
   summarise(iconicity = mean(iconicity)) %>%
   ggplot(
     aes(x = bins, y = iconicity, group = sim)) +
   geom_path(size = 0.9, alpha = 0.2) +
   geom_path(data = . %>% 
-              group_by(bins) %>%
+              group_by(parameter_space, bins) %>%
               summarise(iconicity = mean(iconicity)), 
             aes(group = 1), size = 1.5) +
   geom_hline(yintercept = exp(-2 * sqrt((0.5)^2 + (0.5)^2)), lty = "dashed") +
   scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
   labs(title = "Iconicity over time (learned tokens)",
        y = "Iconicity (high = iconic)", x = "Bins (rounds in 100s)") +
-  theme_minimal()
+  theme_minimal() +
+  facet_grid(~parameter_space)
 
 p.produced.iconicity <- p.learned.iconicity %+%
   (d.iconicity %>%
@@ -218,20 +258,20 @@ p.produced.iconicity <- p.learned.iconicity %+%
   summarise(iconicity = mean(iconicity))) +
   labs(title = "Iconicity over time (produced signals)")
 
-p.learned.iconicity + p.produced.iconicity
+p.learned.iconicity #+ p.produced.iconicity
 
 ```
 
 ```{r fig.width=base.width*4, fig.height=base.height*3, fig.align='center', out.width='80%'}
 # Signal space use
-p.learned.signals <- d.history %>%
+p.learned.signals <- d.simulation %>%
   ggplot(
     aes(stored_x, 
         stored_y, 
         color = type)) +
   geom_point(alpha = 0.2) +
   labs(title = "Evolution of learned signal space", x = "x", y = "y") +
-  facet_wrap(. ~ sim) +
+  facet_grid(parameter_space ~ sim) +
   scale_x_continuous(limits = c(0,1)) + 
   scale_y_continuous(limits = c(0,1)) + 
   scale_color_viridis_d(begin = 0.1, end = 0.9) +
@@ -242,7 +282,7 @@ p.produced.signals <- p.learned.signals %+%
       produced_y) +
   labs(title = "Evolution of produced signal space", x = "x", y = "y")
 
-p.learned.signals + p.produced.signals
+p.learned.signals #+ p.produced.signals
 
 ```
 
@@ -262,7 +302,7 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
     iconicity_boost = seq(0, 0.4, length.out = 4),
     reinforcement_rate = seq(0, 0.1, length.out = 4),
     failure_step = seq(0, 0.06, length.out = 4),
-    learn_rate = seq(0, 0.01, length.out = 4))
+    learn_rate = seq(0, 0.045, length.out = 4))
   
   # Prepare results container
   d.grid_results <- d.param_grid %>%
@@ -317,55 +357,91 @@ d.full.history <- bind_rows(d.grid_results$history, .id = "param_set")
 
 
 ```{r fig.width=base.width*4, fig.height=base.height*3.5, fig.align='center', out.width='90%'}
-# Summarise across all params
-# ggplot(d.grid_results,
-#        aes(x = prod_bias,
-#            y = iconicity_boost,
-#            fill = iconicity)) +
-#   geom_tile() +
-#   scale_fill_viridis_c() +
-#   theme_minimal() +
-#   labs(
-#     title = "Iconicity emergence across parameter grid",
-#     x = "Production bias (toward prototype)",
-#     y = "Interpretation bias (iconicity boost)",
-#     fill = "Final Iconicity")
+d.grid_results.long <- d.grid_results %>% 
+  pivot_longer(
+    cols = -c(iconicity, history),
+    names_to = "parameter",
+    values_to = "value") 
+
+# Figure out how to plot params best
+m.params <- lm(iconicity ~ prod_bias + iconicity_boost + learn_rate + reinforcement_rate + failure_step,
+   data = d.grid_results) %>%
+  tidy()
 
 # plot for different param settings
-d.grid_results %>% 
-  filter(failure_step == .02) %>%
-  #rename variables for plotting reasons
-  #rename("reinforcement" = reinforcement_rate, "failure" = failure_step) %>%
-  rename("reinforcement" = reinforcement_rate, "learning" = learn_rate) %>%
-  mutate(across(where(is.numeric), ~ round(.x, digits = 4))) %>%
+p.grid.noBoost <- d.grid_results %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>% 
+  filter(iconicity_boost == 0) %>%
+  rename("reinforcement" = reinforcement_rate, "production bias" = prod_bias) %>%
   ggplot(
     aes(
-      x = prod_bias, 
-      y = iconicity_boost, 
+      x = failure_step, 
+      y = learn_rate, 
       fill = iconicity,
       color = ifelse(iconicity != max(iconicity), "red", "black"))) +
   geom_tile() +
-  geom_tile(
-    data = . %>%
-      filter(iconicity >= 0.24 & iconicity <= 0.26),
-    color = "yellow", 
-    size = .3, 
-    fill = NA) +
+  # geom_tile(
+  #   data = . %>%
+  #     filter(iconicity >= 0.24 & iconicity <= 0.26),
+  #   color = "yellow", 
+  #   size = .3, 
+  #   fill = NA) +
   geom_point(
     data = . %>%
       filter(iconicity == max(iconicity)),
     shape = 4) +
   scale_color_manual(values = c("red", "black")) +
   scale_fill_viridis_c() +
-  #facet_grid(reinforcement ~ failure, labeller = label_both) +
-  facet_grid(reinforcement ~ learning, labeller = label_both) +
+  facet_grid(reinforcement ~ `production bias`, labeller = label_both) +
   theme_minimal() +
   guides(color = "none") +
   labs(
-    title = "Iconicity across the parameter space",
-    x = "Production bias (toward prototype)",
-    y = "Interpretation bias (iconicity boost)",
+    title = "Iconicity across the parameter space for when there is no iconicity boost",
+    x = "Signal drift on failed trials (toward prototype)",
+    y = "Learning rate",
     fill = "Iconicity")
+
+p.grid.noProdBias <- p.grid.noBoost %+%
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(prod_bias == 0) %>%
+     rename(reinforcement = reinforcement_rate, `Iconicity boost` = iconicity_boost)) +
+  facet_grid(reinforcement ~ `Iconicity boost`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space for when there is no production bias")
+
+p.grid.noReinforcement <- p.grid.noBoost %+%
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(reinforcement_rate == 0) %>%
+     rename(`Production bias` = prod_bias, `Iconicity boost` = iconicity_boost)) +
+  facet_grid(`Production bias` ~ `Iconicity boost`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space for when there is no signal reinforcement")
+
+p.grid.NoLearning <- p.grid.noBoost %+%
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(learn_rate == 0) %>%
+     rename(reinforcement = reinforcement_rate,
+            `Iconicity boost` = iconicity_boost)) +
+  aes(y = prod_bias) +
+  facet_grid(reinforcement ~ `Iconicity boost`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space for when there is no learning") +
+  scale_y_continuous("Production bias (toward target)")
+
+p.grid.NoDrift <- p.grid.noBoost %+%
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(failure_step == 0) %>%
+     rename(`reinforcement` = reinforcement_rate, `Iconicity boost` = iconicity_boost)) +
+  aes(x = prod_bias) +
+  facet_grid(reinforcement ~ `Iconicity boost`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space for when there is no signal drift") +
+  scale_x_continuous("Production bias (toward target")
+
+(p.grid.NoDrift + p.grid.NoLearning) /
+  (p.grid.noProdBias + p.grid.noReinforcement + p.grid.noBoost) +
+  plot_layout(guides = "collect")
+
 ```
 
 ## Separate memories for agents
