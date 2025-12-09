@@ -220,7 +220,7 @@ d.iconicity <- d.simulation %>%
 
 ```
 
-```{r}
+```{r accuracy, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='90%'}
 # Plot success rate over time across simulation within parameter space
 d.simulation %>%
   #group_by(parameter_space, round) %>%
@@ -238,7 +238,7 @@ d.simulation %>%
   theme_minimal()
 ```
 
-```{r iconicity-plot, fig.width=base.width*4, fig.height=base.height*3, fig.align='center', out.width='80%'}
+```{r iconicity-plot, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='90%'}
 #iconicity trajectories
 p.learned.iconicity <- d.iconicity %>%
   filter(process == "learned") %>%
@@ -270,7 +270,7 @@ p.learned.iconicity
 
 ```
 
-```{r fig.width=base.width*4, fig.height=base.height*3, fig.align='center', out.width='80%'}
+```{r fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='90%'}
 # Signal space use
 p.learned.signals <- d.simulation %>%
   ggplot(
@@ -363,9 +363,9 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
 d.full.history <- bind_rows(d.grid_results$history, .id = "param_set")
 
 ```
-```{r}
+```{r fig.width=base.width*4, fig.height=base.height*3.5, fig.align='center', out.width='90%'}
 # plot for different param settings
-p.noReinforce <- d.grid_results.forPlot %>%
+p.noReinforce <- d.grid_results %>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
   filter(reinforcement_rate == 0) %>%
   #filter(failure_step == 0) %>%
@@ -407,7 +407,7 @@ p.noProdBias <- p.noReinforce %+%
   labs(title = "Iconicity across the parameter space for when there is no production bias")
 
 p.noDrift <- p.noReinforce %+%
-  (d.grid_results.forPlot %>%
+  (d.grid_results %>%
      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
      filter(failure_step == 0) %>%
      rename(reinforcement = reinforcement_rate, `production bias` = prod_bias)) +
@@ -448,7 +448,7 @@ m.params <- lm(iconicity ~ prod_bias + iconicity_boost + learn_rate + reinforcem
   tidy()
 
 # plot for different param settings
-p.grid.noBoost <- d.grid_results.forPlot %>%
+p.grid.noBoost <- d.grid_results %>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
   filter(iconicity_boost == 0) %>%
   rename("reinforcement" = reinforcement_rate, "production bias" = prod_bias) %>%
