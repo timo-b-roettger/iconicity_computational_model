@@ -47,6 +47,10 @@ library(broom)      # for regression analysis
 # TO DO
 * One general model for both interaction and generational overturn - what needs tweeking?
 * Signal drift: in a model that includes acoustics, is drift equal for all cues? Is it a ratio of the category variance or merely random gaussian noise?
+* Extend description of params (psychologically grounded).
+* Add section that summarizes under which conditions iconicity seem to emerge.
+* Can params be removed for a more parsimonious model (and less compute intense)?
+* Check why accuracy does not align with iconicity across models---why doesn't iconicity lead to learning in all cases?
 
 ```{r functions, include=FALSE}
 source("functions.R")
@@ -135,7 +139,7 @@ Possible changes:
 
 Production bias: implemented as a bias towards prototype in production as dependent on the speaker's current probability of correctly identifying the target, adjusting the signal prior to guessing. When speakers are more skilled, the bias is smaller and a signal closer to stored value is produced; when speakers are less skilled, bias is larger and speakers produce a more prototypical signal. The bias is applied prior to calculating the posterior probability, hence, it only affects the signal being produced not the stored representation.
 
-Signal/failure drift: on incorrect trials, the stored signal is updated by moving it a small fixed step toward the iconic prototype for that referent type. In addition to this deterministic shift, small Gaussian noise is added. Thus, signal drift on failure is directional toward the prototype (iconicity) but includes random variation from noise. The failure drift could be interpreted as an articulatory bias, i.e., an intentional iconicity parameter on behalf of the speaker when noticing that communication fails?<!--Given that there are no minimal pairs of evident contrasts in the experiment, it might be that this parameter generates iconicity even though the real design could not produce this mechanism?-->
+Signal/failure drift: on incorrect trials, the stored signal is updated by moving it a small fixed step toward the iconic prototype for that referent type. In addition to this deterministic shift, small Gaussian noise is added. Thus, signal drift on failure is directional toward the prototype (iconicity) but includes random variation from noise. The failure drift could be interpreted as an articulatory bias, i.e., an intentional iconicity parameter on behalf of the speaker when noticing that communication fails.<!--Given that there are no minimal pairs of evident contrasts in the experiment, it might be that this parameter generates iconicity even though the real design could not produce this mechanism?-->
 
 Cultural selection bias: implemented as a reinforcement rate on successful trials. The learned/stored signal is updated toward the speaker's produced signal by a fixed proportion. This biases learning toward forms that have been successful in communication, strengthening emergent conventions over time (by reinforcing forms that are already successful in the community and consolidating new forms). It affects memory update on successful trials, moving the stored signal toward the produced signal on success, affecting the shared memory of signals.<!--Is this a strategy of making the signal more iconic to make it more learnable in the communicative game?-->
 
@@ -179,7 +183,10 @@ d.simulation <- rbind(
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = learn_rate_logit, reinforcement_rate = 0) %>%
     mutate(parameter_space = "noReinforcement"),
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = 0) %>%
-    mutate(parameter_space = "noLearning"))
+    mutate(parameter_space = "noLearning"),
+  # Also add one simulation that resembles the old model
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = learn_rate_logit, prod_bias = 0, failure_step = 0, reinforcement_rate = 0) %>%
+    mutate(parameter_space = "onlyLearning"))
 
 ```
 
@@ -251,14 +258,15 @@ p.learned.iconicity <- d.iconicity %>%
   theme_minimal() +
   facet_grid(~parameter_space)
 
-p.produced.iconicity <- p.learned.iconicity %+%
-  (d.iconicity %>%
-  filter(process == "produced") %>%
-  group_by(bins, sim) %>% 
-  summarise(iconicity = mean(iconicity))) +
-  labs(title = "Iconicity over time (produced signals)")
+# p.produced.iconicity <- p.learned.iconicity %+%
+#   (d.iconicity %>%
+#   filter(process == "produced") %>%
+#   group_by(parameter_space, bins, sim) %>% 
+#   summarise(iconicity = mean(iconicity))) +
+#   labs(title = "Iconicity over time (produced signals)") +
+#   facet_grid(~parameter_space)
 
-p.learned.iconicity #+ p.produced.iconicity
+p.learned.iconicity
 
 ```
 
@@ -282,7 +290,8 @@ p.produced.signals <- p.learned.signals %+%
       produced_y) +
   labs(title = "Evolution of produced signal space", x = "x", y = "y")
 
-p.learned.signals #+ p.produced.signals
+p.learned.signals + p.produced.signals +
+  plot_layout(guides = "collect")
 
 ```
 
@@ -354,23 +363,93 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
 d.full.history <- bind_rows(d.grid_results$history, .id = "param_set")
 
 ```
+```{r}
+# plot for different param settings
+p.noReinforce <- d.grid_results.forPlot %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+  filter(reinforcement_rate == 0) %>%
+  #filter(failure_step == 0) %>%
+  rename(`signal drift` = failure_step, `production bias` = prod_bias) %>%
+  ggplot(
+    aes(
+      x = learn_rate, 
+      y = iconicity_boost, 
+      fill = iconicity,
+      color = ifelse(iconicity != max(iconicity), "red", "black"))) +
+  geom_tile() +
+  geom_tile(
+    data = . %>%
+      filter(iconicity >= 0.24 & iconicity <= 0.26),
+    color = "yellow",
+    size = .3,
+    fill = NA) +
+  geom_point(
+    data = . %>%
+      filter(iconicity == max(iconicity)),
+    shape = 4) +
+  scale_color_manual(values = c("red", "black")) +
+  scale_fill_viridis_c() +
+  facet_grid(`production bias` ~ `signal drift`, labeller = label_both) +
+  theme_minimal() +
+  guides(color = "none") +
+  labs(
+    title = "Iconicity across the parameter space for when there is no reinforcement of successful signals",
+    x = "Learning rate",
+    y = "Iconicity boost",
+    fill = "Iconicity")
+
+p.noProdBias <- p.noReinforce %+%
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(prod_bias == 0) %>%
+     rename(`signal drift` = failure_step, reinforcement = reinforcement_rate)) +
+  facet_grid(reinforcement ~ `signal drift`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space for when there is no production bias")
+
+p.noDrift <- p.noReinforce %+%
+  (d.grid_results.forPlot %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(failure_step == 0) %>%
+     rename(reinforcement = reinforcement_rate, `production bias` = prod_bias)) +
+  facet_grid(reinforcement ~ `production bias`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space for when there is no signal drift")
+
+p.NoLearning <- p.noReinforce %+%
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(learn_rate == 0) %>%
+     rename(reinforcement = reinforcement_rate, `signal drift` = failure_step)) +
+  aes(x = prod_bias) +
+  facet_grid(reinforcement ~ `signal drift`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space for when there is no learning") +
+  scale_x_continuous("Production bias (toward target)")
+
+p.NoBoost <- p.noReinforce %+%
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(iconicity_boost == 0) %>%
+     rename(`reinforcement` = reinforcement_rate, `signal drift` = failure_step)) +
+  aes(y = prod_bias) +
+  facet_grid(reinforcement ~ `signal drift`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space for when there is no iconicity boost") +
+  scale_y_continuous("Production bias (toward target)")
+
+(p.noReinforce + p.noProdBias) /
+  (p.noDrift + p.NoLearning + p.NoBoost) +
+  plot_layout(guides = "collect")
+
+```
 
 
 ```{r fig.width=base.width*4, fig.height=base.height*3.5, fig.align='center', out.width='90%'}
-d.grid_results.long <- d.grid_results %>% 
-  pivot_longer(
-    cols = -c(iconicity, history),
-    names_to = "parameter",
-    values_to = "value") 
-
-# Figure out how to plot params best
+# Check params relative weight
 m.params <- lm(iconicity ~ prod_bias + iconicity_boost + learn_rate + reinforcement_rate + failure_step,
    data = d.grid_results) %>%
   tidy()
 
 # plot for different param settings
-p.grid.noBoost <- d.grid_results %>%
-  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>% 
+p.grid.noBoost <- d.grid_results.forPlot %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
   filter(iconicity_boost == 0) %>%
   rename("reinforcement" = reinforcement_rate, "production bias" = prod_bias) %>%
   ggplot(
@@ -380,12 +459,6 @@ p.grid.noBoost <- d.grid_results %>%
       fill = iconicity,
       color = ifelse(iconicity != max(iconicity), "red", "black"))) +
   geom_tile() +
-  # geom_tile(
-  #   data = . %>%
-  #     filter(iconicity >= 0.24 & iconicity <= 0.26),
-  #   color = "yellow", 
-  #   size = .3, 
-  #   fill = NA) +
   geom_point(
     data = . %>%
       filter(iconicity == max(iconicity)),
