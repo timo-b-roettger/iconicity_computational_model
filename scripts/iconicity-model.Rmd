@@ -190,9 +190,16 @@ d.simulation <- rbind(
     mutate(parameter_space = "noReinforcement"),
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = 0) %>%
     mutate(parameter_space = "noLearning"),
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = learn_rate_logit, iconicity_boost = 0) %>%
+    mutate(parameter_space = "noIconicityBoost"),
   # Also add one simulation that resembles the old model
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = learn_rate_logit, prod_bias = 0, failure_step = 0, reinforcement_rate = 0) %>%
     mutate(parameter_space = "onlyLearning"))
+
+# Diagnostics
+# d.onlyDrift <- d.empty %>%
+#   run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = 0, prod_bias = 0, reinforcement_rate = 0, iconicity_boost = 0) %>%
+#   mutate(parameter_space = "onlyDrift")
 
 ```
 
@@ -274,10 +281,25 @@ p.learned.iconicity <- d.iconicity %>%
 
 p.learned.iconicity
 
+d.simulation %>%
+  mutate(
+    dx = produced_x - stored_x,
+    dy = produced_y - stored_y
+  ) %>%
+  group_by(parameter_space, success) %>%
+  summarise(
+    mean_step = mean(sqrt(dx^2 + dy^2)),
+    .groups = "drop"
+  )
+
 ```
 
 ### Accuracy-iconicity dissociation
-Is there learning 'for free' even without iconicity bias? Check whether accuracy mediates iconicity (posthoc diagnostics). A) where iconicity is impossible (so when only learn_rate and noise is in the model), check whether separation can be predicted by accuracy + learn_rate + noise. B) where iconicity is possible, check whether separation can be predicted by iconicity + accuracy + failure_step.
+Learning (success over time) only fails when learn_rate is switched off, suggesting that guessing accuracy depends entirely on learn_rate (expected give that it is the only mechanism that updates guessing probabilities). Iconicity fails in two cases: when there is only learning and iconicity boost, and when there is no signal drift toward prototype on failed trials. This seems to suggest that iconicity is not a by-product of communicative success, and that it requires specific signal-space dynamics.
+
+Is there learning 'for free' even without iconicity bias? Check whether accuracy mediates iconicity (post-hoc diagnostics). A) where iconicity is impossible (so when only learn_rate and noise is in the model), check whether separation can be predicted by accuracy + learn_rate + noise. B) where iconicity is possible, check whether separation can be predicted by iconicity + accuracy + failure_step.
+
+TODO: check iconicity separately for success and fail trials (will no failure model show that iconicity only accumulates after success?, will failure models show that iconicity jumps after failures?)
 
 ```{r fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='90%'}
 # Signal space use
@@ -306,12 +328,14 @@ p.learned.signals + p.produced.signals +
 
 Figure XX seems to suggest that categories separate even for model runs where iconicity does not emerge. Why might this be the case? Could it be that separation is emerging from Bayesian updating + task structure? informative feedback structure (posteriors concentrate around category-consistent regions, inducing implicit clustering?)? Shared target structure (distinct targets, repeated sampling?)? Asymmetric error correction (incorrect guesses trigger larger updates than correct guesses --> category divergence)?
   * replace informative feedback with random correctness and check whether separation disappears (feedback structure is causal).
-  *set learn_rate = 0 but allow guesses to improve (inference alone is sufficient).
+  * set learn_rate = 0 but allow guesses to improve (inference alone is sufficient).
 
 ## Grid over the parameter space
 In order to investigate what parameter settings generate the largest overall iconicity across trials and simulations, we generated a grid search over four model parameters: production bias toward prototypes, strength of iconicity in comprehension (iconicity boost), strength of cultural selection (reinforcement rate), rate of learning in log-odds space (learning rate) and signal drift toward iconic prototypes on incorrect trials. The grid search runs the interaction model for each combination, and computes how iconic the signals become by the end of learning.
 
 Figure XX suggest that the more I learn for free (learn_rate), the less iconic I become. This would suggest that iconicity might not continue to grow in a language, at least not as a learning mechanism (only as a strategy to make the language more learnable for the interlocutor).
+
+We also note that under some condition, iconicity still emerges when signal drift on failed signals is switched off (panel XX, Fig XX). This suggests that failure-based drift is not strictly necessary but is normally the dominant pathway (error-driven vs. success-driven iconicity). Generating a positive feedback-loop of biased production--higher success--reinforcement--more biased stored signals--higher success..
 
 To explore: a memory bias toward more iconic forms? Making the signals more iconic does not seem to make iconicity emerge, merely increase learning rate. Currently, the model does not implement a mechanism whereby the memory of the signal form is reinforced as a function of its iconicity directly. Iconicity improves the guess probability but not the stored representation. That is, iconic forms are easier to understand but they do not improve memory of the signal form. However, there is direct memory bias on failure--the update_signal_on_failure function moves memory representation toward prototype on incorrect trials. Indirectly, there is iconicity bias on produced signals--the produced signals get reinforced on success, leading to production drifting toward iconic prototypes. Those forms are easier to interpret (signal_ease), yielding more successes and memory updates towards what was produced (so indirect bias via production bias).
 
@@ -455,10 +479,10 @@ p.NoBoost <- p.noReinforce %+%
 
 
 ```{r fig.width=base.width*4, fig.height=base.height*3.5, fig.align='center', out.width='90%'}
-# Check params relative weight
-m.params <- lm(iconicity ~ prod_bias + iconicity_boost + learn_rate + reinforcement_rate + failure_step,
-   data = d.grid_results) %>%
-  tidy()
+# # Check params relative weight
+# m.params <- lm(iconicity ~ prod_bias + iconicity_boost + learn_rate + reinforcement_rate + failure_step,
+#    data = d.grid_results) %>%
+#   tidy()
 
 # plot for different param settings
 p.grid.noBoost <- d.grid_results %>%
@@ -530,11 +554,13 @@ p.grid.NoDrift <- p.grid.noBoost %+%
 
 ```
 
-Also plot grid results where all other params are at empirically reasonable values, and only vary one parameter at the time. Check whether iconicity even appear without it, and whether accuracy depend on it. This will allow me to distinguish between necessary and sufficient params.
+Also, plot grid results where all other params are at empirically reasonable values, and only vary one parameter at the time. Check whether iconicity even appears without it, and whether accuracy depend on it. This will allow me to distinguish between necessary and sufficient params.
 
 One way to evaluate this is visualized in Figure XX below. Here, each panel shows the data from the grid search down-sampled to when the labelled parameter varies and the other parameters are set to a 'plausible' value: for production bias = 0.2, for iconicity boost = 0.267, for reinforcement rate = 0.067, for failure drift = 0.04, and for learning rate = 0.03. So, given a baseline configuration where other parameters are reasonable, how does iconicity change as I increase this parameter? If iconicity fails to emerge when the parameter value is at 0, no matter what the other parameters are doing, it is likely a necessary parameter. If iconicity emerges when the parameter > 0 even when all other parameters are set to 0, then it is likely a sufficient parameter.
 
 Figure XX suggests that only signal drift on failed trials is likely to be a necessary parameter. It also seems to be a sufficient parameter as when setting all other parameters = 0, iconicity still emerges. None of the other parameters seem to be sufficient, though.
+
+Without signal drift, reinforcement only strengthens already successful forms and production bias is weak when speaker guess increases. In addition, early random successes can lock in arbitrary, non-iconic equilibria, meaning that whatever random form works first gets reinforced even if it is not iconic.
 
 ```{r}
 # #Generate temp dataframe
