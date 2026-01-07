@@ -39,7 +39,7 @@ base.height = 2.5
 ```{r libraries, include=FALSE}
 library(tidyverse)  # data wrangling and plotting
 library(magrittr)   # for all pipes
-library(ggplot2)
+library(ggplot2)    # for plotting
 library(patchwork)  # combining plots
 library(broom)      # for regression analysis
 ```
@@ -53,36 +53,86 @@ RESET_MODELS = F        # switch on/off whether model is re-run
 ```
 
 # Modelling iconicity
-In this document, we report on a simple model of iconicity emergence in an artificial language interaction game, played in dyads. First, we briefly describe the experiment design. Second, we describe the iconicity model, its parameters and their psychological grounding. We then present simulations including visualizations.
+In this document, we report on a simple agent-based model of the emergence of iconicity in an artificial language interaction game, played in dyads. First, we briefly describe the design of the experiment simulated by the model. Second, we describe the model, its parameters and their psychological grounding. Finally, we present results from simulations.
 
-The model is an agent-based model, meant to simulate the emergence of iconicity resulting from interactions within a population, here: dyads. 
+## Experiment design
+In the experiment, two participants play an interactive game of artificial language learning. The language consists of XX form-meaning pairs that differ in size, shape and color. Each target referent is represented by a picture of an alien and a fixed consonant context (C_C_C) with inter-syllabic schwa-vowels. While the consonant context for each referent is always fixed, the vowel sounds can be altered by participants. 
 
-The adaptive behavior of interlocutors supposedly happens through a learning algorithm...
-
-## Experiment data
-The experiment consists of artificial language learning task, in the form of an interaction game between Agent A and Agent B. Prior to game play, both agents are trained on the form-meaning pairs up to a certain threshold. In each interaction round agent A and agent B takes turns alternating roles of listener and speaker: speaker agent gets a random referent (picture and consonant context) and produces a signal, whereby listener agent selects the perceived referent from a grid of 4 options (4-AFC task). Each form-meaning pair is presented 3 times for each agent in each condition (speaking, listening). On each trial, listener and speaker receive feedback on the guess (negative or positive). Stimuli consists of XX form-meaning pairs that differ in size, shape and color. The consonant context is fixed for each target referent, hence, only the vowel sound changes.
+Prior to game play, both participants, agent A and agent B, are trained on the XX form-meaning pairs up to a certain threshold. When both agents have met the learning criteria, they proceed to the interaction phase. On each trial in the interaction phase, agents take turns alternating roles of listener and speaker. The speaker agent gets a random referent (picture and consonant context) and produces a signal, whereby listener agent selects the perceived referent from a grid of 4 options. On each trial, listener and speaker receive negative or positive feedback on the guess. Each form-meaning pair is presented 3 times for each agent in each condition (speaking, listening), for a total of XX trials.
 
 ## Model specification
-Next, we describe the formalized parameters of the model, beginning with a description of the language at the initial learning state.
+The model is designed to capture how iconicity can emerge in a dyadic communcication game through communicative pressure and incremental learning. The central assumption is that successful interaction favors form-meaning mappings that are iconic (perceptually transparent?), and that interlocutors adjust their behavior over repeated interactions to produce more iconic signals using both segmental (e.g., vowel quality, vowel duration) and suprasegmental acoustic properties (e.g., pitch, word length). 
 
-### Form-meaning pairs
-The form-meaning pairs are represented by a combination of two vectors: one with category information---small, big---one with signal information, represented in a two-dimensional contained space where the prototypical signal is either [1,1] or [0,0]. The prototypical form-meaning pairs of the artificial language thus consist of a small referent paired with a [0,0] signal, and a large referent paired with a [1,1] signal.
+Agents interact in a game in which meanings are conveyed using acoustic signals. Learning is gradual and experience-dependent: agents continuously update their internal representations of form-meaning associations based on interaction outcomes (success-failure). Learning is probabilistic, such that increases in learning do not guarantee perfect performance on every trial???
 
-### Recognition and learning
-Recognition and learning of the form-meaning pairs is formalized as guessing rate. At each trial, the listener guesses what referent the signal refers to. If the guess strength > .5, the guess is correct, the speaker retrieves the signal for the referent and the signal remains the same. If the guess < .5, the guess is incorrect, there is no recall and the speaker draws a new signal near [.5,.5] with noise. The strength of guess rate is not only a function of the characteristics of the signal and the referent type, but also of previous learning/listener memory (priors). Previous learning equals the current guess rate of the agent, higher guess rate implies higher success rate. Hence, increased learning results in higher guessing rates of the agents. There is, however, always learning. Regardless of being incorrect or correct on each trial, the guessing rate increases at each round, but more so on correct than incorrect trials.
+An additional assumption of the model is that the adaptive behavior of interlocutors happens through a learning algorithm whereby agents continuously learn to produce and perceive more iconic signals across the experiment. Learning is operationalized as gradual increase in associative strength, which probabilistically translate into correct recognition... This initial model is a simplification of the actual experiment outlined above, however, with the hypothesized psychological mechanisms in place. For instance, the initial learning stage of the model is lower than the threshold described above, and the perceptual acoustic space of agents is reduced to a two-dimensional space (see below).
 
-Guessing nevertheless involves uncertainty which leads to imperfect learning. This is formalized as the input being perturbed by noise and participants lapsing. On trials where interaction fails, noise is formalized as signal drifting away from target, toward the middle of the two-dimensional space [.5,.5].
+Next, we describe the formalized parameters of the model, beginning with a description of agents and representations.
 
-### Iconicity
-The emergence of iconicity is formalized as a learnability bias during guessing that favors signals that are more closely located to their prototypical target in the two-dimensional space. Some form-meaning pairs are thus easier to learn/guess depending on their spatial proximity to iconic prototypes.
+### Agents, signal and meaning spaces
+  * there are two agents interacting in a language learning game, these agents behave rationally (?)
+  * form-meaning pairs consists of a semantic referent and a signal; meanings are discrete categories (small vs. big), and signals are represented as points in a two-dimensional space
+  
+Meanings are discrete semantic categories corresponding to size objects (small vs big). These categories are assumed to be psychologically basic and perceptually salient, consistent with extensive evidence that magnitude distinctions are readily mapped onto acoustic dimensions.
+
+Signals are represented as points in a continuous two-dimensional signal space. This space abstracts over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly contribute to perceived magnitude. The two dimensions do not correspond to specific acoustic parameters but capture the idea that signals vary continuously along perceptual dimensions relevant for iconic mapping.
+
+Each meaning is associated with an iconic prototype in signal space. The small category is associated with a prototype at [0,0], and the big category with a prototype at [1,1]. These prototypes represent perceptually transparent signal–meaning correspondences rather than learned conventions.
+
+---
+
+While the target experiment consists of XX form-meaning pairs, the form-meaning pairs in the model presented here is reduced to a combination of two vectors: one with semantic category information---small, big---one with signal information, represented in a two-dimensional contained space where the prototypical signal is either [0,0] or [1,1]. The prototypical form-meaning pairs of the artificial language thus consist of a small referent paired with a [0,0] signal, and a large referent paired with a [1,1] signal. This two-dimensional signal space can be considered an abstraction over multiple correlated acoustic cues that jointly encode size-related meaning. This also implies that the task itself is reduced to a 2AFC task.
+
+### Recognition and learning assumptions
+  * learning occurs incrementally on every trial, and is modulated by success or failure
+
+
+Agents maintain graded internal representations of form–meaning associations, formalized as guess strength. Guess strength reflects the agent’s subjective confidence or associative strength linking a signal to a meaning, rather than categorical accuracy.
+
+On each trial, the listener attempts to recognize the referent intended by the speaker’s signal. Recognition is probabilistic: higher guess strength increases the likelihood of correct recognition, but does not guarantee it. Overt recognition decisions are categorical, reflecting the forced-choice nature of the task, while underlying representations remain continuous.
+
+Learning occurs on every interaction. Both successful and unsuccessful trials provide information that updates the agent’s internal representations, though successful interactions contribute more strongly to learning. This assumption reflects error-driven and statistical learning mechanisms, whereby prediction errors and feedback incrementally strengthen associations over time.
+
+---
+
+Recognition and learning of the form-meaning pairs is formalized as guessing rate, which reflects the listener's subjective confidence in a form-meaning association. This increases through experience but does not guarantee correct behavior on every trial. 
+
+At each trial, the listener guesses what referent the signal refers to. If the guess strength $> .5$, the guess is considered correct. The speaker then retrieves the signal for the referent and the signal remains the same. If the guess $< .5$, the guess is considered incorrect, there is no recall from memory and the speaker draws a new signal near [.5,.5] in the two-dimensional space. Although internal representations are continuous, responses are categorical in this 2AFC-task; a threshold on guess strength formalizes this decision boundary. Further, the .5 threshold reflects chance performance in a 2AFC-task.
+
+The strength of guess rate is affected by the characteristics of the signal and the referent type (see below), but also of previous learning/listener memory. Previous learning equals the current guess rate of the agent. This implies that learning gets reinforced as higher previous guess rate generates higher chance of success on each trial, even before the speaker has produced a signal. Even unsuccessful trials provide information about the mapping space, leading to incremental learning, though with reduced learning rates relative to successful trials. This mirrors assumptions in implicit statistical learning, error-driven learning and gradient feedback sensitivity (where negative feedback is still informative).
+
+### Iconicity bias
+The emergence of iconicity in the model is driven by a learnability bias favoring signal–meaning mappings that are perceptually transparent. Signals that are closer to their iconic prototypes are easier to recognize and learn, resulting in higher initial guess strength and faster learning trajectories. Iconicity is thus not imposed directly, but arises from differential learnability under communicative pressure.
+
+---
+
+The emergence of iconicity is formalized as a learnability bias during guessing that favors signals that are more closely located to their prototypical target in the two-dimensional space. Some form-meaning pairs are thus easier to learn/guess depending on their spatial proximity to iconic prototypes. This assumes that signals closer to iconic prototypes are easier to perceive, encode, and retrieve, leading to higher initial guess strength and faster learning, making iconicity a processing advantage more so than a special symbolic mechanism???
+
+### Noise and uncertainty
+  * noise perturbs signal perception and production
+
+Signal perception and production are subject to uncertainty. This uncertainty reflects perceptual noise, memory limitations, and articulatory variability. Under conditions of uncertainty or communicative failure, agents tend to produce less specified signals, which are biased toward the center of the signal space. This central tendency represents regression toward an unmarked or default signal when confidence in a form–meaning mapping is low.
+
+---
+
+Guessing nevertheless involves uncertainty which leads to imperfect learning. This is formalized as the input being perturbed by noise.  This noise could encompass both motor noise in production, external and internal noise in perception, as well as participants lapsing on certain trials (randomly responding without taking the signal into account). On trials where interaction fails, noise is formalized as signal drifting away from target, toward the middle of the two-dimensional space [.5,.5]; i.e., a regression toward an unmarked signal under uncertainty.
 
 ## Model implementation
-Next, we describe how these parameters are implemented in the model.
+Next, we describe how the model is implemented, step-wise going through the model.
 
-### Signal update
-At each trial, the signal updates depending on the speaker's current guess rate, prior to guessing. This production bias toward prototype in production updates the signal by moving it a small fixed step toward the iconic prototype for that referent type. This adds a directional pressure pushing small signals to move towards [0,0] or large signals to move towards [1,1], i.e., push of signals towards the iconic target (directional evolution). When speakers' guessing rates are higher, the bias is smaller and a signal closer to stored value is produced; when speakers' guessing rates are lower, bias is larger and speakers produce a more prototypical signal. The bias is applied prior to calculating the posterior probability, hence, it only affects the signal being produced not the stored representation.<!--psychological mechanism: motor simplification, audience design?--> This is implemented as sampling from beta?? distribution with a mean shifted toward [0,0] or [1,1]: this will affect signal generation becoming more iconic over time.
+Exact update equations for guess strength
 
-In addition to this deterministic shift, two-dimensional Gaussian noise is added, sampled from a distribution with $\mu = 0$, $\sigma = .05$, and bounded to [0,1]. Thus, signal drift on failure is directional toward the prototype (iconicity) but includes random variation from noise. The failure drift could be interpreted as an articulatory bias, i.e., an intentional iconicity parameter on behalf of the speaker when noticing that communication fails.<!--Given that there are no minimal pairs of evident contrasts in the experiment, it might be that this parameter generates iconicity even if the real design could not produce this mechanism?; psych mech: error-based learning/repair?-->
+Learning rates or increment sizes
+
+Noise distributions (e.g., Gaussian, uniform)
+
+Threshold values (e.g., > .5)
+
+Number of trials, dyads, or simulation runs
+
+Initialization values
+
+Random seed handling
 
 ### Learning = the probability of correct guess
 Learning of form-meaning pairs is implemented by calculating the probability of the correct guess at each trial in the interaction game. The probability of correct guess is a function of the previous guessing rate of agent (= the learned ability), the signal fit (= signal ease) and iconicity bias (= iconicity boost). 
@@ -95,6 +145,14 @@ The signal fit is multiplied with an iconicity boost that represents the strengt
 The probability is bounded at $pmax = .95$ to account for $.05$ noise/lapse. At each trial, the posterior probability is implemented as drawing from a random beta distribution. After each trial, a learning rate of $p = .005$ is added to the listener guess, regardless of guess being correct or incorrect. If the learner guess is correct, the same rate is added to the listener guess again, thus increasing learning when correct. The signal, however, remains intact.<!--psych mech of learn rate: plasticity/memory strenght?-->
 
 Cultural selection bias: implemented as a reinforcement rate on successful trials. The learned/stored signal is updated toward the speaker's produced signal by a fixed proportion. This biases learning toward forms that have been successful in communication, strengthening emergent conventions over time (by reinforcing forms that are already successful in the community and consolidating new forms). It affects memory update on successful trials, moving the stored signal toward the produced signal on success, affecting the shared memory of signals.<!--Is this a strategy of making the signal more iconic to make it more learnable in the communicative game? psych mech: social alignment?-->
+
+### Signal update
+At each trial, the signal updates depending on the speaker's current guess rate, prior to guessing. This production bias toward prototype in production updates the signal by moving it a small fixed step toward the iconic prototype for that referent type. This adds a directional pressure pushing small signals to move towards [0,0] or large signals to move towards [1,1], i.e., push of signals towards the iconic target (directional evolution). When speakers' guessing rates are higher, the bias is smaller and a signal closer to stored value is produced; when speakers' guessing rates are lower, bias is larger and speakers produce a more prototypical signal. The bias is applied prior to calculating the posterior probability, hence, it only affects the signal being produced not the stored representation.<!--psychological mechanism: motor simplification, audience design?--> This is implemented as sampling from beta?? distribution with a mean shifted toward [0,0] or [1,1]: this will affect signal generation becoming more iconic over time.
+
+In addition to this deterministic shift, two-dimensional Gaussian noise is added, sampled from a distribution with $\mu = 0$, $\sigma = .05$, and bounded to [0,1]. Thus, signal drift on failure is directional toward the prototype (iconicity) but includes random variation from noise. The failure drift could be interpreted as an articulatory bias, i.e., an intentional iconicity parameter on behalf of the speaker when noticing that communication fails.<!--Given that there are no minimal pairs of evident contrasts in the experiment, it might be that this parameter generates iconicity even if the real design could not produce this mechanism?; psych mech: error-based learning/repair?-->
+
+## Results of simulation
+Here, we present the results of a simulation of XX number of dyads, XX number of trials. Random seed handling.
 
 
 ## Concerns
