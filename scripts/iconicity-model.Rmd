@@ -1,5 +1,5 @@
 ---
-title: "Modelling iconicity"
+title: "Modelling the emergence of iconicity in interactive language learning"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
   bookdown::pdf_document2: default
@@ -53,44 +53,44 @@ RESET_MODELS = F        # switch on/off whether model is re-run
 ```
 
 # Introduction
-In this document, we report on a simple agent-based model of the emergence of iconicity in an artificial language interaction game played in dyads. First, we describe the model, its parameters and their psychological grounding. Second, we describe how the model is computationally implemented. Finally, we present results from simulations and grid searches exploring the relative importance of the different parameters for the emergence of iconicity.
+In this document, we report on a simple agent-based model of the emergence of iconicity in an artificial language interaction game played in dyads. First, we describe the model, its parameters and their psychological grounding. Second, a description of its computational implementation is presented. Finally, we present results from simulations and grid searches exploring the relative importance of the different parameters for the emergence of iconicity.
 
 # Model specification
-The model is designed to capture how iconicity can emerge in a dyadic interaction game through communicative pressure and incremental learning. Agents interact in a game in which meanings are conveyed using acoustic signals. The central assumption is that successful interaction favors form-meaning mappings that are iconic, and that interlocutors adjust their behavior over repeated interactions to produce more iconic signals using both segmental (e.g., vowel quality, vowel duration) and suprasegmental acoustic properties (e.g., pitch, word length). Learning is considered gradual and experience-dependent as agents continuously update their internal representations of form-meaning associations and adjust their signal production based on interaction outcomes (success or failure). Because learning is probabilistic, increases in associative strength do not guarantee perfect performance on every trial, but instead raise the likelihood of correct recognition.
+The model is designed to capture how iconicity can emerge in a dyadic interaction game through communicative pressure and incremental learning. Agents interact in an artificial language learning game in which meanings are conveyed using acoustic signals. The central assumption is that successful interaction favors form-meaning mappings that are iconic, and that interlocutors adjust their behavior over repeated interactions to produce more iconic signals using both segmental (e.g., vowel quality, vowel duration) and suprasegmental acoustic properties (e.g., pitch, word length). Learning is considered gradual and experience-dependent as agents continuously update their internal representations of form-meaning associations and adjust their signal production based on interaction outcomes (success or failure). Because learning is considered probabilistic, increases in associative strength do not guarantee perfect performance on every trial, but raise the likelihood of correct recognition.
 
 Next, we describe the formalized parameters of the model, beginning with a description of agents and representations.
 
 ## Agents, signal and meaning spaces
-The model simulates an interaction game played in dyads where participants, agent A and agent B, take turns alternating roles of listener and speaker.<!--The agents are assumed to behave rationally (?).--> On each trial, one agent produces a signal, whereby the other agent categorizes the signal as referring to one of the referents.
+The model simulates an interaction game played in dyads where two participants, agent A and agent B, take turns alternating roles of listener and speaker. On each trial, one agent produces a signal, whereby the other agent categorizes the signal as referring to one of the referents.
 
-The artificial language is made up of a number of form-meaning pairs. Each pair consists of a semantic referent and a signal. Meanings are discrete semantic categories corresponding to size objects (small vs. big). These categories are assumed to be psychologically basic and perceptually salient, consistent with extensive evidence that magnitude distinctions are readily mapped onto acoustic dimensions.
+The artificial language is made up of a number of form-meaning pairs. Each pair consists of a semantic referent and a signal. Meanings are discrete semantic categories corresponding to size objects (small vs. large). These categories are assumed to be psychologically basic and perceptually salient, consistent with extensive evidence that magnitude distinctions are readily mapped onto acoustic dimensions.
 
 Signals are represented as points in a continuous (yet contained) two-dimensional signal space. This space can be considered a simplified abstraction over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly encode size-related meaning. The two dimensions do not correspond to specific acoustic parameters but capture the idea that signals vary continuously along perceptual dimensions relevant for iconic mapping.
 
-Each meaning is associated with an iconic prototype in signal space. The small category is associated with a prototype at [0,0], and the big category with a prototype at [1,1]. These prototypes represent perceptually transparent signal–meaning correspondences.
+Each meaning is associated with an iconic prototype in signal space. The small category is associated with a prototype at [0,0], and the large category with a prototype at [1,1]. These prototypes represent perceptually transparent signal–meaning correspondences.
 
 ## Recognition, learning assumptions and signal update
 Recognition and learning of the form-meaning pairs are overall formalized as a function of previous guess rate, iconicity, and the signal's distance to the referent prototype (see next section). Guess rate reflects the listener's subjective confidence in a mapping and corresponds to the associative strength linking a signal to a meaning. 
 
-On each trial, the speaker agent gets a random referent (small or big) and produces a signal, whereby the listener agent attempts to recognize the intended referent in a two-alternative forced-choice (2AFC) task. Recognition is probabilistic: higher guess rate increases the likelihood of correct recognition, but does not guarantee it. Because previous learning equals the current guess rate of the agent, higher previous guess rate generates higher chance of success on subsequent trials, reinforcing existing mappings and accelerating learning trajectories. Overt recognition decisions are categorical, reflecting the forced-choice nature of the task, while underlying representations remain continuous. A threshold on guess strength formalizes this decision boundary, with values greater than .5 counted as correct. The .5 threshold reflects chance performance in a 2AFC-task.
+On each trial, the speaker agent gets a random referent (small or large) and produces a signal, whereby the listener agent attempts to recognize the intended referent in a two-alternative forced-choice (2AFC) task. Recognition is probabilistic: higher guess rate increases the likelihood of correct recognition, but does not guarantee it. Because previous guess rate (learning) equals the current guess rate of the agent at a given trial, higher previous guess rate generates higher chance of success on subsequent trials, reinforcing existing mappings and accelerating learning trajectories. Overt recognition decisions are categorical, reflecting the forced-choice nature of the task, while underlying representations remain continuous. A threshold on guess rate formalizes this decision boundary, with values greater than .5 counted as correct. The .5 threshold reflects chance performance in a 2AFC-task.
 
-Feedback is provided on every trial and drives incremental updating of internal representations (=learning). Both positive and negative feedback contribute to learning, but successful interactions lead to stronger reinforcement. After each trial, a *learn rate* of $p = .005$ is added to the listener guess irrespective of outcome. However, if the learner guess is correct, the same rate is added to the listener guess again, thus increasing learning when correct. This assumption reflects error-driven and statistical learning mechanisms, whereby prediction errors and feedback incrementally strengthen associations over time. 
+Feedback is provided on every trial and drives incremental updating of internal representations. Both positive and negative feedback contribute to learning, but successful interactions lead to stronger reinforcement. After each trial, a *learn rate* is added to the listener guess irrespective of outcome. However, if the learner's guess is correct, this rate is added a second time, further reinforcing learning. This reflects the assumption that errors and feedback incrementally strengthen associations over time.
 
-Interaction outcomes also affect signal production. When communication succeeds, the listener retrieves the signal for the referent and the learned signal is updated toward the speaker's produced signal by a fixed proportion, a *reinforcement rate*. This biases learning toward forms that have been successful in communication, strengthening emergent conventions over time by reinforcing forms that are already successful in the community and consolidating new forms. When communication fails, the stored signal is moved toward the iconic prototype for that referent by a fixed proportion, i.e., *failure step*. The failure drift could be interpreted as an articulatory bias, i.e., an intentional iconicity parameter on behalf of the speaker when noticing that communication fails. Together, these update rules allow both successful and unsuccessful interactions to shape conventions, with success consolidating emergent mappings and failure introducing directional pressure toward iconicity.
+Interaction outcomes also affect signal production. When communication succeeds, the listener retrieves the signal for the referent and the learned signal is updated toward the speaker's produced signal by a fixed proportion, a *reinforcement rate*. This biases learning toward forms that have been successful in communication, strengthening emergent conventions over time by reinforcing forms that are already successful in the community and consolidating new forms. When communication fails, the learned signal is instead moved toward the iconic prototype for that referent by a fixed proportion, a *failure step*. This signal drift on failed trials could be interpreted as an articulatory bias, i.e., an intentional iconicity parameter on behalf of the speaker when noticing that communication fails. Together, these update rules allow both successful and unsuccessful interactions to shape conventions, with success consolidating emergent mappings and failure introducing directional pressure toward iconicity.
 
 ## Iconicity bias
-The emergence of iconicity in the model is formalized as a learnability bias during guessing that favors signals that are more closely located to their prototypical target in the two-dimensional space, operationalized in two parameters---*signal ease* and *iconicity boost*. The signal fit (signal ease), is a measure of Euclidean distance that expresses target distance to attractor, i.e., the iconic prototype. The signal fit is multiplied with an iconicity boost that represents the strength of iconicity affecting guessing. This means that iconicity bias is implemented as reinforcing the signal fit to iconic target. Some form-meaning pairs are thus easier to perceive, encode, and retrieve, depending on their spatial proximity to iconic prototypes, leading to higher guess rate and faster learning. Iconic forms are thus not imposed directly in the model; they become preferred because they are easier for learners to interpret and therefore more likely to be reinforced.
+The emergence of iconicity in the model is overall formalized as a learnability bias during guessing that favors signals that are more closely located to their prototypical target in the two-dimensional space, operationalized in two parameters---*signal ease* and *iconicity boost*. Signal ease measures the Euclidean distance between a produced signal and its iconic prototype, capturing how well the signal fits the attractor. This value is scaled by the iconicity boost parameter which controls the strength of iconicity bias affecting guessing. Together, these parameters make some form-meaning pairs easier to perceive, encode, and retrieve, depending on their spatial proximity to iconic prototypes, leading to higher guess rate and faster learning. Iconic forms are thus not imposed directly in the model; they become preferred because they are easier for learners to interpret and therefore more likely to be reinforced.
 
-Additionally, due to communicative pressure, speakers exhibit a directional bias in production toward iconic prototypes, a *production bias*. Signals for small referents tend to shift toward the [0,0] prototype while signals for big referents tend to shift toward the [1,1] prototype. This production bias is modulated by the speaker's confidence in the learned form-meaning mappings such that lower current guess rate generates stronger prototype bias, whereas higher guess rate generates weaker bias. The effect introduces a directional pressure toward iconic targets during production, so that iconicity can emerge gradually through repeated interaction.
+Additionally, due to communicative pressure, speakers exhibit a directional bias in production toward iconic prototypes, a *production bias*. Signals for small referents tend to shift toward the [0,0] prototype while signals for large referents tend to shift toward the [1,1] prototype. This production bias is modulated by the speaker's confidence in the learned form-meaning mappings such that lower current guess rates generate stronger prototype bias, whereas higher guess rates generate weaker bias. The effect introduces a directional pressure toward iconic targets during production, so that iconicity can emerge gradually through repeated interaction.
 
 ## Noise and uncertainty
 Guessing involves uncertainty which leads to imperfect learning. This is formalized as the input being perturbed by *noise*. This noise could encompass both motor noise in production, external and internal noise in perception, as well as participants lapsing on certain trials (randomly responding without taking the signal into account). Under conditions of uncertainty or communicative failure, agents tend to produce less specified signals, which are biased toward the center of the signal space. This central tendency represents regression toward an unmarked or default signal when confidence in a form–meaning mapping is low.
 
 # Model implementation
-Next, we describe step-wise how the model is implemented.
+Next, we step-wise describe how the model is implemented.
 
 ## Signal production
-Each trial is initialized by randomly assigning agent A and agent B to either speaker or listener role. The speaker is given a random referent and the stored signal for that referent and agent is retrieved. The initial signals at the start of the experiment/simulation are placed at the center of the space, [.5,.5]. The signal produced by the speaker is affected by the *production bias*, dependent on the speaker's current guess rate. Lower guess rate yields stronger bias toward prototype, while higher guess rate yields weaker bias. The biased production target is computed as a weighted average of the stored signal and the prototype, where the prototype weight increases as $p$ decreases, implemented as sampling from a two-dimensional Gaussian distribution with a mean shifted toward [0,0] or [1,1]. 
+Each trial is initialized by randomly assigning agent A and agent B to either speaker or listener role. The speaker is given a random referent and the learned signal for that referent and agent is retrieved. The initial signals at the start of the simulation are placed at the center of the space, [.5,.5]. The signal produced by the speaker is affected by the *production bias*, dependent on the speaker's current guess rate. Lower guess rate yields stronger bias toward prototype, while higher guess rate yields weaker bias. The biased production target is computed as a weighted average of the learned signal and the prototype, where the prototype weight increases as $p$ decreases, implemented as sampling from a two-dimensional Gaussian distribution with a mean shifted toward [0,0] or [1,1]. 
 
 After updating the signal, *Gaussian noise* is added to each dimension ([x,y]) of the produced token with $sd = .05$ to model production variability. After noise is added, values are bounded within [0,1] in each dimension. The noise affects only the produced token and does not modify the underlying stored representation.
 
@@ -106,7 +106,7 @@ produce_signal <- function(previous_signal, referent_type, speaker_guess_rate) {
 ## Recognition and learning = the probability of correct guess
 Next, the posterior probability of the correct guess is calculated as a function of the listener's current guess rate and the ease with which the signal maps onto the referent's prototype. The initial learning state of the listener is summarized to an averaged probability of $~.33$. This probability is established by drawing n random values from a beta distribution with a $\mu = .333$ and $\sigma = .032$. 
 
-The *signal ease* is defined as a decreasing function of the Euclidean distance between the signal and the prototypical signal for that referent, further scaled by the *iconicity boost*. The signal ease distance measure drops off sharply (exponentially) when moving away from targets. 
+The *signal ease* is defined as a decreasing function of the Euclidean distance between the signal and the prototype signal for that referent, further scaled by the *iconicity boost*. The signal ease distance measure drops off sharply (exponentially) when moving away from targets. 
 
 ```{r echo=TRUE, eval=FALSE}
 signal_ease <- function(signal_xy, referent_type) {
@@ -118,7 +118,7 @@ signal_ease <- function(signal_xy, referent_type) {
 
 Figure \@ref(fig:signal-ease) illustrates signal ease relative to the signal space, with higher ease for more prototypical values.
 
-(ref:signal-ease) Illustration of signal ease in the two-dimensional signal space, for small and big referents.
+(ref:signal-ease) Illustration of signal ease in the two-dimensional signal space, for small and large referents.
 
 ```{r signal-ease, fig.width=base.width*4, fig.height=base.height*2, out.width='90%', fig.align='center', fig.pos='ht', fig.cap="(ref:signal-ease)"}
 # show heatmap of ease relative to signal space
@@ -141,7 +141,7 @@ ggplot(grid,
 
 ```
 
-Previous guess rate is converted to log-odds, combined additively with the iconicity-weighted signal ease, and then converted back to probability space. The probability is bounded at $pmax = .95$ to account for $.05$ noise/lapse. The final outcome of the trial, success or failure, is implemented as random sampling from a binomial distribution. If $p > .5$, the referent has been correctly recognized, otherwise incorrect. The guess rate of both speaker and listener is then updated by adding a constant *learn rate* of $.05$. 
+Previous guess rate is converted to log-odds, combined additively with the iconicity-weighted signal ease, and then converted back to probability space. The probability is bounded at $pmax = .95$ to account for $.05$ noise/lapse. The final outcome of the trial, success or failure, is implemented as random sampling from a binomial distribution. If $p > .5$, the referent has been correctly recognized, otherwise incorrectly. The guess rate of both speaker and listener is then updated by adding a constant *learn rate* of $.05$. 
 
 ```{r echo=TRUE, eval=FALSE}
 guess_probability <- function(agent_guess_prob, signal_xy, referent_type) {
@@ -161,7 +161,7 @@ listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
 ```
 
 ## Updating of learned signals and guess rates
-After each trial, the learned signals are updated based on success or failure. If listener guess is correct, the stored signal is moved toward the produced token by applying reinforcement rate. If the listener guess is incorrect, the signal drifts toward the referent's iconic prototype by applying failure step to the signal, and adding additional noise to capture variability in updating.
+After each trial, the learned signals are updated based on success or failure. If listener guess is correct, the learned signal is moved toward the produced token by applying *reinforcement rate*. If the listener guess is incorrect, the signal drifts toward the referent's iconic prototype by applying *failure step* to the signal, and adding additional *noise* to capture variability in updating.
 
 ```{r echo=TRUE, eval=FALSE}
 reinforce_signal <- function(previous_signal, produced_signal) {
@@ -177,16 +177,16 @@ update_signal_on_failure <- function(previous_signal, referent_type) {
 Finally, the speaker and listener guess rates are updated based on the current guess, before the output is stored and the simulation runs through the entire loop again.
 
 ## Initialization values and simulation rounds
-For the results presented below, we ran 10 simulations, each with n = 1000 interaction rounds for a total of 10 000 trials. Simulations were run with fixed random seeds for reproducibility.<!--changing the seed did not qualitatively alter the results -- CHECK!--> The number of unique referents in the guessing game was set to 6; 3 small referents and 3 large referents.
+For the results presented below, we ran 10 simulations, each with n = 1000 interaction rounds for a total of 10 000 trials. Simulations were run with fixed random seeds for reproducibility.<!--changing the seed did not qualitatively alter the results -- haven't checked if that is actually true--> The number of unique referents in the guessing game was set to 6; 3 small referents and 3 large referents.
 
-The amount of variation introduced during production was set to $.05$ (noise), and learn rate to $.005$. Iconicity boost was set to $.2$ and production bias toward prototype to $.15$. How strongly stored signals were moved toward produced signal on success (reinforcement rate) = $.05$, and how much stored signal moves toward prototype on failure (failure step) was set to $.03$.
+The simulation used the following parameter settings: noise ($.05$), learn rate ($.005$), iconicity boost ($.2$), production bias ($.15$), reinforcement rate ($.05$), and failure step ($.03$).
 
 # Results
-To evaluate the different parameters, we generated 7 types of models. The main model included all of the above described parameters set at their intialization values (i.e., production bias, iconicity boost, learn rate, failure drift, and reinforcement rate). The remaining six models were generated by switching off one of the parameters at a time by setting their value to 0, or switching off all of the parameters besides learning rate. This was done to evaluate whether updating guessing rate with a fixed rate would be sufficient for iconicity to emerge. 
+We generated 6 types of models. The main model included all of the above described parameters set at their intialization values (i.e., production bias, iconicity boost, learn rate, failure drift, and reinforcement rate). The remaining 5 models were generated by switching off one of the parameters at a time by setting their value to 0.
 
-Figure \@ref(fig:iconicity-plot) illustrates the emergence of iconicity over trials for each of these 7 models. Iconicity emerges over time in all models, except when only learning is assumed (right-most panel). The increase in iconicity is also very small for the model for which failure drift is swithed off. This seems to suggest the importance of pushing produced signals on failed interactions toward more prototypical values. Iconicity might thus not be a by-product of communicative success, but requires specific signal-space dynamics. Interestingly, the best performing model seems to be the model where no learn rate is added to the updated speaker and listener guess rates.
+Figure \@ref(fig:iconicity-plot) illustrates the emergence of iconicity over trials for each of these 6 models. All models display similar patterns of iconicity emergence over time, besides the model for which failure drift is switched off. This highlights the importance of pushing produced signals on failed interactions toward more prototypical values. Iconicity might thus not be a by-product of communicative success, but requires specific signal-space dynamics. Interestingly, the best performing model seems to be the model where no learn rate is added to the updated speaker and listener guess rates.
 
-(ref:iconicity-plot) Evolution of iconicity for learned tokens across simulation time. Iconicity is averaged in bins of 100 rounds and showed separately for each parameter setting (facets). Light lines trace individual simulations, the bold line denotes the average across simulations. The dashed horizontal line marks the iconicity of a neutral signal located at the center of the space [.5,.5].
+(ref:iconicity-plot) Evolution of iconicity for learned tokens across simulation time. Iconicity is averaged in bins of 100 rounds and showed separately for each parameter setting (facets). Light lines trace individual simulations, the bold line denotes the average across simulations. The dashed horizontal line represents baseline iconicity expected from random signals without structure or learning.
 
 ```{r parameters}
 set.seed(2139752)
@@ -268,10 +268,10 @@ d.iconicity <- d.simulation %>%
 
 ```
 
-```{r iconicity-plot, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='90%', fig.cap="(ref:iconicity-plot)", warning=FALSE}
-#iconicity trajectories
+```{r iconicity-plot, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:iconicity-plot)", warning=FALSE}
+#iconicity trajectories - remove model with only learning since that was added to compare against old model
 p.learned.iconicity <- d.iconicity %>%
-  filter(process == "learned") %>%
+  filter(process == "learned", parameter_space != "onlyLearning") %>%
   group_by(parameter_space, bins, sim) %>% 
   summarise(iconicity = mean(iconicity)) %>%
   ggplot(
@@ -309,13 +309,14 @@ p.learned.iconicity
 
 ```
 
-We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. The accuracy for each of the 7 models is strikingly similar, except for the model where no learn rate is added, see Figure \@ref(fig:accuracy). This seems to suggest that guessing accuracy depends entirely on learn_rate (expected given that it is the only mechanism that updates guessing probabilities). 
+We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. The accuracy for each of the 6 models is strikingly similar, except for the model where no learn rate is added, see Figure \@ref(fig:accuracy). This seems to suggest that guessing accuracy depends entirely on learn rate (which is expected given that it is the only mechanism that updates guessing probabilities).
 
-(ref:accuracy) Success rate across simulation rounds. A binomial GLM with smoothing is fit to the proportion of successful interactions. Shaded bands indicate the model-based standard error. Panels correspond to different parameter settings. Success values are bounded between 0 and 1.
+(ref:accuracy) Success rate across simulation rounds. A binomial GLM with smoothing is fit to the proportion of successful interactions. Shaded bands indicate the model-based standard error. Panels correspond to the different parameter settings.
 
-```{r accuracy, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='90%', fig.cap="(ref:accuracy)"}
+```{r accuracy, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:accuracy)"}
 # Plot success rate over time across simulation within parameter space
 d.simulation %>%
+  filter(parameter_space != "onlyLearning") %>%
   #group_by(parameter_space, round) %>%
   #summarise(success = mean(success)) %>%
   ggplot(
@@ -331,13 +332,14 @@ d.simulation %>%
   theme_minimal()
 ```
 
-Figure \@ref(fig:signal-space) visualizes the distribution of learned and produced signals across simulations for each of the 7 model types. The figure seems to suggest that categories separate even for models where iconicity does not emerge, e.g., the model without failure step (second row), and the model that only assumes an additive learn rate (last row).
+Figure \@ref(fig:signal-space) visualizes the distribution of learned and produced signals across simulations for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge, e.g., the model without failure step (second row).
   
-(ref:signal-space) Distribution of stored (left panels) and produced (right panels) signals over the course of the simulation. Each point represents a signal token in two-dimensional signal space; colors denote referent type (small vs. big). Columns correspond to simulation replicates and rows to parameter settings. Axes are bounded to the model's signal space [0,1]^2.
+(ref:signal-space) Distribution of stored (left panels) and produced (right panels) signals over the course of the simulation. Each point represents a signal token in two-dimensional signal space; colors denote referent type (small vs. large). Columns correspond to simulation replicates and rows to parameter settings.
   
-```{r signal-space, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='90%', fig.cap="(ref:signal-space)"}
+```{r signal-space, fig.width=base.width*7, fig.height=base.height*4, fig.align='center', out.width='100%', fig.cap="(ref:signal-space)"}
 # Signal space use
 p.learned.signals <- d.simulation %>%
+  filter(parameter_space != "onlyLearning") %>%
   ggplot(
     aes(stored_x, 
         stored_y, 
@@ -362,22 +364,30 @@ p.learned.signals + p.produced.signals +
 
 ```
 
-<!--This entire segment needs editing-->Overall, the results seem to suggest that the strongest effect on the emergence of iconicity is in whether the signal drifts toward the prototype on incorrect trials. There seems to be an implicit benefit of learning iconic forms quicker, but without necessarily making iconicity emerge? Success in the model does not directly improve memory of the signal form. It only improves the guess probability but not the stored signal. So, iconic forms are easier to understand but do not improve memory of the signal form. However, there is direct memory bias on unsuccessful trials, the update_signal_on_failure function moves memory toward prototype/iconic patterns. If communication fails, the stored signal shifts toward the iconic prototype---direct iconicity bias. There is also indirect memory bias using prod_bias because produced signals trend toward prototypes for speakers with lower guess rate, and even for speakers with high guess rates when noise pushes them. Those produced signals then get reinforced on success by reinforce_signal. So the memory drift and reinforcement loop leads to: production drifting toward iconic prototypes, those forms are easier to interpret (signal_ease), they yield more successes, success to reinforcement to memory updates toward what was produced.
+Overall, the results seem to suggest that iconicity emerged reliably except when the failure step mechanism was disabled. Removing failure drift eliminated the tendency for signals to move toward their iconic prototypes on failed trials, indicating that this mechanism plays a central role in shaping the signal space. This suggests that iconicity in this model depends on specific signal-space dynamics that bias failed forms toward iconic attractors.
 
-## Concerns and open questions
-  * learning update: the guess probabilities improve over time while signal drift decreases (no drift on correct trials), this means that the signal tends to freeze near its initial state [.5,.5].
-  * the iconicity bias: iconicity is implemented through the ease function which improves listeners' probability of correct guesses, but it does not affect the likelihood of the speaker producing good-guess signals.
-  * Why the accuracy-iconicity dissociation?
-  * Why the emergence of a binary category space even for models where iconicity does not emerge? Could it be that separation is emerging from Bayesian updating + task structure? informative feedback structure (posteriors concentrate around category-consistent regions, inducing implicit clustering?)? Shared target structure (distinct targets, repeated sampling?)? Asymmetric error correction (incorrect guesses trigger larger updates than correct guesses --> category divergence)?
+Interestingly, learn rate appeared to influence communicative accuracy without substantially affecting iconicity. When learn rate was removed, agents reached relatively high levels of iconicity but reduced communicative success, indicating that learn rate governs guessing accuracy whereas failure drift governs the emergence of form-meaning structure. This seems to suggest that agents can learn to communicative successfully without producing iconic forms, and that iconic forms can emerge without directly improving recognition accuracy.
 
-## Grid over the parameter space
-In order to investigate what parameter settings generate the largest overall iconicity across trials and simulations, we generated a grid search over four model parameters: production bias toward prototypes, strength of iconicity in comprehension (iconicity boost), strength of cultural selection (reinforcement rate), rate of learning in log-odds space (learning rate) and signal drift toward iconic prototypes on incorrect trials. The grid search runs the interaction model for each combination, and computes how iconic the signals become by the end of learning.
+Visualizing the learned and produced signal spaces further suggested that category separation can occur even in the absence of iconicity, indicating that lexical categories can form without alignment to iconic prototypes. It might be the case that iconicity emerges from indirect learning advantages rather than from explicit pressure for communicative success---the combination of failure drift, production bias, interpretative ease, and reinforcement creating a positive feedback loop where failure pushes signals toward iconic prototypes, iconic signals are easier to interpret, successful interpretations reinforce produced forms and reinforcement consolidates iconic patterns in memory?<!--is it?--->
 
-Figure XX suggest that the more I learn for free (learn_rate), the less iconic I become. This would suggest that iconicity might not continue to grow in a language, at least not as a learning mechanism (only as a strategy to make the language more learnable for the interlocutor).
+## Grid search over the parameter space
+In order to investigate what parameter settings generate the largest increase in iconicity across trials and simulations, we generated a grid search over the five model parameters: production bias, iconicity boost, reinforcement rate, learning rate, and failure step. The grid search explored the following values for each of the parameters.
 
-We also note that under some condition, iconicity still emerges when signal drift on failed signals is switched off (panel XX, Fig XX). This suggests that failure-based drift is not strictly necessary but is normally the dominant pathway (error-driven vs. success-driven iconicity). Generating a positive feedback-loop of biased production--higher success--reinforcement--more biased stored signals--higher success..
+```{r echo=TRUE, eval=FALSE}
+production bias = seq(0, 0.3, length.out = 4)
+iconicity boost = seq(0, 0.4, length.out = 4)
+reinforcement rate = seq(0, 0.1, length.out = 4)
+failure step = seq(0, 0.06, length.out = 4)
+learn rate = seq(0, 0.045, length.out = 4)
+```
 
-To explore: a memory bias toward more iconic forms? Making the signals more iconic does not seem to make iconicity emerge, merely increase learning rate. Currently, the model does not implement a mechanism whereby the memory of the signal form is reinforced as a function of its iconicity directly. Iconicity improves the guess probability but not the stored representation. That is, iconic forms are easier to understand but they do not improve memory of the signal form. However, there is direct memory bias on failure--the update_signal_on_failure function moves memory representation toward prototype on incorrect trials. Indirectly, there is iconicity bias on produced signals--the produced signals get reinforced on success, leading to production drifting toward iconic prototypes. Those forms are easier to interpret (signal_ease), yielding more successes and memory updates towards what was produced (so indirect bias via production bias).
+Similarly to the figures presented above, each panel of Figure \@ref(fig:grid-search) visualizes iconicity across the parameter space for when one of the parameters is switched off. Replicating previous figures, Figure \@ref(fig:grid-search) shows that 1) iconicity struggles to emerge when failure step is switched off, 2) learn rate does not seem to support the emergence of iconicity, and 3) switching off the other three parameters (reinforcement rate, production bias, iconicity boost) generates highly similar patterns of iconicity, suggesting that these might play less of a role in the model.
+
+For most combinations of parameters, the trade-off between learn rate and iconicity is evident---iconicity is higher for when learn rate = 0, suggesting that the more I learn for free, the less iconic I become (upper two panels, and bottom-right panel, Figure \@ref(fig:grid-search)). This would suggest that iconicity might not continue to grow in a language, at least not as a learning mechanism, but perhaps as a strategy to make the language more recognizable for the interlocutor.
+
+We also note that under some conditions, iconicity still emerges when failure step is switched off (bottom-left panel, Figure \@ref(fig:grid-search)). This suggests that failure-based drift is not strictly necessary but is normally the dominant pathway (error-driven vs. success-driven iconicity). If this mechanism is not available, iconicity can still emerge by generating a positive feedback-loop of biased production--higher success--reinforcement--more biased learned signals--higher success.
+
+(ref:grid-search) Heatmaps of iconicity across the parameter space for different model configurations. Each panel shows simulations where one parameter is disabled: no reinforcement, no production bias, no signal drift, no learning, or no iconicity boost. Color indicates mean iconicity; yellow outlines mark the iconicity baseline (~.25) and red crosses indicate the parameter values that generates maximum iconicity.
 
 ```{r}
 if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
@@ -440,13 +450,14 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
 d.full.history <- bind_rows(d.grid_results$history, .id = "param_set")
 
 ```
-```{r fig.width=base.width*4, fig.height=base.height*3.5, fig.align='center', out.width='90%'}
+
+```{r grid-search, fig.width=base.width*6, fig.height=base.height*4, fig.align='center', out.width='100%', fig.cap="(ref:grid-search)"}
 # plot for different param settings
 p.noReinforce <- d.grid_results %>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
   filter(reinforcement_rate == 0) %>%
   #filter(failure_step == 0) %>%
-  rename(`signal drift` = failure_step, `production bias` = prod_bias) %>%
+  rename(`failure step` = failure_step, `production bias` = prod_bias) %>%
   ggplot(
     aes(
       x = learn_rate, 
@@ -466,11 +477,11 @@ p.noReinforce <- d.grid_results %>%
     shape = 4) +
   scale_color_manual(values = c("red", "black")) +
   scale_fill_viridis_c() +
-  facet_grid(`production bias` ~ `signal drift`, labeller = label_both) +
+  facet_grid(`production bias` ~ `failure step`, labeller = label_both) +
   theme_minimal() +
   guides(color = "none") +
   labs(
-    title = "Iconicity across the parameter space for when there is no reinforcement of successful signals",
+    title = "Iconicity across the parameter space (no reinforcement)",
     x = "Learning rate",
     y = "Iconicity boost",
     fill = "Iconicity")
@@ -479,9 +490,9 @@ p.noProdBias <- p.noReinforce %+%
   (d.grid_results %>%
      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
      filter(prod_bias == 0) %>%
-     rename(`signal drift` = failure_step, reinforcement = reinforcement_rate)) +
-  facet_grid(reinforcement ~ `signal drift`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space for when there is no production bias")
+     rename(`failure step` = failure_step, reinforcement = reinforcement_rate)) +
+  facet_grid(reinforcement ~ `failure step`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space (no production bias)")
 
 p.noDrift <- p.noReinforce %+%
   (d.grid_results %>%
@@ -489,123 +500,45 @@ p.noDrift <- p.noReinforce %+%
      filter(failure_step == 0) %>%
      rename(reinforcement = reinforcement_rate, `production bias` = prod_bias)) +
   facet_grid(reinforcement ~ `production bias`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space for when there is no signal drift")
+  labs(title = "Iconicity across the parameter space (no failure step)") +
+  guides(fill = "none")
 
 p.NoLearning <- p.noReinforce %+%
   (d.grid_results %>%
      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
      filter(learn_rate == 0) %>%
-     rename(reinforcement = reinforcement_rate, `signal drift` = failure_step)) +
+     rename(reinforcement = reinforcement_rate, `failure step` = failure_step)) +
   aes(x = prod_bias) +
-  facet_grid(reinforcement ~ `signal drift`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space for when there is no learning") +
-  scale_x_continuous("Production bias (toward target)")
+  facet_grid(reinforcement ~ `failure step`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space (no learn rate)") +
+  scale_x_continuous("Production bias (toward target)") +
+  guides(fill = "none")
 
 p.NoBoost <- p.noReinforce %+%
   (d.grid_results %>%
      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
      filter(iconicity_boost == 0) %>%
-     rename(`reinforcement` = reinforcement_rate, `signal drift` = failure_step)) +
+     rename(`reinforcement` = reinforcement_rate, `failure step` = failure_step)) +
   aes(y = prod_bias) +
-  facet_grid(reinforcement ~ `signal drift`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space for when there is no iconicity boost") +
-  scale_y_continuous("Production bias (toward target)")
+  facet_grid(reinforcement ~ `failure step`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space (no iconicity boost)") +
+  scale_y_continuous("Production bias (toward target)") +
+  guides(fill = "none")
 
-(p.noReinforce + p.noProdBias) /
+(p.noReinforce  +
+  guides(fill = "none") + p.noProdBias + plot_spacer()) /
   (p.noDrift + p.NoLearning + p.NoBoost) +
-  plot_layout(guides = "collect")
-
+  plot_layout(widths = c(1,1,1),
+              heights = c(1,1))
 ```
-
-
-```{r fig.width=base.width*4, fig.height=base.height*3.5, fig.align='center', out.width='90%'}
-# # Check params relative weight
-# m.params <- lm(iconicity ~ prod_bias + iconicity_boost + learn_rate + reinforcement_rate + failure_step,
-#    data = d.grid_results) %>%
-#   tidy()
-
-# plot for different param settings
-p.grid.noBoost <- d.grid_results %>%
-  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-  filter(iconicity_boost == 0) %>%
-  rename("reinforcement" = reinforcement_rate, "production bias" = prod_bias) %>%
-  ggplot(
-    aes(
-      x = failure_step, 
-      y = learn_rate, 
-      fill = iconicity,
-      color = ifelse(iconicity != max(iconicity), "red", "black"))) +
-  geom_tile() +
-  geom_point(
-    data = . %>%
-      filter(iconicity == max(iconicity)),
-    shape = 4) +
-  scale_color_manual(values = c("red", "black")) +
-  scale_fill_viridis_c() +
-  facet_grid(reinforcement ~ `production bias`, labeller = label_both) +
-  theme_minimal() +
-  guides(color = "none") +
-  labs(
-    title = "Iconicity across the parameter space for when there is no iconicity boost",
-    x = "Signal drift on failed trials (toward prototype)",
-    y = "Learning rate",
-    fill = "Iconicity")
-
-p.grid.noProdBias <- p.grid.noBoost %+%
-  (d.grid_results %>%
-     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-     filter(prod_bias == 0) %>%
-     rename(reinforcement = reinforcement_rate, `Iconicity boost` = iconicity_boost)) +
-  facet_grid(reinforcement ~ `Iconicity boost`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space for when there is no production bias")
-
-p.grid.noReinforcement <- p.grid.noBoost %+%
-  (d.grid_results %>%
-     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-     filter(reinforcement_rate == 0) %>%
-     rename(`Production bias` = prod_bias, `Iconicity boost` = iconicity_boost)) +
-  facet_grid(`Production bias` ~ `Iconicity boost`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space for when there is no signal reinforcement")
-
-p.grid.NoLearning <- p.grid.noBoost %+%
-  (d.grid_results %>%
-     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-     filter(learn_rate == 0) %>%
-     rename(reinforcement = reinforcement_rate,
-            `Iconicity boost` = iconicity_boost)) +
-  aes(y = prod_bias) +
-  facet_grid(reinforcement ~ `Iconicity boost`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space for when there is no learning") +
-  scale_y_continuous("Production bias (toward target)")
-
-p.grid.NoDrift <- p.grid.noBoost %+%
-  (d.grid_results %>%
-     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-     filter(failure_step == 0) %>%
-     rename(`reinforcement` = reinforcement_rate, `Iconicity boost` = iconicity_boost)) +
-  aes(x = prod_bias) +
-  facet_grid(reinforcement ~ `Iconicity boost`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space for when there is no signal drift") +
-  scale_x_continuous("Production bias (toward target")
-
-(p.grid.NoDrift + p.grid.NoLearning) /
-  (p.grid.noProdBias + p.grid.noReinforcement + p.grid.noBoost) +
-  plot_layout(guides = "collect")
-
-```
-
-Also, plot grid results where all other params are at empirically reasonable values, and only vary one parameter at the time. Check whether iconicity even appears without it, and whether accuracy depend on it. This will allow me to distinguish between necessary and sufficient params.
-
-One way to evaluate this is visualized in Figure XX below. Here, each panel shows the data from the grid search down-sampled to when the labelled parameter varies and the other parameters are set to a 'plausible' value: for production bias = 0.2, for iconicity boost = 0.267, for reinforcement rate = 0.067, for failure drift = 0.04, and for learning rate = 0.03. So, given a baseline configuration where other parameters are reasonable, how does iconicity change as I increase this parameter? If iconicity fails to emerge when the parameter value is at 0, no matter what the other parameters are doing, it is likely a necessary parameter. If iconicity emerges when the parameter > 0 even when all other parameters are set to 0, then it is likely a sufficient parameter.
-
-Figure XX suggests that only signal drift on failed trials is likely to be a necessary parameter. It also seems to be a sufficient parameter as when setting all other parameters = 0, iconicity still emerges. None of the other parameters seem to be sufficient, though.
-
-Without signal drift, reinforcement only strengthens already successful forms and production bias is weak when speaker guess increases. In addition, early random successes can lock in arbitrary, non-iconic equilibria, meaning that whatever random form works first gets reinforced even if it is not iconic.
-
 
 ```{r}
 
 ```
 
+# Open questions
+  * learning update: the guess probabilities improve over time while failure step decreases (no drift on correct trials), this could mean that the signal tends to freeze near its initial state [.5,.5]?
+  * Why the accuracy-iconicity dissociation?
+  * Why the emergence of a binary category space even for models where iconicity does not emerge? Could it be that separation is emerging from Bayesian updating + task structure? informative feedback structure?
 
 
