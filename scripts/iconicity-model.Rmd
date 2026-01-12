@@ -171,7 +171,7 @@ listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
 
 ## Updating of learned signals and guess rates
 
-After each trial, the learned signals are updated based on success or failure. If listener guess is correct, the learned signal is moved toward the produced token by applying *reinforcement rate*. If the listener guess is incorrect, the signal drifts toward the referent's iconic prototype by applying *failure step* to the signal, and adding additional *noise* to capture variability in updating.
+After each trial, the learned signals are updated based on success or failure. If listener guess is correct, the learned signal is moved toward the produced token by applying the *reinforcement rate*. If the listener guess is incorrect, the signal drifts toward the referent's iconic prototype by applying the *failure step* to the signal, and adding additional *noise* to capture variability in updating.
 
 ```{r echo=TRUE, eval=FALSE}
 reinforce_signal <- function(previous_signal, produced_signal) {
@@ -554,3 +554,4 @@ p.NoBoost <- p.noReinforce %+%
 -   learning update: the guess probabilities improve over time while failure step decreases (no drift on correct trials), this could mean that the signal tends to freeze near its initial state [.5,.5]?
 -   Why the accuracy-iconicity dissociation?
 -   Why the emergence of a binary category space even for models where iconicity does not emerge? Could it be that separation is emerging from Bayesian updating + task structure? informative feedback structure?
+- need to implement what happens if "anti-iconic" signals are punished during learning, currently they are just discarded and give even minor learning boosts
