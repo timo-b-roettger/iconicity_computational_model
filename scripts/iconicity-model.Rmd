@@ -62,81 +62,50 @@ RESET_MODELS = F        # switch on/off whether model is re-run
 
 # Introduction
 <!--Start with discussing possible ways that iconicity can emerge in a language interaction game, following previous work-->
-Iconicity refers to... often evaluated in experiments of artificial language learning, through iterative learning or in language interaction games played in dyads. The artificial language is represented as a set of form-meaning pairs, as in real languages. The form is represented by some signal, either an orthographic signal (lexical item), or an acoustic signal (a sound). The meaning communicated by the signal refers to some underlying semantic property of the item. Most previous work has used binary contrasts, such as size (large vs. small), form (spiky vs. round), or... mapping size dimensions to acoustic properties of the signal...
+## What is iconicity?
+Iconicity in spoken language refers to the linguistic phenomena of a sound of a word resembling its meaning... 
+Empirically, iconicity has often been evaluated in experiments of artificial language learning, through iterative learning or in language interaction games played in dyads. The artificial language is represented by a set of form-meaning pairs, as in real languages, where the form is represented by either an orthographic signal (a lexical item), or an acoustic signal (a spoken lexical item). The meaning communicated by the signal refers to an underlying semantic property of the item. Most previous work has used binary contrasts, such as size (large vs. small), form (spiky vs. round), or..., In spoken language, dimensions of the semantic feature is mapped to acoustic properties of the signal...
+
+## Under what conditions does iconicity emerge?
 Previous work has found iconicity to emerge under certain circumstances...as driven by communicative pressure for successful interaction, further reinforced by rewards such as...
-There have been few attempts at computationally model the emergence of iconicity...several of these have used agent-based learning models to evaluate the emergence of iconicity.
 
-## Suggested mechanisms underlying the emergence of iconicity
-Here, we use a simple agent-based model of lexical learning to simulate the emergence of iconicity. A model of lexical learning needs to account for the production and perception of form-meaning pairs, including components affecting this process, such as communicative pressure. The model is agent-based, meaning that... Over the course of interaction rounds, learning increases incrementally, affected by feedback. For iconicity to emerge, something needs to exhert pressure on agents to 1) produce more iconic signals, and 2) favor more iconic signals being stored in memory. 
-recognition of the underlying semantic aspect rather than lexical categorization
-The model simulates the emergence of iconicity in a language interaction game. The output of interest is thus whether the signals becomes more iconic---here, modeled as a distance measure to prototypical value in the signal space. In parallel, agents learn the form-meaning pairs over interaction rounds. There is constant increase in learning over interaction rounds. Feedback is provided on each trial, supposedly, negative feedback has a stronger influence on subsequent interactions--mechanistic favor for success regardless of iconicity... Whether they actually increasingly learn the form-meaning pairs is, in theory, orthogonal to the question of iconicity... In a conventionalized system, you actually do not need iconicity, it can only help in communication. And it does---iconic signals aids learning through the bias-reinforcement-loop, but you don't actually need it to learn because learning always increases.
+# Suggested mechanisms underlying the emergence of iconicity
+Based on what we know from previous work, we suggest three main mechanisms underlying the emergence of iconicity in interactive language learning. Based in the idea that iconicity facilitates interaction and learning of an artificial language, these mechanisms target different parts of the interaction, affecting either the signal being produced, the interpretation ease of the signal during recognition, or the memory trace of the learned signal after recognition. The three mechanisms encompass: an *adaptive production bias* toward producing more iconic signals based on previous interactional outcomes, a *interpretation bias* that favor iconic signals and punishes anti-iconic signals in recognition, and finally, an *adaptive signal alignment* toward making learned signals more iconic when communication fails.
 
-Each referent has their own idiomatic meaning which is assumed to be unambiguously signaled by sequences of consonants. Whether the referent belongs to the large or small subset is communicated by the acoustic signal space. In the experiment where there is a unique consonant context associated with each item, the form aspect of the form-meaning pair can be considered represented by the consonant context, and the acoustic signal would thus not actually signal lexical meaning but the underlying semantic aspect. This means that the signal is not necessary for lexical retrieval; it is merely an additional source of information for perception---here, the underlying semantic category. This mirrors real perception where you often slightly mis-hear some phonetic detail but still perceive the underlying size dimension. In addition, it means that the associative strength refers to the semantic property of the item, and not to the lexical item itself (the identification of the lexical item is not modeled here). 
+## Adaptive production bias
+In an interaction game, iconic signal formation can be seen as a bias in adaptive production whereby speakers adjust their signal to be more iconic depending on previous communication outcomes. If iconicity indeed arises from communicative pressure, one can expect this production bias toward a more iconic signal to be larger if previous communication was unsuccessful. This would reflect a situation where interlocutors have difficulties communicating in the new language, and the speaker would resort to using iconicity as a means for increasing the probability of successful interaction. The *adaptive production bias* mechanism thus represents a directional pressure toward iconic targets during production, causing iconicity to gradually emerge over repeated interaction.
 
-Conceptualizing the different mechanisms involved in the emergence of iconicity in human interaction, we suggest three parameters to be involved. These mechanisms operate at different levels of processing?? at different aspects of interaction, affecting either the signal being produced, or the memory trace of the learned signal. The three mechanisms encompass: a general production bias toward more iconic signals, an intentional communication bias toward more iconic signals when communication fails, and finally, a learning benefit for with more iconic signals.
+## Interpretation bias
+If iconic signals indeed drive interaction and learning, iconic forms should be favored in recognition. Similarly, non-iconic forms should be dis-favored. The *interpretation bias* mechanism incentivizes iconic signals based on their distance to prototype; boosting the ease of interpretation for signals that are closer to the prototype, and punishing signals that are further away from the prototype. This means that listener success in identifying the referent increases with signal proximity to prototype, and iconicity thus boosts interpretability/perception. In a situation where the listener tries to identify what semantic referent the speaker is signalling, more iconic signals would thus be easier for the listener to identify than non-iconic signals.
+INTEGRATE: Iconic forms are thus not imposed directly in the model; they become preferred because they are easier for listeners to interpret and therefore more likely to be reinforced. 
 
-### General production bias
-At producing signals for the interlocutor to recognize, it is expected from previous work of speakers to produce more iconic signals, more so if previous communication has been unsuccessful...
+## Adaptive signal alignment
+In interaction, feedback on communicative success is expected to have an effect on language learning and signal representation in memory, where both successful and unsuccessful interactions can shape representations. If iconicity is used as a strategy for communicative success, one could expect an intentional pressure on listeners to update their learned signals in line with interactional outcomes; updating signals to be more iconic when communication has failed, relative to success. This would reflect a situation where a listener adapts their memory representation of the signal in line with interactional outcome. On failed interactions, the learned signals are shifted towards the prototype, thus becoming more iconic, and less so on successful interactions. The *adaptive signal alignment* mechanism could be interpreted as an intentional effort on behalf of the speaker to shift the memory representation of the signal towards the prototype when communication fails, aiming to make the form-meaning mapping easier to recognize in upcoming interactions. This means that iconicity does not only affect the production of signals, but also the memory of the signal.
 
-### Intentional communicative pressure on failed trials
-One could further expect an intentional pressure on listeners to update their learned signals in line with the above---so that the learned signal become more iconic if current interaction has failed...
-
-### Learnability bias
-If iconic signals indeed drive learning, iconic forms should be favored in guessing, and vice versa...
-The learning bias incentivizes iconic signals based on their distance to prototype, by boosting signals that are closer to their target, and punishing signals that are further away from their target. 
-
-Next, we describe how these suggested mechanisms are computationally implemented in this model
+Next, we describe how these suggested mechanisms are computationally implemented in a computational model simulating the emergence of iconicity.
 
 # Model implementation and underlying assumptions (expected consequences)
-The model is designed to capture different previously suggested mechanisms as to how iconicity might emerge in a dyadic interaction game through communicative pressure and incremental learning. Agents interact in an artificial language learning game in which meanings are conveyed using acoustic signals. The central assumption is that successful interaction favors form-meaning mappings that are iconic, and that over repeated interactions, iconic signals emerge. Learning is considered gradual and experience-dependent as agents continuously update their internal representations of form-meaning associations and adjust their signal production based on interaction outcomes (success or failure). Because learning is considered probabilistic, increases in associative strength do not guarantee perfect performance on every trial, but raise the probability of correct recognition.
+There have been few attempts at computationally model the emergence of iconicity. The studies have often used agent-based learning models...
+The model we introduce here, simulates the emergence of iconicity in an interactive game of artificial language learning, played in dyads. Guided by communicative pressure and incremental learning, the above mechanisms are implemented in the model to simulate the role of iconicity. The central assumption is that successful interaction favors form-meaning mappings that are iconic, and that over repeated interactions, iconic signals emerge. Learning is considered gradual and experience-dependent as agents continuously update their internal representations of form-meaning associations and adjust their signal production based on interaction outcomes (success or failure). Success or failure is dependent on the probability of the current guess, $p$. Because learning is considered probabilistic, increases in associative strength do not guarantee perfect performance on every trial, but raise the probability of correct recognition.
 
-## Agents, signal and meaning spaces
-The model simulates an interaction game played in dyads where two participants, agent A and agent B, take turns alternating roles as listener and speaker. There are a limited number of referents that need to be learned and communicated. Half of the referents are noticeably smaller than the other half of the referents. Physical size is assumed to be perceptually salient, consistent with extensive evidence that magnitude distinctions are readily mapped onto acoustic dimensions.
+The emergence pressure of iconicity is formalized in two sets of parameters, in line with the above described mechanisms: one set of parameters operating on the listener's perception and retrieval of the referent, and on the storage of the signal after recognition, and one set of parameters operating on the production of the signal. We begin by accounting for the overall structure of the model, before describing how these parameters are implemented in the model.
 
-On each trial, the speakers produces a signal, and the listener categorizes the signal as referring to either a large of small referent.
+## Overall structure
+Any simple agent-based model of lexical learning that simulates the emergence of iconicity, needs to account for 1) agents and the language to be learnt, 2) how agents produce and perceive form-meaning pairs, 2) how learning incrementally increases over time, and 3) the iconicity mechanisms affecting this process. As accounted for above, for iconicity to emerge, mechanisms need to exert pressure on agents to favor more iconic signals in production and perception, and in signal representations. The output of interest is thus whether the signals becomes more iconic over time. In this model, this is measured using a distance measure of the signal to the prototypical value in the signal space. More iconic signals are thus closer located to the prototypical value of the underlying referent. 
 
-Signals are represented as points in a continuous (yet contained) two-dimensional signal space ranging from [0,0] to [1,1]. This space can be considered a simplified abstraction over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly encode size-related meaning. The two dimensions do not correspond to specific acoustic parameters but capture the idea that signals vary continuously along multi-dimensional perceptual dimensions relevant for iconic mapping.
+One central assumption in the model is that we assume a constant increase in learning over interaction rounds, on both successful and unsuccessful trials irrespective of iconicity. Whether agents increasingly learn the form-meaning pairs is, in theory, orthogonal to the question of iconicity. In a conventionalized system, such as established languages, you actually do not need iconicity, it can only help in communication.<!--And it does---iconic signals aids learning through the bias-reinforcement-loop, but you don't actually need it to learn because learning always increases.--> <!--introduce successful interaction biasing learning here??-->
 
-Each meaning is associated with an iconic prototype in signal space. Small referents are associated with a prototype at [0,0], and the large category with a prototype at [1,1]. These prototypes represent perceptually transparent signal–meaning correspondences and can be thought of e.g. a formant vowel space in which high front vowels are correlated with small referents and low back vowels are correlated with large referents.
+In the language interaction game, meanings are conveyed using acoustic signals. There are a limited number of referents that need to be learned and communicated. Half of the referents are noticeably smaller than the other half of the referents. Physical size is assumed to be perceptually salient, consistent with extensive evidence that magnitude distinctions are readily mapped onto acoustic dimensions. Each referent has their own idiomatic meaning which is assumed to be unambiguously signaled by sequences of consonants. Whether the referent belongs to the large or small subset is communicated by the acoustic signal space. In the experiment where there is a unique consonant context associated with each item, the form aspect of the form-meaning pair can be considered represented by the consonant context, and the acoustic signal would thus not actually signal lexical meaning but the underlying semantic aspect. This means that the signal is not necessary for lexical retrieval; it is merely an additional source of information for perception---here, the underlying semantic aspect. This mirrors real perception where you often slightly mis-hear some phonetic detail but still perceive the underlying size dimension. In addition, it means that the associative strength refers to the semantic property of the item, and not to the lexical item itself (the identification of the lexical item is not modeled here).
 
-Each trial is initialized by randomly assigning agent A and agent B to either speaker or listener role. The speaker is given a random referent and the learned signal for that referent and agent is retrieved. The initial signals at the start of the simulation are placed at the center of the space, [.5,.5]. The signal produced by the speaker is affected by the *production bias*, dependent on the speaker's current guess rate. Lower guess rate yields stronger bias toward the iconic prototype, while higher guess rate yields weaker bias. The biased production target is computed as a weighted average of the learned signal and the prototype, where the prototype weight increases as $p$ decreases, implemented as sampling from a two-dimensional Gaussian probability distribution with a mean shifted toward [0,0] or [1,1].
+The model loops through several trials in this experiment, where two participants, agent A and agent B, take turns alternating roles as listener and speaker. Each trial is initialized by randomly assigning agent A and agent B to either speaker or listener role. The speaker is given a random referent (small or large) and the learned signal for that referent is retrieved. The speaker then produces a signal, and the listener attempts to recognize the intended referent. The recognition is evaluated as either correct or incorrect, and both speaker and listener update their beliefs about the signal-to-referent mapping independently of iconicity (= their learning), continuously becoming more and more certain about the language over trials. Next, the listener updates its stored signal representation depending on the interactional outcome, and a new trial starts.
 
-## Recognition and learning assumptions
-Recognition and learning of the form-meaning pairs are overall formalized as a function of previous guess rate and the signal's distance to the iconic prototype (see next section). Guess rate reflects the listener's prior probability of guessing a specific referent correctly and corresponds to the associative strength linking a signal to a meaning.
+## Implementation of suggested mechanisms
+The suggested mechanisms are implemented at different stages of interaction round accounted for above. Figure XX visualizes a single trial and highlights at what stages the mechanisms are assumed to operate. Beginning at the top of the figure, the speaker agent is given a referent at random and retrieves the stored signal values for the referent. Signals are represented as points in a continuous (yet contained) two-dimensional signal space ranging from [0,0] to [1,1]. This space can be considered a simplified abstraction over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly encode size-related meaning. The two dimensions do not correspond to specific acoustic parameters but capture the idea that signals vary continuously along multi-dimensional perceptual dimensions relevant for iconic mapping. Each meaning is associated with an iconic prototype in signal space. Small referents are associated with a prototype at [0,0], and the large category with a prototype at [1,1]. These prototypes represent perceptually transparent signal–meaning correspondences and can be thought of e.g. a formant vowel space in which high front vowels are correlated with small referents and low back vowels are correlated with large referents. The initial signals at the start of the simulation are placed at the center of the space, [.5,.5].
 
-On each trial, the speaker has to communicate a random referent (small or large) and produces a signal, whereby the listener attempts to recognize the intended referent. Recognition is probabilistic: higher guess rate increases the probability of correct recognition, but does not guarantee it. Because previous guess rate (learning) equals the current guess rate of the agent at a given trial, higher previous guess rate generates higher probability of success on subsequent trials. Overt recognition decisions are categorical, while underlying representations remain continuous. A threshold on guess rate formalizes this decision boundary, with values greater than .5 counted as correct.<!--check whether there is a threshold-->
+### Producing a signal
+When retrieving the signal, the *adaptive production bias* mechanism transforms the signal depending on the speaker's current probability of correct identification, $p$. At the first trial, this is set to... The updated biased signal is computed as a weighted average of the learned signal and the prototype, where the prototype weight increases as $p$ decreases, so as to be modulated by the speaker's confidence in the learned form-meaning mappings such that lower current guess rates generate stronger prototype bias, whereas higher guess rates generate weaker bias ($1-p_\speaker$). The adaptive production bias is implemented as sampling from a two-dimensional Gaussian probability distribution with a mean shifted toward [0,0] or [1,1]. Signals for small referents tend to shift toward the [0,0] prototype while signals for large referents tend to shift toward the [1,1] prototype.
 
-On each trial feedback is provided which drives incremental updating of internal representations. Both positive and negative feedback leads to updating representations. After each trial, a *learn rate* is applied to the listener guess rate irrespective of outcome. However, successful interactions lead to a stronger update. If the listener's guess is correct, this rate is added a second time, further reinforcing learning. This reflects the assumption that errors and feedback incrementally strengthen associations over time...successful learning variable??--Interaction outcomes also affect signal production. When communication succeeds, the listener retrieves the signal for the referent and the learned signal is updated toward the speaker's produced signal by a fixed proportion in probability space, a *reinforcement rate*. This biases learning toward forms that have been successful in communication. 
-
-Assumptions that follow:
-- higher previous guess rate generates higher probability of success on subsequent trials, reinforcing existing mappings and accelerating learning trajectories
-
-## Iconicity biases
-The emergence pressure of iconicity in the model is formalized in two sets of parameters: one set of parameters operating on the listener's perception and retrieval of the referent, and on the storage of the signal after guessing, and one set of parameters operating on the production of the signal.
-
-### Learnability bias during guessing + intentional communicative bias on failed trials
-as a learnability bias during guessing that favors signals that are more closely located to their prototypical target in the two-dimensional space, operationalized by two parameters---*signal ease* and *iconicity boost*. Signal ease measures the Euclidean distance between a produced signal and its iconic prototype, capturing how well the signal fits the attractor. This value is scaled by the iconicity boost parameter which modulate the impact of signal ease affecting guessing. Together, these parameters make some form-meaning pairs easier to perceive, encode, and retrieve, depending on their spatial proximity to iconic prototypes, leading to higher guess rate and faster learning. Iconic forms are thus not imposed directly in the model; they become preferred because they are easier for listeners to interpret and therefore more likely to be reinforced.
-
-When communication fails, the learned signal is instead moved toward the iconic prototype for that referent by a fixed proportion, a *failure step*. This signal drift on failed trials could be interpreted as an intentional effort on behalf of the speaker to make the form-meaning pair easier to recognize when noticing that communication fails. Together, these updating rules allow both successful and unsuccessful interactions to shape conventions, with success consolidating emergent mappings and failure introducing directional pressure toward iconicity.<!--the last part should be moved to iconicity biases-->
-Assumed consequences are.
-
-### General production bias
-Additionally, due to communicative pressure, speakers exhibit a directional bias in production toward iconic prototypes, a *production bias*. Signals for small referents tend to shift toward the [0,0] prototype while signals for large referents tend to shift toward the [1,1] prototype. This production bias is modulated by the speaker's confidence in the learned form-meaning mappings such that lower current guess rates generate stronger prototype bias, whereas higher guess rates generate weaker bias. The effect introduces a directional pressure toward iconic targets during production, so that iconicity can emerge gradually through repeated interaction.
-
-## Noise and uncertainty
-
-Guessing involves uncertainty which leads to imperfect learning. This is formalized as the signal being perturbed by *noise*. This noise could encompass both motor noise in production, external and internal noise during perception, as well as participants having attention lapses on certain trials (randomly producing/guessing referents without taking the signal into account). Under conditions of uncertainty or communicative failure, agents tend to produce less specified signals, which are biased toward the center of the signal space. This central tendency represents regression toward an unmarked or default signal when confidence in a form–meaning mapping is low.
-
-After updating the produced signal, *Gaussian noise* is added to each dimension ([x,y]) of the produced token with $sd = .05$ to model production variability. After noise is added, values are bounded within [0,1] in each dimension. The noise affects only the produced token and does not modify the underlying stored representation.
-
-
-Calculations of associative strength is done in log odds space, and converted back to probability space for reporting. All mechanisms that operate on the signal---the general production bias, the intentional communication bias, the learning bias---are based on a distance-to-prototype measure, calculated as a linear interpolation between signal position and prototypical value for that referent in signal space.
-
-
-Finally, we compare the different mechanisms and assess their relative importance for the emergence of iconicity.
-
---INTEGRATE/MOVE
-
+After updating the produced signal, *Gaussian noise* is added to each dimension ([x,y]) of the produced token with $sd = .05$ to model production variability. After noise is added, values are bounded within [0,1] in each dimension. The production noise affects only the produced token and does not modify the underlying stored representation.
 
 ```{r echo=TRUE, eval=FALSE}
 produce_signal <- function(previous_signal, referent_type, speaker_guess_rate) {
@@ -147,21 +116,19 @@ produce_signal <- function(previous_signal, referent_type, speaker_guess_rate) {
 }
 ```
 
-The probability of the correct guess is calculated as a function of the listener's current guess rate and the ease with which the signal maps onto the referent's prototype. The initial learning state of the listener is on average a probability of $~.33$. This probability is established by drawing n random values from a beta distribution with a $\alpha = 2$ and $\beta = 4$.
+The biased signal is then presented to the listener, that guesses what referent the signal refers to.
 
-The *signal ease* is defined as a decreasing function of the Euclidean distance between the signal and the prototype signal for that referent, further scaled by the *iconicity boost*. The signal ease distance measure drops off sharply (exponentially) when moving away from prototypes.
+### Recognizing the signal
+Overall, recognition and learning of the form-meaning pairs, $p$, is formalized as a function of previous guessing probability, and the interpretation bias. Guessing probability reflects the listener's prior probability of guessing a specific referent correctly and corresponds to the associative strength linking a signal to a meaning. Recognition is probabilistic: higher guess rate increases the probability of correct recognition, but does not guarantee it. Overt recognition decisions are categorical (large--small), while underlying representations remain continuous (size dimension). The initial learning state of the listener at the first trial is on average a probability of $~.33$. This probability is established by drawing n random values from a beta distribution with a $\alpha = 2$ and $\beta = 4$.
+INTEGRATE: 
+Assumptions that follow:
+- higher previous guess rate generates higher probability of success on subsequent trials, reinforcing existing mappings and accelerating learning trajectories
 
-```{r echo=TRUE, eval=FALSE}
-signal_ease <- function(signal_xy, referent_type) {
-  target <- prototype_point(referent_type)
-  dist <- sqrt((signal_xy[1] - target[1])^2 + (sigsignal_xy - target[2])^2)
-  exp(-1 * dist)
-}
-```
+When guessing the underlying referent the speaker intended to produce, the listener's guess is affected by *interpretation bias*. This interpretation bias is implemented as the signal's distance to the iconic prototype affecting the current guess, favoring signals that are more closely located to their prototypical target in the two-dimensional space, and punishing signals that are further away from target. 
 
-Figure \@ref(fig:signal-ease) illustrates signal ease relative to the signal space, with higher ease for more prototypical values.
+The interpretation bias is operationalized by two parameters---*signal distance* and *prototype weighting*. Signal distance measures the Euclidean distance between a produced signal and its iconic prototype, capturing how well the signal fits the attractor. It is defined as a decreasing function that drops off sharply (exponentially) when moving away from prototypes. Figure \@ref(fig:signal-ease) illustrates signal distance relative to the signal space, with higher ease for more prototypical values.
 
-(ref:signal-ease) Illustration of signal ease in the two-dimensional signal space, for small and large referents.
+(ref:signal-ease) Illustration of signal distance in the two-dimensional signal space, for small and large referents.
 
 ```{r signal-ease, fig.width=base.width*4, fig.height=base.height*2, out.width='90%', fig.align='center', fig.pos='ht', fig.cap="(ref:signal-ease)"}
 # show heatmap of ease relative to signal space
@@ -184,7 +151,21 @@ ggplot(grid,
 
 ```
 
-Previous guess rate is converted to log-odds, combined additively with the iconicity-weighted signal ease, and then converted back to probability space. The probability is bounded at $pmax = .95$ to account for $.05$ noise/lapse. The final outcome of the trial, success or failure, is implemented as random sampling from a binomial distribution. If $p > .5$, the referent has been correctly recognized, otherwise incorrectly. The guess rate of both speaker and listener is then updated by adding a constant *learn rate* of $.05$.
+The signal distance value is scaled by the prototype weighting parameter which modulates the impact of signal distance affecting guessing. Together, these parameters make form-meaning pairs easier or more difficult to perceive, encode, and retrieve, depending on their spatial proximity to iconic prototypes, leading to higher guessing probability and faster learning.
+
+Guessing involves uncertainty which leads to imperfect learning. This is formalized as the signal being perturbed by *noise*. This noise could encompass both external and internal noise in perception, and listeners having attentional lapses on certain trials (randomly guessing referents without taking the signal into account).<!--it is lapse here-->
+
+```{r echo=TRUE, eval=FALSE}
+signal_ease <- function(signal_xy, referent_type) {
+  target <- prototype_point(referent_type)
+  dist <- sqrt((signal_xy[1] - target[1])^2 + (sigsignal_xy - target[2])^2)
+  exp(-1 * dist)
+}
+```
+
+The guessing probability is calculated in log-odds space: taking the previous guessing probability of the listener, combined additively with the iconicity-weighted signal distance, and then converted back to probability space. The probability is bounded at $pmax = .95$ to account for $.05$ noise/lapse. 
+
+The final outcome of the trial, success or failure, is implemented as random sampling from a binomial distribution with $p$ = current guessing probability. If $p = 1$, the referent has been correctly recognized, otherwise incorrectly. 
 
 ```{r echo=TRUE, eval=FALSE}
 guess_probability <- function(agent_guess_prob, signal_xy, referent_type) {
@@ -203,9 +184,14 @@ speaker_guess[r] <- update_guess_logodds(speaker_guess[r], learn_rate)
 listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
 ```
 
-## Updating of learned signals and guess rates
+#### Successful learning bias
+On each trial, feedback is provided which drives learning and incremental updating of guessing probabilities of both speaker and listener, implemented by the *successful learning bias* mechanism. This is parameterized as applying a constant learn rate to the speaker and listener guessing probabilities. The magnitude of the learn rate is a function of the recognition outcome with successful interactions leading to larger increase in guessing probability. If the listener's guess is correct, the rate $= 2 \times magnitude$, further reinforcing learning. If the listener's guess is incorrect, the rate $= .5 \times magnitude$. This reflects the assumption that errors and feedback incrementally strengthen associations over time, with stronger learning on correct interactions.
+According to previous work on general learning, negative feedback has a stronger influence on subsequent interactions...
 
-After each trial, the learned signals are updated based on success or failure. If listener guess is correct, the learned signal is moved toward the produced token by applying the *reinforcement rate*. If the listener guess is incorrect, the signal drifts toward the referent's iconic prototype by applying the *failure step* to the signal, and adding additional *noise* to capture variability in updating.
+### Updating the learned signal
+After the listener and speaker have received feedback on the interaction, they update their learned signals in memory. The updating is affected by the *adaptive signal alignment* mechanism that aligns the signal toward either the produced or the prototypical signal, depending on whether interaction succeed or failed. The adaptive signal alignment is implemented by two parameters: a *reinforcement rate* on successful interactions, and a *failure step* on failed interactions. 
+
+When communication succeeds, the listener retrieves the signal for the referent and the learned signal is updated toward the speaker's produced signal by a fixed proportion (reinforcement rate) in probability space. When communication fails, the learned signal is instead moved toward the iconic prototype for that referent by a fixed proportion (failure step). In addition, noise is added to the failed signal to capture variability in updating failed signals.
 
 ```{r echo=TRUE, eval=FALSE}
 reinforce_signal <- function(previous_signal, produced_signal) {
@@ -218,17 +204,19 @@ update_signal_on_failure <- function(previous_signal, referent_type) {
 }
 ```
 
-Finally, the speaker and listener guess rates are updated based on the current guess, before the output is stored and the simulation runs through the entire loop again.
+Finally, the speaker and listener guessing probabilities are updated based on their current probabilities, before the output is stored and the agents proceed to the next trial.
+
+Next, we compare the different mechanisms and assess their relative importance for the emergence of iconicity.
+
+```{r}
+```
 
 # Comparison of mechanisms and their relative importance for the emergence of iconicity
+For the comparison presented below, we ran 10 simulations of the model, each simulation with 1000 interaction rounds for a total of 10 000 trials. Simulations were run with fixed random seeds for reproducibility.<!--changing the seed did not qualitatively alter the results -- haven't checked if that is actually true--> The number of unique referents in the guessing game was set to 6; 3 small referents and 3 large referents.
 
-We generated 6 types of models. The main model included all of the above described parameters set at their intialization values (i.e., production bias, iconicity boost, learn rate, failure drift, and reinforcement rate). The remaining 5 models were generated by switching off one of the parameters at a time by setting their value to 0.
+The simulations used the following parameter settings: noise ($.05$), learn rate ($.005$), iconicity boost ($.2$), production bias ($.15$), reinforcement rate ($.05$), and failure step ($.03$).<!--theses values should have approx. the same magnitude, depending on their role in respective function-->
 
-## Initialization values and simulation rounds
-
-For the results presented below, we ran 10 simulations, each with n = 1000 interaction rounds for a total of 10 000 trials. Simulations were run with fixed random seeds for reproducibility.<!--changing the seed did not qualitatively alter the results -- haven't checked if that is actually true--> The number of unique referents in the guessing game was set to 6; 3 small referents and 3 large referents.
-
-The simulation used the following parameter settings: noise ($.05$), learn rate ($.005$), iconicity boost ($.2$), production bias ($.15$), reinforcement rate ($.05$), and failure step ($.03$).<!--theses values should have approx. the same magnitude, depending on their role in respective function-->
+We generated 6 types of models. The main model included all of the above described parameters set at their intialization values, as described above. The remaining 5 models were generated by switching off one of the parameters at a time by setting their value to 0.
 
 Figure \@ref(fig:iconicity-plot) illustrates the emergence of iconicity over trials for each of these 6 models. All models display similar patterns of iconicity emergence over time, besides the model for which failure drift is switched off. This highlights the importance of pushing produced signals on failed interactions toward more prototypical values. Iconicity might thus not be a by-product of communicative success, but requires specific signal-space dynamics. Interestingly, the best performing model seems to be the model where no learn rate is added to the updated speaker and listener guess rates.
 
@@ -355,7 +343,7 @@ p.learned.iconicity
 
 ```
 
-We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. The accuracy for each of the 6 models is strikingly similar, except for the model where no learn rate is added, see Figure \@ref(fig:accuracy). This seems to suggest that guessing accuracy depends entirely on learn rate (which is expected given that it is the only mechanism that updates guessing probabilities).
+We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. The accuracy for each of the 6 models is strikingly similar, except for the model where no successful learning bias is applied, see Figure \@ref(fig:accuracy). This seems to suggest that guessing accuracy depends entirely on learning bias (which is expected given that it is the only mechanism that updates guessing probabilities).
 
 (ref:accuracy) Success rate across simulation rounds. A binomial GLM with smoothing is fit to the proportion of successful interactions. Shaded bands indicate the model-based standard error. Panels correspond to the different parameter settings.
 
@@ -378,7 +366,7 @@ d.simulation %>%
   theme_minimal()
 ```
 
-Figure \@ref(fig:signal-space) visualizes the distribution of learned and produced signals across simulations for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge, e.g., the model without failure step (second row).
+Figure \@ref(fig:signal-space) visualizes the distribution of learned and produced signals across simulations for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge strongly, e.g., the model without failure step (second row).
 
 (ref:signal-space) Distribution of stored (left panels) and produced (right panels) signals over the course of the simulation. Each point represents a signal token in two-dimensional signal space; colors denote referent type (small vs. large). Columns correspond to simulation replicates and rows to parameter settings.
 
