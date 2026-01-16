@@ -49,9 +49,9 @@ source("functions.R")
 ```
 
 # TO DO
-  * Add variable for un/successful learning (justified no from previous work)
+
   * Change signal ease function to include anti-iconic punishment
-  * Change learn rate function (so that it's not applied twice)
+  * Change learn rate function (so that it's not applied twice; justified no from previous work)
   * Check initialization values to be of roughly the same magnitude
   * Revisit the question of linear noise in a bounded system
   * Generate overview figure
