@@ -5,10 +5,12 @@
 ## Functions for iconicity simulation ----------------------------------------
 # Have this outside main function for plotting reasons
 prototype_point <- function(type) if (type == "small") c(0,0) else c(1,1)
-signal_ease <- function(sig, type) {
+signal_evidence <- function(sig, type, distance_scale = sqrt(2)) {
   target <- prototype_point(type)
   dist <- sqrt((sig[1] - target[1])^2 + (sig[2] - target[2])^2)
-  exp(-1 * dist)
+  # convert distance to signed evidence in [-1,+1]
+  evidence <- 1 - (dist / distance_scale) * 2
+  evidence
 }
 
 # Main interaction loop function
@@ -20,11 +22,11 @@ run_interaction_sim <- function(
   n_large = n_referents/2, # number of large referents
   n_rounds = 1000, # number of interaction rounds
   drift_sd = 0.05, # amount of variation introduced during production
-  learn_rate = 0.005, # amount of added memory strengthening for words per round
-  iconicity_boost = 0.2, # multiplicator for distance to iconic prototypes
-  prod_bias = 0.15, # baseline production bias toward prototype
+  learning_strength = 0.005, # amount of added memory strengthening for words per round
+  prototype_weight = 0.2, # multiplicator for distance to iconic prototypes
+  adaptive_production_bias = 0.15, # baseline production bias toward prototype
   reinforcement_rate = 0.05, #how strongly stored signals move toward produced signal on success
-  failure_step = 0.03, # how much stored signal moves toward prototype on failure
+  corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
   lapse = 0.05 # soft lapse in guess_probability
 ) {
 
@@ -40,48 +42,61 @@ run_interaction_sim <- function(
   ## large referents easier to guess near [1,1]
   ## currently distance measures range from 0.014 (max distance), to 1 (min distance) and is sharply dropping off when away from targets
   ### NOTE: Discuss and justify distance function (maybe euclidean)
-  signal_ease <- function(sig, type) {
+  signal_evidence <- function(signal, type, distance_scale = sqrt(2)) {
     target <- prototype_point(type)
-    dist <- sqrt((sig[1] - target[1])^2 + (sig[2] - target[2])^2)
-    exp(-1 * dist)
+    dist <- sqrt((signal[1] - target[1])^2 + (signal[2] - target[2])^2)
+    # Normalized distance [0,1]
+    d_norm <- dist / distance_scale
+    # Smooth boost + punishment: +1 at prototype, -1 at max distance
+    evidence <- (1 - d_norm)^2 - d_norm^2
+    evidence <- 1 - 2 * (dist / distance_scale)
+    #clamp to [-1, 1] just in case
+    evidence <- pmax(-1, pmin(1, evidence))
+    evidence
   }
   # interpretation probability
   ## final guess probability = previous guessing rate + signal fit (iconicity bias)
-  guess_probability <- function(agent_guess_prob, signal_xy, ref_type) {
-    ease <- signal_ease(signal_xy, ref_type)
-    # learned ability plus signal ease, capped at 1
-    # the added learning boost of ease is reduced by a factor 'iconicity_boost' which represents the strength of iconicity affecting guessing
+  guess_probability <- function(agent_guess_prob, signal_xy, referent_type) {
+    evidence <- signal_evidence(signal_xy, referent_type)
+    # learned ability plus signal evidence, capped at 1
+    # the added learning boost of evidence is reduced by a factor 'prototype_weight' which represents the strength of iconicity affecting guessing
     # convert probability to logodds
-    p_logit <- qlogis(agent_guess_prob) + iconicity_boost * ease
+    p_logit <- qlogis(agent_guess_prob) + prototype_weight * evidence
     p_raw <- plogis(p_logit)
     p_final <- (lapse/2) + (1 - lapse) * p_raw
     p_final
   }
   # produce a token (produced signal) given stored signal and speaker skill
-  # - speaker_skill in [0,1] can modulate how biased production is; speaker skill = the speaker's current probability of correctly identifying that referent
-  produce_signal <- function(sig_prev, ref_type, speaker_skill) {
-    target <- prototype_point(ref_type)
+  # - speaker_guess_prob in [0,1] can modulate how biased production is; speaker skill = the speaker's current probability of correctly identifying that referent
+  produce_signal <- function(previous_signal, referent_type, speaker_guess_prob) {
+    target <- prototype_point(referent_type)
     # Example: less-skilled speakers produce more prototypical forms (you can flip this)
-    bias_strength <- prod_bias * (1 - speaker_skill)
-    mu <- (1 - bias_strength) * sig_prev + bias_strength * target
+    bias_strength <- adaptive_production_bias * (1 - speaker_guess_prob)
+    mu <- (1 - bias_strength) * previous_signal + bias_strength * target
     clamp01(rnorm(2, mean = mu, sd = drift_sd))
   }
   # reinforce stored signal toward produced signal after success
-  reinforce_signal <- function(sig_prev, produced_sig) {
-    clamp01((1 - reinforcement_rate) * sig_prev + reinforcement_rate * produced_sig)
+  reinforce_signal <- function(previous_signal, produced_signal) {
+    clamp01((1 - reinforcement_rate) * previous_signal + reinforcement_rate * produced_signal)
   }
   # # when failure occurs, nudge stored signal toward prototype (or could do random drift)
-  update_signal_on_failure <- function(sig_prev, ref_type) {
-    target <- prototype_point(ref_type)
-    clamp01(sig_prev + failure_step * (target - sig_prev) + rnorm(2, 0, drift_sd/2))
+  update_signal_on_failure <- function(previous_signal, referent_type) {
+    target <- prototype_point(referent_type)
+    clamp01(previous_signal + corrective_rate * (target - previous_signal) + rnorm(2, 0, drift_sd/2))
   }
   # # drift on failure
-  # apply_drift <- function(sig_prev) {
-  #   pmax(pmin(sig_prev + rnorm(2, 0, drift_sd), 1), 0)
+  # apply_drift <- function(previous_signal) {
+  #   pmax(pmin(previous_signal + rnorm(2, 0, drift_sd), 1), 0)
   # }
   
   # log-odds learning update for guessing probabilities (additive in logit space)
-  update_guess_logodds <- function(p_old, learn_rate) plogis(qlogis(p_old) + learn_rate)
+  update_guess_logodds <- function(p_old, delta) {
+    plogis(qlogis(p_old) + delta)
+  }
+  
+  # convert learning_strength from probability to logit space
+  p0 <- 0.3
+  learning_strength_logit <- qlogis(p0 + learning_strength) - qlogis(p0)
   
   referents <- tibble(
     id = 1:n_referents,
@@ -118,24 +133,29 @@ run_interaction_sim <- function(
       r_type <- referents$type[r]
       
       # get stored signal, shared by both agents (one representation per referent)
-      sig_prev <- c(signals$x[r], signals$y[r])
+      previous_signal <- c(signals$x[r], signals$y[r])
       # produce a token (speaker generates a signal)
-      sig_prod <- produce_signal(sig_prev, r_type, speaker_guess[r])
+      sig_prod <- produce_signal(previous_signal, r_type, speaker_guess[r])
       # listener computes probability of correct guess
       p_correct <- guess_probability(listener_guess[r], sig_prod, r_type)
       # actual outcome, binomial sampling
       success <- rbinom(1, 1, p_correct)
+      # learning magnitude depends on success/failure
+      success_scale <- 1.2
+      failure_scale <- 0.8
+      delta <- learning_strength_logit * ifelse(success == 1, success_scale, failure_scale)
+      
       # learning: speaker improves guess rate, in logodds space
-      speaker_guess[r] <- update_guess_logodds(speaker_guess[r], learn_rate)
+      speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
       # listener also learns due to feedback
-      listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
+      listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
 
       # signal memory updates: success -> reinforce toward produced form; failure -> nudge toward prototype (or drift)
       new_sig <- if(success == 1) {
-        reinforce_signal(sig_prev, sig_prod)
+        reinforce_signal(previous_signal, sig_prod)
       } else {
-        #apply_drift(sig_prev)
-        update_signal_on_failure(sig_prev, r_type)
+        #apply_drift(previous_signal)
+        update_signal_on_failure(previous_signal, r_type)
       }
       signals$x[r] <- new_sig[1]
       signals$y[r] <- new_sig[2]
@@ -154,7 +174,7 @@ run_interaction_sim <- function(
           sim = n, round = t, referent = r,
           speaker = speaker, listener = listener, type = r_type,
           p_correct = p_correct, success = success,
-          stored_x = sig_prev[1], stored_y = sig_prev[2],
+          stored_x = previous_signal[1], stored_y = previous_signal[2],
           produced_x = sig_prod[1], produced_y = sig_prod[2]
         )
       )
@@ -174,11 +194,11 @@ run_interaction_sim_separate_memory <- function(
   n_large = n_referents/2,
   n_rounds = 1000,
   drift_sd = 0.05,
-  learn_rate = 0.005,
+  learning_strength = 0.05,
   iconicity_boost = 0.2,
-  prod_bias = 0.15,
+  adaptive_production_bias = 0.15,
   reinforcement_rate = 0.05,
-  failure_step = 0.03,
+  corrective_rate = 0.03,
   lapse = 0.05
 ) {
   
@@ -195,33 +215,33 @@ run_interaction_sim_separate_memory <- function(
     exp(-dist)
   }
   
-  guess_probability <- function(agent_guess_prob, signal_xy, ref_type) {
-    ease <- signal_ease(signal_xy, ref_type)
+  guess_probability <- function(agent_guess_prob, signal_xy, referent_type) {
+    ease <- signal_ease(signal_xy, referent_type)
     p_logit <- qlogis(agent_guess_prob) + iconicity_boost * ease
     p_raw <- plogis(p_logit)
     p_final <- (lapse/2) + (1 - lapse) * p_raw
     p_final
   }
   
-  produce_signal <- function(sig_prev, ref_type, skill) {
-    target <- prototype_point(ref_type)
-    bias_strength <- prod_bias * (1 - skill)
-    mu <- (1 - bias_strength) * sig_prev + bias_strength * target
+  produce_signal <- function(previous_signal, referent_type, skill) {
+    target <- prototype_point(referent_type)
+    bias_strength <- adaptive_production_bias * (1 - skill)
+    mu <- (1 - bias_strength) * previous_signal + bias_strength * target
     clamp01(rnorm(2, mu, drift_sd))
   }
   
-  reinforce_signal <- function(sig_prev, produced_sig) {
-    clamp01((1 - reinforcement_rate)*sig_prev + reinforcement_rate*produced_sig)
+  reinforce_signal <- function(previous_signal, produced_signal) {
+    clamp01((1 - reinforcement_rate)*previous_signal + reinforcement_rate*produced_signal)
   }
   
-  update_signal_on_failure <- function(sig_prev, ref_type) {
-    target <- prototype_point(ref_type)
-    clamp01(sig_prev + failure_step * (target - sig_prev) +
+  update_signal_on_failure <- function(previous_signal, referent_type) {
+    target <- prototype_point(referent_type)
+    clamp01(previous_signal + corrective_rate * (target - previous_signal) +
               rnorm(2, 0, drift_sd/2))
   }
   
-  update_guess_logodds <- function(p_old, learn_rate)
-    plogis(qlogis(p_old) + learn_rate)
+  update_guess_logodds <- function(p_old, learning_strength)
+    plogis(qlogis(p_old) + learning_strength)
   
   referents <- tibble(
     id = 1:n_referents,
@@ -264,35 +284,35 @@ run_interaction_sim_separate_memory <- function(
       r_type <- referents$type[r]
       
       # retrieve speaker's stored signal
-      sig_prev <- c(speaker_memory$x[r], speaker_memory$y[r])
+      previous_signal <- c(speaker_memory$x[r], speaker_memory$y[r])
       
       # produce signal
-      sig_prod <- produce_signal(sig_prev, r_type, speaker_guess[r])
+      sig_prod <- produce_signal(previous_signal, r_type, speaker_guess[r])
       
       # listener computes probability of correct guess
       p_correct <- guess_probability(listener_guess[r], sig_prod, r_type)
       success <- rbinom(1, 1, p_correct)
       
       # update speaker skill
-      speaker_guess[r] <- update_guess_logodds(speaker_guess[r], learn_rate)
+      speaker_guess[r] <- update_guess_logodds(speaker_guess[r], learning_strength)
       
       # listener skill update
-      listener_guess[r] <- update_guess_logodds(listener_guess[r], learn_rate)
+      listener_guess[r] <- update_guess_logodds(listener_guess[r], learning_strength)
       
       # speaker memory update
       new_sig_speaker <- if (success == 1) {
-        reinforce_signal(sig_prev, sig_prod)
+        reinforce_signal(previous_signal, sig_prod)
       } else {
-        update_signal_on_failure(sig_prev, r_type)
+        update_signal_on_failure(previous_signal, r_type)
       }
       
       # listener memory update
       # Theoretically: listener encodes the form they just heard.
-      sig_prev_listener <- c(listener_memory$x[r], listener_memory$y[r])
+      previous_signal_listener <- c(listener_memory$x[r], listener_memory$y[r])
       new_sig_listener <- if (success == 1) {
-        reinforce_signal(sig_prev_listener, sig_prod)
+        reinforce_signal(previous_signal_listener, sig_prod)
       } else {
-        update_signal_on_failure(sig_prev_listener, r_type)
+        update_signal_on_failure(previous_signal_listener, r_type)
       }
       
       
@@ -327,12 +347,12 @@ run_interaction_sim_separate_memory <- function(
           type = r_type,
           p_correct = p_correct,
           success = success,
-          speaker_stored_x = sig_prev[1],
-          speaker_stored_y = sig_prev[2],
+          speaker_stored_x = previous_signal[1],
+          speaker_stored_y = previous_signal[2],
           produced_x = sig_prod[1],
           produced_y = sig_prod[2],
-          listener_stored_x = sig_prev_listener[1],
-          listener_stored_y = sig_prev_listener[2]
+          listener_stored_x = previous_signal_listener[1],
+          listener_stored_y = previous_signal_listener[2]
         )
       )
     }
