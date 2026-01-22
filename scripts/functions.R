@@ -15,6 +15,184 @@ signal_evidence <- function(sig, type, distance_scale = sqrt(2)) {
 
 # Main interaction loop function
 run_interaction_sim <- function(
+    data,
+    n_sim = 10, # number of simulations
+    n_referents = 4, # number of unique referents in guessing game
+    n_rounds = 1000, # number of interaction rounds
+    drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production
+    drift_sd_y = 0.05,       # amount of variation introduced during production 
+    learning_strength = 0.005, # amount of added memory strengthening for words per round
+    prototype_weight = 0.2,  # multiplicator for distance to iconic prototypes
+    articulatory_production_bias = 0.15, # baseline production bias toward prototype
+    reinforcement_rate = 0.05, # how strongly stored signals move toward produced signal on success
+    corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
+    lapse = 0.05, # soft lapse in guess_probability
+    lambda_softmax = 10       # sensitivity for multinomial choice
+) {
+  
+  # assign input data frame to history internally
+  history <- data
+  
+  #clamp to [0,1]
+  clamp01 <- function(x) pmax(0, pmin(1, x))
+  
+  # Size prototypes (semantic -> vowel Y)
+  size_prototypes <- c(small = 0, large = 1)
+  
+  # Define lexeme X prototypes (fixed)
+  lex_prototypes <- c(A = 0.1, B = 0.4, C = 0.7, D = 1.0)
+  
+  # Referent info: lexeme + size (many-to-one allowed)
+  referents_info <- tibble(
+    id = 1:n_referents,
+    lexeme = c("A","B","C","D")[1:n_referents],
+    type = c("large","small","large","small")[1:n_referents]
+  )
+  
+  # Convert learning strength from probability to log-odds
+  p0 <- 0.3 # approximate starting value
+  learning_strength_logit <- qlogis(p0 + learning_strength) - qlogis(p0)
+  
+  # produce a token (produced signal) given stored signal and speaker skill; 
+  # x = fixed lexeme + tiny noise
+  # y = stored y + articulatory bias
+  produce_signal <- function(stored_y, lexeme, referent_type, speaker_guess) {
+    x <- rnorm(1, mean = lex_prototypes[lexeme], sd = drift_sd_x)
+    bias_strength <- articulatory_production_bias * (1 - speaker_guess)
+    target_y <- size_prototypes[referent_type]
+    y <- rnorm(1, mean = (1 - bias_strength) * stored_y + bias_strength * target_y,
+               sd = drift_sd_y)
+    c(x, clamp01(y))
+  }
+  
+  # Adaptive communicative bias (for Y only)
+  # reinforce stored signal toward produced signal after success
+  reinforce_Y <- function(stored_y, produced_y) {
+    ((1 - reinforcement_rate) * stored_y + reinforcement_rate * produced_y)
+  }
+  # when failure occurs, nudge stored signal toward prototype
+  correct_Y <- function(stored_y, referent_type) {
+    target_y <- size_prototypes[referent_type]
+    clamp01(
+      stored_y + corrective_rate * (target_y - stored_y) +
+        rnorm(1, 0, drift_sd_y/2))
+  }
+  
+  # Signal evidence for interpretation bias
+  # Measures proximity of Y to its size prototype
+  signal_evidence <- function(signal_y, referent_type) {
+    target <- size_prototypes[referent_type]
+    dist <- abs(signal_y - target)
+    # normalized to [-1,1]; +1 at prototype, -1 at max distance ---- THIS NEEDS EDITING
+    evidence <- 1 - 2 * dist
+    clamp01((evidence + 1)/2) * 2 - 1  # ensure [-1,1]
+  }
+  
+  # interpretation probability
+  # final guess probability = previous guessing rate + signal fit (iconicity bias)
+  # Listener recognition: softmax on distance in Y only
+  listener_guess_probs <- function(agent_guess_vec, signal_y, referents_info) {
+    logits <- sapply(1:nrow(referents_info), function(k) {
+      # previous guess in logit space
+      logit_prev <- qlogis(agent_guess_vec[k])
+      # iconicity evidence
+      evidence <- signal_evidence(signal_y, referents_info$type[k])
+      # weighted sum (matches old model)
+      logit_prev + prototype_weight * evidence
+    })
+    
+    # softmax over logit values
+    exp_logits <- exp(lambda_softmax * logits)
+    probs <- exp_logits / sum(exp_logits)
+    
+    # apply lapse
+    probs <- (lapse/length(probs)) + (1 - lapse) * probs
+    probs
+  }
+
+  # log-odds learning update for guessing probabilities (additive in logit space)
+  update_guess_logodds <- function(p_old, delta) plogis(qlogis(p_old) + delta)
+  # convert learning_strength from probability to logit space
+  p0 <- 0.3
+  learning_strength_logit <- qlogis(p0 + learning_strength) - qlogis(p0)
+
+  # MAIN SIMULATION LOOP
+  for (sim in 1:n_sim) {
+    
+    # Stored representation: X=lexeme fixed, Y starts neutral
+    stored_y <- rep(0.5, n_referents)
+    
+    # initial learning status of referents (after training)
+    ## each agent has initial probability ~ 0.3 ± noise
+    agentA_guess <- rbeta(n_referents, 2, 4)
+    agentB_guess <- rbeta(n_referents, 2, 4)
+    
+    for (t in 1:n_rounds) {
+      # speakers/listeners are taking turns
+      if (t %% 2 == 1) {
+        speaker <- "A"; listener <- "B"
+        speaker_guess <- agentA_guess; listener_guess <- agentB_guess
+      } else {
+        speaker <- "B"; listener <- "A"
+        speaker_guess <- agentB_guess; listener_guess <- agentA_guess
+      }
+      # randomly pick one referent
+      r <- sample(1:n_referents, 1)
+      ref <- referents_info[r,]
+      
+      # Production (speaker knows lexeme & size)
+      sig <- produce_signal(stored_y[r], ref$lexeme, ref$type, speaker_guess[r])
+      x_prod <- sig[1]
+      y_prod <- sig[2]
+      
+      # Listener infers lexeme via softmax
+      probs <- listener_guess_probs(listener_guess, y_prod, referents_info)
+      # actual outcome, binomial sampling
+      success <- rbinom(1,1,probs[r])
+      
+      # Learning in lexical mapping depends on success/failure
+      success_scale <- 1.2
+      failure_scale <- 0.8
+      delta <- learning_strength_logit * ifelse(success==1, success_scale, failure_scale)
+      # learning: speaker improves guess rate, in logodds space
+      speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
+      # listener also learns due to feedback
+      listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
+      
+      # Adaptive communicative bias in Y, signal memory updates: success -> reinforce toward produced form; failure -> nudge toward prototype (or drift)
+      if(success==1) {
+        stored_y[r] <- reinforce_Y(stored_y[r], y_prod)
+      } else {
+        stored_y[r] <- correct_Y(stored_y[r], ref$type)
+      }
+      
+      # Update agent states based on learning
+      if (speaker == "A") {
+        agentA_guess <- speaker_guess
+        agentB_guess <- listener_guess
+      } else {
+        agentB_guess <- speaker_guess
+        agentA_guess <- listener_guess
+      }
+      
+      # Log trials
+      history <- rbind(history, data.frame(
+        sim = sim, round = t,
+        referent = r, lexeme = ref$lexeme, type = ref$type,
+        speaker = speaker, listener = listener,
+        produced_x = x_prod, produced_y = y_prod,
+        stored_y = stored_y[r],
+        p_guess = probs[r], success = success
+      ))
+    }
+  }
+  
+  return(history)
+}
+
+
+# Main interaction loop function
+run_interaction_sim_old <- function(
   data,
   n_sim = 10, # number of simulations
   n_referents = 6, # number of unique referents in guessing game
@@ -24,7 +202,7 @@ run_interaction_sim <- function(
   drift_sd = 0.05, # amount of variation introduced during production
   learning_strength = 0.005, # amount of added memory strengthening for words per round
   prototype_weight = 0.2, # multiplicator for distance to iconic prototypes
-  adaptive_production_bias = 0.15, # baseline production bias toward prototype
+  articulatory_production_bias = 0.15, # baseline production bias toward prototype
   reinforcement_rate = 0.05, #how strongly stored signals move toward produced signal on success
   corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
   lapse = 0.05 # soft lapse in guess_probability
@@ -48,7 +226,6 @@ run_interaction_sim <- function(
     # Normalized distance [0,1]
     d_norm <- dist / distance_scale
     # Smooth boost + punishment: +1 at prototype, -1 at max distance
-    evidence <- (1 - d_norm)^2 - d_norm^2
     evidence <- 1 - 2 * (dist / distance_scale)
     #clamp to [-1, 1] just in case
     evidence <- pmax(-1, pmin(1, evidence))
@@ -71,7 +248,7 @@ run_interaction_sim <- function(
   produce_signal <- function(previous_signal, referent_type, speaker_guess_prob) {
     target <- prototype_point(referent_type)
     # Example: less-skilled speakers produce more prototypical forms (you can flip this)
-    bias_strength <- adaptive_production_bias * (1 - speaker_guess_prob)
+    bias_strength <- articulatory_production_bias * (1 - speaker_guess_prob)
     mu <- (1 - bias_strength) * previous_signal + bias_strength * target
     clamp01(rnorm(2, mean = mu, sd = drift_sd))
   }
@@ -196,7 +373,7 @@ run_interaction_sim_separate_memory <- function(
   drift_sd = 0.05,
   learning_strength = 0.05,
   iconicity_boost = 0.2,
-  adaptive_production_bias = 0.15,
+  articulatory_production_bias = 0.15,
   reinforcement_rate = 0.05,
   corrective_rate = 0.03,
   lapse = 0.05
@@ -225,7 +402,7 @@ run_interaction_sim_separate_memory <- function(
   
   produce_signal <- function(previous_signal, referent_type, skill) {
     target <- prototype_point(referent_type)
-    bias_strength <- adaptive_production_bias * (1 - skill)
+    bias_strength <- articulatory_production_bias * (1 - skill)
     mu <- (1 - bias_strength) * previous_signal + bias_strength * target
     clamp01(rnorm(2, mu, drift_sd))
   }

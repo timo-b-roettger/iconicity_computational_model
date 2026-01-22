@@ -77,24 +77,24 @@ Finally, some studies have also indicated differences in the strength of iconici
 To sum up, iconicity tends to emerge when learners cannot rely on rote memorization, when meaning (the semantic property of the item) is salient, and when communicative pressure is present. Combinatorial patterns tend to increase with repetition and transmission but are sometimes inhibited by highly iconic or semantically transparent mappings. Learnability typically improves over generations, but whether this improvement is driven by structure or iconicity depends on the design of each study.
 
 # Suggested mechanisms underlying the emergence of iconicity
-Based on what we know from previous work, we suggest three main mechanisms supporting the emergence of iconicity in interactive language learning. Based in the idea that iconicity facilitates interaction and learning of an artificial language, these mechanisms target different parts of the interaction, affecting either the signal being produced, the interpretation ease of the signal during recognition, or the memory trace of the learned signal after recognition. The three mechanisms encompass: an *adaptive production bias* toward producing more iconic signals based on previous interactional outcomes, a *interpretation bias* that favor iconic signals and punishes anti-iconic signals in recognition, and finally, an *adaptive signal alignment* toward making learned signals more iconic when communication fails.<!--TR: check general articulation bias, (accidental drift of produced signal to iconicity) vs communication bias (intentional modulation of the produced signal tw iconicity to make it easier for listener)-->
+Based on what we know from previous work, we suggest three main mechanisms supporting the emergence of iconicity in interactive language learning. Based in the idea that iconicity facilitates interaction and learning of an artificial language, these mechanisms target different parts of the interaction, affecting either the signal being produced, the interpretation ease of the signal during recognition, or the memory trace of the learned signal after recognition. The three mechanisms encompass: an *articulatory production bias* toward producing more iconic signals based on previous interactional outcomes, a *interpretation bias* that favor iconic signals and punishes anti-iconic signals in recognition, and finally, an *adaptive communicative bias* toward making learned signals more iconic when communication fails.<!--TR: check general articulation bias, (accidental drift of produced signal to iconicity) vs communication bias (intentional modulation of the produced signal tw iconicity to make it easier for listener)-->
 
-## Adaptive production bias
-In an interaction game, iconic signal formation can be seen as a bias in adaptive production whereby speakers adjust their signal to be more iconic depending on previous communication outcomes. Given that iconicity strategies arise from communicative pressure, one can expect this production bias toward a more iconic signal to be larger if previous communication was unsuccessful. This would reflect a situation where interlocutors have difficulties communicating in the new language, and the speaker would resort to using iconicity as a means for increasing the probability of successful interaction. The *adaptive production bias* mechanism thus represents a directional pressure toward iconic targets during production, causing iconicity to gradually emerge over repeated interaction.
+## Articulatory production bias
+In an interaction game, signal formation can be affected by an automatic articulatory bias toward producing iconic signals that is modulated by the speaker's prior experience with the language. This prior experience---the speaker's associative strength in the mapping between signal and referent---affects the variability with which a signal is produced. Low associative strength yields productions that are more variable and more strongly affected by iconicity, whereas high associative strength yields productions that remain closer to the speaker's stored forms and are less affected by iconicity. The *articulatory production bias* mechanism thus represents an automatic, experience-based production bias toward iconic targets that weakens as mappings become more established.
 
 ## Interpretation bias
 <!--AP: agree w comments here but haven't touched since you wrote you'd have a swing--> 
 If iconic signals indeed drive interaction and learning,<!--TR: a bit strong. interaction and learning is not driven by iconicity but facilitated. Also the sentence premise does not naturally warrant its conclusion.--> iconic forms should further be favored in recognition.<!--TR: favored and disfavored relative to what? Iconic form should be easier to recognize than non-iconic forms. Also no mention of anti-iconic forms. (non-iconic is arbitrary, anti-iconic is opposite of iconic so confusing); AP: so, in dis/favored in relation to the initial (neutral) signal produced at the centre of the space?--> Similarly, non-iconic forms should be dis-favored. The *interpretation bias* mechanism incentivizes iconic signals based on their iconicity; boosting the ease of interpretation for signals that are closer to the prototype, and punishing signals that are further away from the prototype. This means that the listener's success in identifying the referent increases with signal proximity to prototype, and iconicity thus boosts perception and interpretability. In a situation where the listener tries to identify what semantic referent the speaker is signalling, more iconic signals would thus be easier for the listener to identify than non-iconic signals. This means that iconic forms become preferred because they are easier for listeners to interpret and therefore more likely to be reinforced.<!--TR: not sure I understand this in relation to what we have done-->
 
-## Adaptive signal alignment
-In interaction, feedback on communicative success is expected to have an effect on language learning and signal representation in memory, where both successful and unsuccessful interactions can shape representations. If iconicity is used as a strategy for communicative success, one could expect an intentional pressure on listeners to update their learned signals in line with interactional outcomes. On failed interactions, the signals are shifted toward the iconic target signal, thus becoming more iconic, and less so on successful interactions. The *adaptive signal alignment* mechanism may reflect an implicit learning process in which communicative failures lead the listener to update the memory representation of the signal toward a more prototypical form. In this sense, iconicity shapes both signal production and the memory of signal–referent mappings.
+## Adaptive communicative bias
+In interaction, feedback on communicative success is expected to have an effect on upcoming interactions and signal representations, such that both successful and unsuccessful interactions can shape how signals are produced. If iconicity is used as a strategy for improving communicative success, one could expect an intentional pressure on interlocutors to increase the iconicity of their signals when communication fails. Given that iconicity strategies arise from communicative pressure, this intentional communicative bias toward more iconic signals should be stronger following unsuccessful trials. This reflects a situation where interlocutors have difficulties communicating in the new language, and rely on iconicity to increase the probability of successful interaction. On failed interactions, the signals are shifted toward the referent's iconic target, making future productions more iconic, whereas successful interactions reinforce the currently produced form. The *adaptive communicative bias* mechanism thus represents an intentional strategy for adjusting signals in response to communicative outcomes, gradually increasing iconicity under uncertainty while stabilizing existing forms when communication succeeds.
 
 Next, we describe how these suggested mechanisms are implemented in a computational model simulating the emergence of iconicity.
 
 # Model implementation and underlying assumptions
 The model we introduce here simulates the emergence of iconicity in an interactive game of artificial language learning, played in dyads. Guided by communicative pressure and incremental learning, the above mechanisms are implemented in the model as parameters supporting the emergence of iconicity. The central assumption is that successful interaction favors form-meaning mappings that are iconic, and that over repeated interactions, iconic signals emerge. Learning is considered gradual and experience-dependent as agents continuously update their internal representations of form-meaning associations and adjust their signal production based on interaction outcomes (success or failure). Success or failure is formalized as the probability of the current guess, $p$. Because learning is considered probabilistic, increases in guessing probabilities do not guarantee perfect performance on every trial, but raise the probability of correct recognition.
 
-The emergence pressure of iconicity is formalized in two sets of parameters, in line with the above described mechanisms: one set of parameters operating on the listener's perception and retrieval of the referent, and on the storage of the signal after recognition, and one set of parameters operating on the production of the signal. We begin by accounting for the overall structure of the model, before describing how these parameters are implemented.<!--TR: I wonder whether we should rebuild the model such that one dimension of the signal space is mapped onto referents and the other mapped onto size.-->
+The emergence pressure of iconicity is formalized in two sets of parameters, in line with the above described mechanisms: one set of parameters operating on the listener's perception and retrieval of the referent, and on the updating of the signal after recognition, and one set of parameters operating on the production of the signal. We begin by accounting for the overall structure of the model, before describing how these parameters are implemented.<!--TR: I wonder whether we should rebuild the model such that one dimension of the signal space is mapped onto referents and the other mapped onto size.-->
 
 ## Overall structure of model
 Any simple agent-based model of lexical learning that simulates the emergence of iconicity needs to account for 1) agents and the language to be learnt, 2) how agents produce and perceive form-meaning pairs, 3) how learning incrementally increases over time, and 4) the iconicity mechanisms affecting this process. As accounted for above, for iconicity to emerge, mechanisms need to exert pressure on agents to favor more iconic signals in production and perception, and in signal representation. The output of interest is whether the signals becomes more iconic over time. In this model, this is assessed using a distance measure of the signal to the prototypical value in a continuous signal space. More iconic signals are closer located to the prototypical value of the underlying referent. This goes for both learned and produced signals.
@@ -104,26 +104,27 @@ In the language interaction game simulated here, size-related meanings are conve
 The model loops through several trials in the experiment where two participants, agent A and agent B, take turns alternating roles as listener and speaker. Each trial is initialized by randomly assigning agent A and agent B to either speaker or listener role. The speaker is given a random referent (small or large) and the learned signal for that referent is retrieved. The speaker then produces a signal, and the listener attempts to recognize the intended referent. The recognition is evaluated as either correct or incorrect, and both speaker and listener update their beliefs (= their learning) about the signal-to-referent mapping independently of iconicity, continuously becoming more and more certain about the language over trials. Finally, the listener updates its learned signal representation depending on the interactional outcome, and a new trial starts.
 
 ## Implementation of suggested mechanisms
-The suggested mechanisms are implemented at different stages of the interaction round accounted for above. Figure XX visualizes a single trial and highlights at what stages the mechanisms are assumed to operate.
+The suggested mechanisms are implemented at different stages of the interaction round accounted for above. Figure \@ref(fig:model-figure) visualizes a single trial and highlights at what stages the mechanisms are assumed to operate.
 
 ### Producing a signal
-Beginning at the bottom of Figure XX, the speaker agent is given a referent at random and retrieves the stored signal values [x,y] for the referent. Signals are represented as points in a continuous (yet contained) two-dimensional signal space ranging from [0,0] to [1,1]. This space can be considered a simplified abstraction over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly encode size-related meaning. The two dimensions do not correspond to specific acoustic parameters but capture the idea that signals vary continuously along multi-dimensional perceptual dimensions relevant for iconic mapping. Each meaning is associated with an iconic prototype in signal space. Small referents are associated with a prototype at [0,0], and the large category with a prototype at [1,1]. These prototypes represent perceptually transparent signal–meaning correspondences and can be thought of e.g. a formant vowel space in which high front vowels are correlated with small referents and low back vowels are correlated with large referents. The initial signals at the start of the simulation are placed at the center of the space, [.5,.5].
+Beginning at the bottom of Figure \@ref(fig:model-figure), the speaker agent is given a referent at random and retrieves the stored signal values [x,y] for the referent. Signals are represented as points in a continuous (yet contained) two-dimensional signal space ranging from [0,0] to [1,1]. This space can be considered a simplified abstraction over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly encode size-related meaning. The two dimensions do not correspond to specific acoustic parameters but capture the idea that signals vary continuously along multi-dimensional perceptual dimensions relevant for iconic mapping. Each meaning is associated with an iconic prototype in signal space. Small referents are associated with a prototype at [0,0], and the large category with a prototype at [1,1]. These prototypes represent perceptually transparent signal–meaning correspondences and can be thought of e.g. a formant vowel space in which high front vowels are correlated with small referents and low back vowels are correlated with large referents. The initial signals at the start of the simulation are placed at the center of the space, [.5,.5].<!--AP: assumption of each lexical item uniquely cueing the referent category--guessing problem is still binary, lexical identity is categorical context constraining interpretation---iconicity only modulates recognition within the lexical category through the acoustic dimension?-->
+$s = (X,y)$ where X = lexeme, and y[0,1] = acoustic dimension affected by iconicity? Target prototypes $y_{small} = 0$, $y_{large} = 1$.
 
-When the speaker retrieves the signal for the randomly selected referent, the *adaptive production bias* mechanism transforms the signal depending on the speaker's current probability of correct identification, $p$. The initial learning state of the listener at the first trial is on average a probability of $~.33$. This probability is established by drawing n random values from a beta distribution with a $\alpha = 2$ and $\beta = 4$. The updated biased signal is computed as a weighted average of the learned signal and the prototype, where the prototype weight increases as $p$ decreases, so as to be modulated by the speaker's confidence in the learned form-meaning mappings; lower current guess probabilities generate stronger prototype bias, whereas higher guess probabilities generate weaker bias ($1-p_{speaker}$). The adaptive production bias is implemented as sampling from a two-dimensional Gaussian probability distribution with a mean shifted toward [0,0] or [1,1]. Signals for small referents tend to shift toward the [0,0] prototype while signals for large referents tend to shift toward the [1,1] prototype.
+When the speaker retrieves the signal for the randomly selected referent, the general *articulatory production bias* mechanism transforms the signal depending on the speaker's current probability of correct identification, $p$. The initial learning state of the listener at the first trial is on average a probability of $~.33$. This probability is established by drawing n random values from a beta distribution with a $\alpha = 2$ and $\beta = 4$. The updated biased signal is computed as a weighted average of the learned signal and the prototype, where the prototype weight increases as $p$ decreases, so as to be modulated by the speaker's confidence in the learned form-meaning mappings; lower current guess probabilities generate stronger prototype bias, whereas higher guess probabilities generate weaker bias ($1-p_{speaker}$). The articulatory production bias is implemented as sampling from a two-dimensional Gaussian probability distribution with a mean shifted toward [0,0] or [1,1]. Signals for small referents tend to shift toward the [0,0] prototype while signals for large referents tend to shift toward the [1,1] prototype.
 
 After updating the produced signal, *Gaussian noise* is applied to each dimension of the produced token with $sd = .05$ to model production variability (incl. e.g., motor noise). Signals are restricted within the set limits ([0,1] in each dimension), so if modulation of the signal resulted in values outside of its bound, the model truncates the signal to its boundaries. The production noise affects only the produced token and does not modify the underlying stored representation.
 
 ```{r echo=TRUE, eval=FALSE}
 produce_signal <- function(previous_signal, referent_type, speaker_guess_prob) {
   target <- prototype_point(referent_type)
-  bias_strength <- adaptive_production_bias * (1 - speaker_guess_prob)
+  bias_strength <- articulatory_production_bias * (1 - speaker_guess_prob)
   mu <- (1 - bias_strength) * previous_signal + bias_strength * target
   clamp01(rnorm(2, mean = mu, sd = drift_sd))
 }
 ```
 
 ### Recognizing the signal
-Moving up in Figure XX, the biased signal is then presented to the listener, that guesses what referent the signal refers to. Recognition and learning of the form-meaning mappings are formalized as a function of the listener's previous guessing probability and the *interpretation bias* term. Guessing probability reflects the listener's prior probability of guessing a specific referent correctly and corresponds to the associative strength linking a signal to a meaning. Higher previous guessing probabilities generate higher probability of success on subsequent trials, thus reinforcing existing mappings and accelerating learning trajectories. 
+Moving up in Figure \@ref(fig:model-figure), the biased signal is then presented to the listener, that guesses what referent the signal refers to. Recognition and learning of the form-meaning mappings are formalized as a function of the listener's previous guessing probability and the *interpretation bias* term. Guessing probability reflects the listener's prior probability of guessing a specific referent correctly and corresponds to the associative strength linking a signal to a meaning. Higher previous guessing probabilities generate higher probability of success on subsequent trials, thus reinforcing existing mappings and accelerating learning trajectories. 
 
 The interpretation bias is implemented as the signal's distance to the iconic prototype affecting the current guess, favoring signals that are more closely located to their prototypical target in the two-dimensional space, and punishing signals that are anti-iconic. It is operationalized by two parameters---*signal evidence* and *prototype weighting*. Signal evidence measures the Euclidean distance between a produced signal and its iconic prototype, capturing how well the signal fits the attractor. It is defined as a decreasing function that drops off sharply (exponentially) when moving away from prototypes. Figure \@ref(fig:signal-ease) illustrates signal evidence relative to the signal space, with higher ease for more prototypical values.
 
@@ -191,10 +192,11 @@ delta <- if (success == 1) {
 
 speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
 listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
+
 ```
 
-### Updating the learned signal
-After the listener and speaker have received feedback on the interaction, they update their learned signals in memory, Figure XX:top. The updating is affected by the *adaptive signal alignment* mechanism that aligns the signal toward either the produced or the prototypical signal depending on whether interaction succeed or failed. The adaptive signal alignment is implemented by two parameters: a *reinforcement rate* on successful interactions, and a *corrective rate* on failed interactions. 
+### Updating the signal
+After the listener and speaker have received feedback on the interaction, they update their learned signals in memory, Figure \@ref(fig:model-figure):top. The updating is affected by the *adaptive communicative bias* mechanism that aligns the signal toward either the produced or the prototypical signal depending on whether interaction succeed or failed. The adaptive communicative bias is implemented by two parameters: a *reinforcement rate* on successful interactions, and a *corrective rate* on failed interactions. 
 
 When communication succeeds, the listener retrieves the signal for the referent and the learned signal is updated by a weighted average of the previous signal and the speaker's production, with weight given by the reinforcement rate. When communication fails, the learned signal takes a proportional step toward the referent's iconic prototype, scaled by a corrective rate and perturbed by small drift noise to capture variability in updating failed signals.
 
@@ -227,7 +229,7 @@ Next, we compare the different mechanisms and assess their relative importance f
 # Comparison of mechanisms and their relative importance for the emergence of iconicity
 For the comparison presented below, we ran 10 simulations of the model, each simulation with 1000 interaction rounds for a total of 10 000 trials. Simulations were run with fixed random seeds for reproducibility.<!--AP: changing the seed did not qualitatively alter the results -- haven't checked if that is actually true--> The number of unique referents in the guessing game was set to 6; 3 small referents and 3 large referents.
 
-The simulations used the following parameter settings: learning strength ($.005$), prototype weighting ($.2$), adaptive production bias ($.15$), reinforcement rate ($.05$), and corrective rate ($.03$).<!--AP: theses values should have approx. the same magnitude, depending on their role in respective function-->
+The simulations used the following parameter settings: learning strength ($.005$), prototype weighting ($.2$), articulatory production bias ($.15$), reinforcement rate ($.05$), and corrective rate ($.03$).<!--AP: theses values should have approx. the same magnitude, depending on their role in respective function-->
 
 We generated 6 types of models. The main model included all of the above described parameters set at their intialization values, as described above. The remaining 5 models were generated by switching off one of the parameters at a time by setting their value to 0.
 
@@ -258,8 +260,8 @@ d.empty <- data.frame(
 d.simulation <- rbind(
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000) %>%
     mutate(parameter_space = "allParams"),
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, adaptive_production_bias = 0) %>%
-    mutate(parameter_space = "noAdaptiveProductionBias"),
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, articulatory_production_bias = 0) %>%
+    mutate(parameter_space = "noArticulatoryProductionBias"),
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, corrective_rate = 0) %>%
     mutate(parameter_space = "noCorrectiveRate"),
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, reinforcement_rate = 0) %>%
@@ -269,7 +271,7 @@ d.simulation <- rbind(
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, prototype_weight = 0) %>%
     mutate(parameter_space = "noPrototypeWeight"),
   # Also add one simulation that resembles the old model
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, adaptive_production_bias = 0, corrective_rate = 0, reinforcement_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0, reinforcement_rate = 0) %>%
     mutate(parameter_space = "onlyLearning"))
 
 # Diagnostics
@@ -283,30 +285,29 @@ d.simulation <- rbind(
 # you can compute iconicity either from stored signals or produced tokens
 d.iconicity <- d.simulation %>%
   group_by(parameter_space) %>%
+  # bin rounds for temporal smoothing
   mutate(bins = cut(round, breaks = 20, labels = FALSE)) %>%
+  # average within bin × type × simulation
   group_by(parameter_space, bins, type, sim) %>%
   summarise(
-    x_learned = mean(stored_x),
-    y_learned = mean(stored_y),
-    x_produced = mean(produced_x),
-    y_produced = mean(produced_y),
+    y_learned   = mean(stored_y),
+    y_produced  = mean(produced_y),
+    x_produced  = mean(produced_x),   # kept for completeness
     .groups = "drop") %>%
+  # reshape for learned vs produced comparison
   pivot_longer(
-    cols = starts_with(c("x", "y")),
+    cols = c(y_learned, y_produced),
     names_to = c("signal", "process"),
     values_to = "value",
     names_sep = "_") %>%
-  pivot_wider(
-    names_from = signal,
-    values_from = value) %>%
+  # only evaluate iconicity along y (semantic dimension)
   mutate(
-    target_x = ifelse(type == "small", 0, 1),
     target_y = ifelse(type == "small", 0, 1),
-    dist = sqrt((x - target_x)^2 + (y - target_y)^2),
+    dist = abs(value - target_y),
     iconicity = exp(-2 * dist)) %>%
+  # collapse across referent types to get overall iconicity
   group_by(parameter_space, bins, sim, process) %>%
-    summarise(iconicity = mean(iconicity), .groups = "drop")
-
+  summarise(iconicity = mean(iconicity), .groups = "drop")
 ```
 
 ```{r iconicity-plot, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:iconicity-plot)", warning=FALSE}
@@ -371,6 +372,11 @@ d.simulation %>%
   facet_grid( ~ parameter_space) +
   scale_y_continuous(limits = c(0,1)) + 
   theme_minimal()
+
+# ggplot(d.iconicity, aes(bins, iconicity, color=process)) +
+#   geom_smooth() + facet_grid(~parameter_space)
+
+
 ```
 
 Figure \@ref(fig:signal-space) visualizes the distribution of learned and produced signals across simulations for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge strongly, e.g., the model without corrective rate (second row).
@@ -379,29 +385,29 @@ Figure \@ref(fig:signal-space) visualizes the distribution of learned and produc
 
 ```{r signal-space, fig.width=base.width*7, fig.height=base.height*4, fig.align='center', out.width='100%', fig.cap="(ref:signal-space)"}
 # Signal space use
-p.learned.signals <- d.simulation %>%
-  filter(parameter_space != "onlyLearning") %>%
-  ggplot(
-    aes(stored_x, 
-        stored_y, 
-        color = type)) +
-  geom_point(alpha = 0.2) +
-  labs(title = "Evolution of learned signal space", x = "x", y = "y") +
-  facet_grid(parameter_space ~ sim) +
-  scale_x_continuous(limits = c(0,1)) + 
-  scale_y_continuous(limits = c(0,1)) + 
-  scale_color_viridis_d(begin = 0.1, end = 0.9) +
-  theme_minimal()
-
-p.produced.signals <- p.learned.signals %+%
-  aes(produced_x,
-      produced_y) +
-  labs(title = "Evolution of produced signal space", x = "x", y = "y")
-
-p.learned.signals + p.produced.signals +
-  plot_layout(guides = "collect") &
-  theme(
-    legend.position = "bottom")
+# p.learned.signals <- d.simulation %>%
+#   filter(parameter_space != "onlyLearning") %>%
+#   ggplot(
+#     aes(stored_x, 
+#         stored_y, 
+#         color = type)) +
+#   geom_point(alpha = 0.2) +
+#   labs(title = "Evolution of learned signal space", x = "x", y = "y") +
+#   facet_grid(parameter_space ~ sim) +
+#   scale_x_continuous(limits = c(0,1)) + 
+#   scale_y_continuous(limits = c(0,1)) + 
+#   scale_color_viridis_d(begin = 0.1, end = 0.9) +
+#   theme_minimal()
+# 
+# p.produced.signals <- p.learned.signals %+%
+#   aes(produced_x,
+#       produced_y) +
+#   labs(title = "Evolution of produced signal space", x = "x", y = "y")
+# 
+# p.learned.signals + p.produced.signals +
+#   plot_layout(guides = "collect") &
+#   theme(
+#     legend.position = "bottom")
 
 ```
 
@@ -409,34 +415,34 @@ Overall, the results seem to suggest that iconicity emerged reliably except when
 
 Interestingly, learning strength appeared to influence communicative accuracy without substantially affecting iconicity. When learning strength was removed, agents reached relatively high levels of iconicity but reduced communicative success, indicating that learning strength governs guessing accuracy whereas failure drift governs the emergence of form-meaning structure. This seems to suggest that agents can learn to communicative successfully without producing iconic forms, and that iconic forms can emerge without directly improving recognition accuracy.
 
-Visualizing the learned and produced signal spaces further suggested that category separation can occur even in the absence of iconicity, indicating that lexical categories can form without alignment to iconic prototypes. It might be the case that iconicity emerges from indirect learning advantages rather than from explicit pressure for communicative success---the combination of failure drift, adaptive production bias, interpretative ease, and reinforcement creating a positive feedback loop where failure pushes signals toward iconic prototypes, iconic signals are easier to interpret, successful interpretations reinforce produced forms and reinforcement consolidates iconic patterns in memory?<!--is it?--->
+Visualizing the learned and produced signal spaces further suggested that category separation can occur even in the absence of iconicity, indicating that lexical categories can form without alignment to iconic prototypes. It might be the case that iconicity emerges from indirect learning advantages rather than from explicit pressure for communicative success---the combination of failure drift, articulatory production bias, interpretative ease, and reinforcement creating a positive feedback loop where failure pushes signals toward iconic prototypes, iconic signals are easier to interpret, successful interpretations reinforce produced forms and reinforcement consolidates iconic patterns in memory?<!--is it?--->
 
 ## Grid search over the parameter space
 
-In order to investigate what parameter settings generate the largest increase in iconicity across trials and simulations, we generated a grid search over the five model parameters: adaptive production bias, prototype weighting, reinforcement rate, learning rate, and corrective rate. The grid search explored the following values for each of the parameters.
+In order to investigate what parameter settings generate the largest increase in iconicity across trials and simulations, we generated a grid search over the five model parameters: articulatory production bias, prototype weighting, reinforcement rate, learning rate, and corrective rate. The grid search explored the following values for each of the parameters.
 
 ```{r echo=TRUE, eval=FALSE}
-adaptive production bias = seq(0, 0.3, length.out = 4)
+articulatory production bias = seq(0, 0.3, length.out = 4)
 prototype weight = seq(0, 0.4, length.out = 4)
 reinforcement rate = seq(0, 0.1, length.out = 4)
 corrective rate = seq(0, 0.06, length.out = 4)
 learning strength = seq(0, 0.1, length.out = 4)
 ```
 
-Similarly to the figures presented above, each panel of Figure \@ref(fig:grid-search) visualizes iconicity across the parameter space for when one of the parameters is switched off. Replicating previous figures, Figure \@ref(fig:grid-search) shows that 1) iconicity struggles to emerge when corrective rate is switched off, 2) learning strength does not seem to support the emergence of iconicity, and 3) switching off the other three parameters (reinforcement rate, adaptive production bias, prototype weighting) generates highly similar patterns of iconicity, suggesting that these might play less of a role in the model.
+Similarly to the figures presented above, each panel of Figure \@ref(fig:grid-search) visualizes iconicity across the parameter space for when one of the parameters is switched off. Replicating previous figures, Figure \@ref(fig:grid-search) shows that 1) iconicity struggles to emerge when corrective rate is switched off, 2) learning strength does not seem to support the emergence of iconicity, and 3) switching off the other three parameters (reinforcement rate, articulatory production bias, prototype weighting) generates highly similar patterns of iconicity, suggesting that these might play less of a role in the model.
 
 For most combinations of parameters, the trade-off between learning strength and iconicity is evident---iconicity is higher for when learning strength = 0, suggesting that the more I learn for free, the less iconic I become (upper two panels, and bottom-right panel, Figure \@ref(fig:grid-search)). This would suggest that iconicity might not continue to grow in a language, at least not as a learning mechanism, but perhaps as a strategy to make the language more recognizable for the interlocutor.
 
 We also note that under some conditions, iconicity still emerges when corrective rate is switched off (bottom-left panel, Figure \@ref(fig:grid-search)). This suggests that failure-based drift is not strictly necessary but is normally the dominant pathway (error-driven vs. success-driven iconicity). If this mechanism is not available, iconicity can still emerge by generating a positive feedback-loop of biased production--higher success--reinforcement--more biased learned signals--higher success.
 
-(ref:grid-search) Heatmaps of iconicity across the parameter space for different model configurations. Each panel shows simulations where one parameter is disabled: no reinforcement, no adaptive production bias, no signal drift, no learning, or no prototype weighting. Color indicates mean iconicity; yellow outlines mark the iconicity baseline (\~.25) and red crosses indicate the parameter values that generates maximum iconicity.
+(ref:grid-search) Heatmaps of iconicity across the parameter space for different model configurations. Each panel shows simulations where one parameter is disabled: no reinforcement, no articulatory production bias, no signal drift, no learning, or no prototype weighting. Color indicates mean iconicity; yellow outlines mark the iconicity baseline (\~.25) and red crosses indicate the parameter values that generates maximum iconicity.
 
 ```{r}
 if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
   
   # Generate a parameter grid to explore
   d.param_grid <- expand.grid(
-    adaptive_production_bias = seq(0, 0.3, length.out = 4),
+    articulatory_production_bias = seq(0, 0.3, length.out = 4),
     prototype_weight = seq(0, 0.4, length.out = 4),
     reinforcement_rate = seq(0, 0.1, length.out = 4),
     corrective_rate = seq(0, 0.06, length.out = 4),
@@ -470,7 +476,7 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
       drift_sd = 0.05,
       learning_strength = params$learning_strength,
       prototype_weight = params$prototype_weight,
-      adaptive_production_bias = params$adaptive_production_bias,
+      articulatory_production_bias = params$articulatory_production_bias,
       reinforcement_rate = params$reinforcement_rate,
       corrective_rate = params$corrective_rate,
       lapse = 0.05)
@@ -494,84 +500,85 @@ d.full.history <- bind_rows(d.grid_results$history, .id = "param_set")
 ```
 
 ```{r grid-search, fig.width=base.width*6, fig.height=base.height*4, fig.align='center', out.width='100%', fig.cap="(ref:grid-search)"}
+#COMMENTED out since grid search isn't yet re-generated with new naming scheme
 # plot for different param settings
-p.noReinforce <- d.grid_results %>%
-  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-  filter(reinforcement_rate == 0) %>%
-  #filter(corrective_rate == 0) %>%
-  rename(`corrective rate` = corrective_rate, `adaptive production bias` = prod_bias) %>%
-  ggplot(
-    aes(
-      x = learn_rate, 
-      y = iconicity_boost, 
-      fill = iconicity,
-      color = ifelse(iconicity != max(iconicity), "red", "black"))) +
-  geom_tile() +
-  geom_tile(
-    data = . %>%
-      filter(iconicity >= 0.24 & iconicity <= 0.26),
-    color = "yellow",
-    size = .3,
-    fill = NA) +
-  geom_point(
-    data = . %>%
-      filter(iconicity == max(iconicity)),
-    shape = 4) +
-  scale_color_manual(values = c("red", "black")) +
-  scale_fill_viridis_c() +
-  facet_grid(`adaptive production bias` ~ `corrective rate`, labeller = label_both) +
-  theme_minimal() +
-  guides(color = "none") +
-  labs(
-    title = "Iconicity across the parameter space (no reinforcement)",
-    x = "Learning rate",
-    y = "Prototype weighting",
-    fill = "Iconicity")
-
-p.noProdBias <- p.noReinforce %+%
-  (d.grid_results %>%
-     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-     filter(prod_bias == 0) %>%
-     rename(`corrective rate` = corrective_rate, reinforcement = reinforcement_rate)) +
-  facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space (no adaptive production bias)")
-
-p.noDrift <- p.noReinforce %+%
-  (d.grid_results %>%
-     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-     filter(corrective_rate == 0) %>%
-     rename(reinforcement = reinforcement_rate, `adaptive production bias` = prod_bias)) +
-  facet_grid(reinforcement ~ `adaptive production bias`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space (no corrective rate)") +
-  guides(fill = "none")
-
-p.NoLearning <- p.noReinforce %+%
-  (d.grid_results %>%
-     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-     filter(learn_rate == 0) %>%
-     rename(reinforcement = reinforcement_rate, `corrective rate` = corrective_rate)) +
-  aes(x = prod_bias) +
-  facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space (no learning strength)") +
-  scale_x_continuous("Adaptive production bias") +
-  guides(fill = "none")
-
-p.NoBoost <- p.noReinforce %+%
-  (d.grid_results %>%
-     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-     filter(iconicity_boost == 0) %>%
-     rename(`reinforcement` = reinforcement_rate, `corrective rate` = corrective_rate)) +
-  aes(y = prod_bias) +
-  facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
-  labs(title = "Iconicity across the parameter space (no prototype weighting)") +
-  scale_y_continuous("Adaptive production bias") +
-  guides(fill = "none")
-
-(p.noReinforce  +
-  guides(fill = "none") + p.noProdBias + plot_spacer()) /
-  (p.noDrift + p.NoLearning + p.NoBoost) +
-  plot_layout(widths = c(1,1,1),
-              heights = c(1,1))
+# p.noReinforce <- d.grid_results %>%
+#   mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+#   filter(reinforcement_rate == 0) %>%
+#   #filter(corrective_rate == 0) %>%
+#   rename(`corrective rate` = corrective_rate, `articulatory production bias` = prod_bias) %>%
+#   ggplot(
+#     aes(
+#       x = learn_rate, 
+#       y = iconicity_boost, 
+#       fill = iconicity,
+#       color = ifelse(iconicity != max(iconicity), "red", "black"))) +
+#   geom_tile() +
+#   geom_tile(
+#     data = . %>%
+#       filter(iconicity >= 0.24 & iconicity <= 0.26),
+#     color = "yellow",
+#     size = .3,
+#     fill = NA) +
+#   geom_point(
+#     data = . %>%
+#       filter(iconicity == max(iconicity)),
+#     shape = 4) +
+#   scale_color_manual(values = c("red", "black")) +
+#   scale_fill_viridis_c() +
+#   facet_grid(`articulatory production bias` ~ `corrective rate`, labeller = label_both) +
+#   theme_minimal() +
+#   guides(color = "none") +
+#   labs(
+#     title = "Iconicity across the parameter space (no reinforcement)",
+#     x = "Learning rate",
+#     y = "Prototype weighting",
+#     fill = "Iconicity")
+# 
+# p.noProdBias <- p.noReinforce %+%
+#   (d.grid_results %>%
+#      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+#      filter(prod_bias == 0) %>%
+#      rename(`corrective rate` = corrective_rate, reinforcement = reinforcement_rate)) +
+#   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
+#   labs(title = "Iconicity across the parameter space (no articulatory production bias)")
+# 
+# p.noDrift <- p.noReinforce %+%
+#   (d.grid_results %>%
+#      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+#      filter(corrective_rate == 0) %>%
+#      rename(reinforcement = reinforcement_rate, `articulatory production bias` = prod_bias)) +
+#   facet_grid(reinforcement ~ `articulatory production bias`, labeller = label_both) +
+#   labs(title = "Iconicity across the parameter space (no corrective rate)") +
+#   guides(fill = "none")
+# 
+# p.NoLearning <- p.noReinforce %+%
+#   (d.grid_results %>%
+#      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+#      filter(learn_rate == 0) %>%
+#      rename(reinforcement = reinforcement_rate, `corrective rate` = corrective_rate)) +
+#   aes(x = prod_bias) +
+#   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
+#   labs(title = "Iconicity across the parameter space (no learning strength)") +
+#   scale_x_continuous("articulatory production bias") +
+#   guides(fill = "none")
+# 
+# p.NoBoost <- p.noReinforce %+%
+#   (d.grid_results %>%
+#      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+#      filter(iconicity_boost == 0) %>%
+#      rename(`reinforcement` = reinforcement_rate, `corrective rate` = corrective_rate)) +
+#   aes(y = prod_bias) +
+#   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
+#   labs(title = "Iconicity across the parameter space (no prototype weighting)") +
+#   scale_y_continuous("articulatory production bias") +
+#   guides(fill = "none")
+# 
+# (p.noReinforce  +
+#   guides(fill = "none") + p.noProdBias + plot_spacer()) /
+#   (p.noDrift + p.NoLearning + p.NoBoost) +
+#   plot_layout(widths = c(1,1,1),
+#               heights = c(1,1))
 ```
 
 ```{r}
