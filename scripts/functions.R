@@ -21,7 +21,7 @@ run_interaction_sim <- function(
     n_rounds = 1000, # number of interaction rounds
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production
     drift_sd_y = 0.05,       # amount of variation introduced during production 
-    learning_strength = 0.005, # amount of added memory strengthening for words per round
+    learning_strength = 0.05, # amount of added memory strengthening for words per round
     prototype_weight = 0.2,  # multiplicator for distance to iconic prototypes
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     reinforcement_rate = 0.05, # how strongly stored signals move toward produced signal on success
@@ -39,14 +39,18 @@ run_interaction_sim <- function(
   # Size prototypes (semantic -> vowel Y)
   size_prototypes <- c(small = 0, large = 1)
   
-  # Define lexeme X prototypes (fixed)
-  lex_prototypes <- c(A = 0.1, B = 0.4, C = 0.7, D = 1.0)
+  # Define no of lexemes in language + their prototypical values
+  lexemes <- LETTERS[1:n_referents]
+  lex_prototypes <- seq(0, 1, length.out = n_referents)
+  names(lex_prototypes) <- lexemes
+  
+  types <- rep(c("small","large"), length.out = n_referents)
   
   # Referent info: lexeme + size (many-to-one allowed)
   referents_info <- tibble(
-    id = 1:n_referents,
-    lexeme = c("A","B","C","D")[1:n_referents],
-    type = c("large","small","large","small")[1:n_referents]
+    id = seq_len(n_referents),
+    lexeme = lexemes,
+    type = types
   )
   
   # Convert learning strength from probability to log-odds
@@ -80,12 +84,13 @@ run_interaction_sim <- function(
   
   # Signal evidence for interpretation bias
   # Measures proximity of Y to its size prototype
-  signal_evidence <- function(signal_y, referent_type) {
-    target <- size_prototypes[referent_type]
+  signal_evidence <- function(signal_y, referent_type, k=5) { # change k for steeper or more shallow decay
+    target <- size_prototypes[referent_type]   # 0 or 1
     dist <- abs(signal_y - target)
-    # normalized to [-1,1]; +1 at prototype, -1 at max distance ---- THIS NEEDS EDITING
-    evidence <- 1 - 2 * dist
-    clamp01((evidence + 1)/2) * 2 - 1  # ensure [-1,1]
+    # exponential decay for stronger effect near or far away from target
+    evidence <- exp(-k * dist)
+    # rescale to [-1,1] so that far-away signals are punished while close signals are rewarded
+    2 * evidence - 1
   }
   
   # interpretation probability
@@ -151,8 +156,8 @@ run_interaction_sim <- function(
       success <- rbinom(1,1,probs[r])
       
       # Learning in lexical mapping depends on success/failure
-      success_scale <- 1.2
-      failure_scale <- 0.8
+      success_scale <- 1.2 # slightly more learning with success
+      failure_scale <- 0.8 # also increase in learning with failure, but less so
       delta <- learning_strength_logit * ifelse(success==1, success_scale, failure_scale)
       # learning: speaker improves guess rate, in logodds space
       speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
