@@ -12,7 +12,7 @@ run_interaction_sim <- function(
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
     learning_strength = 0.05, # amount of added memory strengthening for words per round
-    prototype_weight = 0.2,  # multiplicator for iconicity
+    iconicity = 0.2,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     reinforcement_rate = 0.05, # how much stored signals move toward produced signal on success
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
@@ -83,7 +83,7 @@ run_interaction_sim <- function(
   }
   
   # Listener inference
-  listener_guess_probs <- function(agent_guess_vec, signal_x, signal_y, referents_info) {
+  listener_guess_probability <- function(agent_guess_vec, signal_x, signal_y, referents_info) {
     n <- nrow(referents_info)
     
     # Scalable perceptual noise (moderate overlap between neighbouring categories)
@@ -106,7 +106,7 @@ run_interaction_sim <- function(
     })
       
     # Combine in logodds space; lexical likelihood, the learned associative strength and iconicity
-    logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + prototype_weight * icon_ev
+    logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + iconicity * icon_ev
     
     # Competition across referents
     exp_logits <- exp(lambda_softmax * logits)
@@ -150,7 +150,7 @@ run_interaction_sim <- function(
       y_prod <- sig[2]
       
       # Listener inference (x+y)
-      probs <- listener_guess_probs(listener_guess, x_prod, y_prod, referents_info)
+      probs <- listener_guess_probability(listener_guess, x_prod, y_prod, referents_info)
       # actual outcome, binomial sampling
       success <- rbinom(1,1,probs[r])
       

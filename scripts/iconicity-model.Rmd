@@ -116,23 +116,25 @@ knitr::include_graphics("p.overview.fig.pdf")
 Beginning at the bottom of Figure \@ref(fig:model-figure), the speaker agent is given a referent ($r$) at random and retrieves the stored signal values $S_r$ for the referent. Signals are represented as points in a continuous (yet contained) two-dimensional signal space ranging from [0,0] to [1,1]. This space can be considered a simplified abstraction over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly encode size-related meaning. The two dimensions do not correspond to specific acoustic parameters but capture the idea that signals vary continuously along multi-dimensional perceptual dimensions relevant for iconic mapping. Each meaning is associated with an iconic prototype in signal space. Small referents are associated with a prototype at [0,0], and the large category with a prototype at [1,1]. These prototypes represent perceptually transparent signal–meaning correspondences and can be thought of e.g. a formant vowel space in which high front vowels are correlated with small referents and low back vowels are correlated with large referents. The initial signals at the start of the simulation are placed at the center of the space, [.5,.5].<!--AP: assumption of each lexical item uniquely cueing the referent category--guessing problem is still binary, lexical identity is categorical context constraining interpretation---iconicity only modulates recognition within the lexical category through the acoustic dimension?-->
 $s = (X,y)$ where X = phonologically distinctive dimension (differentiating lexical items), and y[0,1] = acoustic dimension affected by iconicity? Target prototypes $y_{small} = 0$, $y_{large} = 1$.
 
-When the speaker retrieves the signal for the randomly selected referent, the general *articulatory production bias* mechanism ($\alpha$) transforms the produced signal ($X_r$) depending on the speaker's current probability of correct identification, $P_{r,t}$. The initial learning state of the listener at the first trial is on average a probability of $~.33$. This probability is established by drawing n random values from a beta distribution with a $\alpha = 2$ and $\beta = 4$. The updated biased signal is computed as a weighted average of the learned signal and the prototype, where the prototype weight increases as $p$ decreases, so as to be modulated by the speaker's confidence in the learned form-meaning mappings; lower current guess probabilities generate stronger prototype bias, whereas higher guess probabilities generate weaker bias ($1-P_{speaker}$). The articulatory production bias is implemented as sampling from a two-dimensional Gaussian probability distribution with a mean shifted toward [0,0] or [1,1]. Signals for small referents tend to shift toward the [0,0] prototype while signals for large referents tend to shift toward the [1,1] prototype.
+When the speaker retrieves the signal for the randomly selected referent, the general *articulatory production bias* mechanism ($\alpha$) transforms the produced signal ($X_r$) depending on the speaker's current probability of correct identification, $P_{r,t}$. The initial learning state of the listener at the first trial is on average a probability of $~.33$. This probability is established by drawing n random values from a beta distribution with a $\alpha = 2$ and $\beta = 4$. The updated biased signal is computed as a weighted average of the learned signal and the prototype, where the iconicity increases as $p$ decreases, so as to be modulated by the speaker's confidence in the learned form-meaning mappings; lower current guess probabilities generate stronger prototype bias, whereas higher guess probabilities generate weaker bias ($1-P_{speaker}$). The articulatory production bias is implemented as sampling from a two-dimensional Gaussian probability distribution with a mean shifted toward [0,0] or [1,1]. Signals for small referents tend to shift toward the [0,0] prototype while signals for large referents tend to shift toward the [1,1] prototype.
 
 After updating the produced signal, *Gaussian noise* ($\epsilon$) is applied to each dimension of the produced token with $sd = .05$ to model production variability (incl. e.g., motor noise). Signals are restricted within the set limits ([0,1] in each dimension), so if modulation of the signal resulted in values outside of its bound, the model truncates the signal to its boundaries. The production noise affects only the produced token and does not modify the underlying stored representation.
 
 ```{r echo=TRUE, eval=FALSE}
-produce_signal <- function(previous_signal, referent_type, speaker_guess_prob) {
-  target <- prototype_point(referent_type)
-  bias_strength <- articulatory_production_bias * (1 - speaker_guess_prob)
-  mu <- (1 - bias_strength) * previous_signal + bias_strength * target
-  clamp01(rnorm(2, mean = mu, sd = drift_sd))
+produce_signal <- function(stored_y, lexeme, referent_type, speaker_guess) {
+  x <- rnorm(1, mean = lex_prototypes[lexeme], sd = drift_sd_x)
+  bias_strength <- articulatory_production_bias * (1 - speaker_guess)
+  target_y <- size_prototypes[referent_type]
+  y <- rnorm(1, mean = (1 - bias_strength) * stored_y + bias_strength * target_y,
+             sd = drift_sd_y)
+  c(x, clamp01(y))
 }
 ```
 
 ### Recognizing the signal
 Moving up in Figure \@ref(fig:model-figure), the biased signal is then presented to the listener, that guesses what referent the signal refers to ($P_{r,t}$). Recognition and learning of the form-meaning mappings are formalized as a function of the listener's previous guessing probability and the *interpretation bias* term. Guessing probability reflects the listener's prior probability of guessing a specific referent correctly and corresponds to the associative strength linking a signal to a meaning. Higher previous guessing probabilities generate higher probability of success on subsequent trials, thus reinforcing existing mappings and accelerating learning trajectories. 
 
-The interpretation bias is implemented as the signal's distance to the iconic prototype affecting the current guess, favoring signals that are more closely located to their prototypical target in the two-dimensional space, and punishing signals that are anti-iconic. It is operationalized by two parameters---*signal evidence* and *prototype weighting* ($\omega$). Signal evidence measures the Euclidean distance between a produced signal and its iconic prototype, capturing how well the signal fits the attractor. It is defined as a decreasing function that drops off sharply (exponentially) when moving away from prototypes. Figure \@ref(fig:signal-ease) illustrates signal evidence relative to the signal space, with higher ease for more prototypical values.
+The interpretation bias is implemented as the signal's distance to the iconic prototype affecting the current guess, favoring signals that are more closely located to their prototypical target in the two-dimensional space, and punishing signals that are anti-iconic. It is operationalized by two parameters---*signal evidence* and *iconicity* ($\omega$). Signal evidence measures the Euclidean distance between a produced signal and its iconic prototype, capturing how well the signal fits the attractor. It is defined as a decreasing function that drops off sharply (exponentially) when moving away from prototypes. Figure \@ref(fig:signal-ease) illustrates signal evidence relative to the signal space, with higher ease for more prototypical values.
 
 (ref:signal-ease) Illustration of signal evidence in the two-dimensional signal space, for small and large referents.
 
@@ -157,6 +159,64 @@ grid <- grid %>%
     evidence = signal_evidence(y, type)) %>%
   ungroup()
 
+#alternative plots
+# n_grid <- 200
+# iconicity <- 0.2   # use the same value as in the model
+# k <- 3
+# 
+# grid <- expand.grid(
+#   y = seq(0, 1, length.out = n_grid),
+#   type = c("small", "large")
+# )
+# 
+# signal_evidence <- function(signal_y, referent_type, k = 5) {
+#   target <- ifelse(referent_type == "small", 0, 1)
+#   evidence <- exp(-k * abs(signal_y - target))
+#   2 * evidence - 1
+# }
+# 
+# 
+# grid <- grid %>%
+#   rowwise() %>%
+#   mutate(
+#     evidence = signal_evidence(y, type, k),
+#     delta_logit = iconicity * evidence
+#   ) %>%
+#   ungroup()
+# 
+# ggplot(grid, aes(x = y, y = delta_logit, color = type)) +
+#   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
+#   geom_line(linewidth = 1.2) +
+#   scale_color_viridis_d() +
+#   labs(
+#     title = "Net logit contribution of iconicity cue",
+#     subtitle = "Positive values boost, negative values penalize the intended referent",
+#     x = "Y (acoustic iconicity dimension)",
+#     y = expression(Delta * "logit from iconicity"),
+#     color = "Referent type"
+#   ) +
+#   theme_minimal() +
+#   theme(
+#     legend.position = "bottom"
+#   )
+# 
+# ggplot(grid, aes(x = y, y = delta_logit, fill = delta_logit > 0)) +
+#   geom_area(alpha = 0.6) +
+#   facet_wrap(~ type) +
+#   scale_fill_manual(
+#     values = c("firebrick", "steelblue"),
+#     labels = c("Punishment", "Boost")
+#   ) +
+#   labs(
+#     title = "Iconicity cue contribution by signal value",
+#     x = "Y",
+#     y = expression(Delta * "logit"),
+#     fill = "Effect"
+#   ) +
+#   theme_minimal() +
+#   theme(legend.position = "bottom")
+
+
 grid %>%
   ggplot(
     aes(
@@ -167,9 +227,9 @@ grid %>%
   facet_wrap(~ type) +
   scale_y_continuous() +
   scale_fill_viridis_c() +
-  labs(title="Signal evidence as a function of iconicity (Y)",
+  labs(title="Raw signal evidence as a function of Y",
        x=NULL, y="Y (iconicity)") +
-  guides(fill = guide_legend(element_blank())) +
+  guides(fill = guide_legend("Evidence (pre-weighting)")) +
   theme_minimal() +
   theme(
     legend.position = "bottom",
@@ -181,11 +241,11 @@ grid %>%
 The signal evidence is scaled by the prototype weighting parameter ($\omega$) which modulates the impact of signal distance affecting guessing. Iconic signals are scaled by the prototype weighting parameter, while anti-iconic signals are scaled by the same parameter with opposite sign. This reflects a mechanism that favors iconic signals and punishes anti-iconic signals in recognition. Together, these parameters make form-meaning pairs easier or more difficult to perceive, encode, and retrieve, depending on their spatial proximity to iconic prototypes.
 
 ```{r echo=TRUE, eval=FALSE}
-signal_evidence <- function(signal, type, distance_scale = sqrt(2)) {
-  target <- prototype_point(type)
-  dist <- sqrt((signal[1] - target[1])^2 + (signal[2] - target[2])^2)
-  evidence <- 1 - (dist / distance_scale) * 2
-  evidence
+signal_evidence <- function(signal_y, referent_type, k=5) {
+  target <- size_prototypes[referent_type]
+  dist <- abs(signal_y - target)
+  evidence <- exp(-k * dist)
+  2 * evidence - 1
 }
 ```
 
@@ -197,26 +257,42 @@ After calculating success or failure, learning is reinforced for both speaker an
 According to previous work on general learning, negative feedback has a stronger influence on subsequent interactions...
 
 ```{r echo=TRUE, eval=FALSE}
-guess_probability <- function(agent_guess_prob, signal_xy, referent_type) {
-  evidence <- signal_evidence(signal_xy, referent_type)
-  p_logit <- qlogis(agent_guess_prob) + prototype_weight * evidence
-  p_raw <- plogis(p_logit)
-  p_final <- (lapse/2) + (1 - lapse) * p_raw
-  p_final
+speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
+listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
+
+
+listener_guess_probability <- function(agent_guess_vec, signal_x, signal_y, referents_info) {
+  n <- nrow(referents_info)
+  Delta_x <- mean(diff(sort(lex_prototypes)))
+  sigma_x <- .5 * Delta_x
+  
+  lex_likelihood <- sapply(1:n, function(k) {
+    mu <- lex_prototypes[ referents_info$lexeme[k] ]
+    exp(- (signal_x - mu)^2 / (2 * sigma_x^2))
+  })
+  lex_likelihood <- lex_likelihood / sum(lex_likelihood)
+  
+  strength <- agent_guess_vec
+  
+  icon_ev <- sapply(1:n, function(k) {
+    signal_evidence(signal_y, referents_info$type[k])
+  })
+  
+  logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + iconicity * icon_ev
+  exp_logits <- exp(lambda_softmax * logits)
+  probs <- exp_logits / sum(exp_logits)
+  probs <- (lapse/n) + (1 - lapse) * probs
+  probs
 }
 
-update_guess_logodds <- function(p_old, delta) {
-  plogis(qlogis(p_old) + delta)
-}
+probs <- listener_guess_probability(listener_guess, x_prod, y_prod, referents_info)
+success <- rbinom(1,1,probs[r])
 
-p_correct <- guess_probability(listener_guess[r], sig_prod, r_type)
-success <- rbinom(1, 1, p_correct)
-delta <- if (success == 1) {
-  2 * learning_strength
-} else {
-  0.5 * learning_strength
-}
+update_guess_logodds <- function(p_old, delta) plogis(qlogis(p_old) + delta)
 
+success_scale <- 1.2
+failure_scale <- 0.8
+delta <- learning_strength_logit * ifelse(success==1, success_scale, failure_scale)
 speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
 listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
 
@@ -231,19 +307,24 @@ When communication succeeds, the listener retrieves the signal for the referent 
 reinforce_signal <- function(previous_signal, produced_signal) {
   clamp01((1 - reinforcement_rate) * previous_signal + reinforcement_rate * produced_signal)
 }
-
-update_signal_on_failure <- function(previous_signal, referent_type) {
-  target <- prototype_point(referent_type)
-  clamp01(previous_signal + corrective_rate * (target - previous_signal) + rnorm(2, 0, drift_sd/2))
+##THIS DOES NOT FULLY ALIGN!!!
+reinforce_Y <- function(stored_y, produced_y) {
+  ((1 - reinforcement_rate) * stored_y + reinforcement_rate * produced_y)
 }
 
-new_sig <- if(success == 1) {
-  reinforce_signal(previous_signal, sig_prod)
+correct_Y <- function(stored_y, referent_type) {
+  target_y <- size_prototypes[referent_type]
+  clamp01(
+    stored_y + corrective_rate * (target_y - stored_y) +
+      rnorm(1, 0, drift_sd_y/2))
+}
+
+if(success==1) {
+  stored_y[r] <- reinforce_Y(stored_y[r], y_prod)
 } else {
-  update_signal_on_failure(previous_signal, r_type)
+  stored_y[r] <- correct_Y(stored_y[r], ref$type)
 }
-signals$x[r] <- new_sig[1]
-signals$y[r] <- new_sig[2]
+
 ```
 
 Finally, the speaker and listener guessing probabilities ($P_{r}$) are updated based on their current probabilities, before the output is stored and the agents proceed to the next trial.
@@ -295,7 +376,7 @@ d.simulation <- rbind(
     mutate(parameter_space = "noReinforcement"),
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learning_strength = 0) %>%
     mutate(parameter_space = "noLearning"),
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, prototype_weight = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, iconicity = 0) %>%
     mutate(parameter_space = "noPrototypeWeight"),
   # Also add one simulation that resembles the old model
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0, reinforcement_rate = 0) %>%
@@ -419,11 +500,11 @@ p.produced.signals <- d.simulation %>%
         produced_y,
         shape = type,
         color = lexeme)) +
-  geom_point(alpha = 0.4) +
+  geom_point(alpha = 0.2) +
   labs(title = "Evolution of produced signal space", x = "x", y = "y") +
   facet_grid(parameter_space ~ sim) +
-  scale_x_continuous(limits = c(0,1)) +
-  scale_y_continuous(limits = c(0,1)) +
+  #scale_x_continuous(limits = c(0,1)) +
+  #scale_y_continuous(limits = c(0,1)) +
   scale_color_viridis_d(begin = 0.1, end = 0.9) +
   theme_minimal()
 
@@ -442,10 +523,8 @@ p.produced.signals
 
 p.produced.signals %+%
   (d.simulation %>%
-     filter(parameter_space != "onlyLearning") %>%
-     group_by(sim, parameter_space, type, lexeme, speaker, listener) %>%
-     summarise(produced_x = mean(produced_x),
-               produced_y = mean(produced_y))) +
+     filter(parameter_space == "allParams") %>%
+     group_by(sim, parameter_space, type, lexeme, speaker, listener)) +
   facet_grid(~ parameter_space)
 
 ```
@@ -462,7 +541,7 @@ In order to investigate what parameter settings generate the largest increase in
 
 ```{r echo=TRUE, eval=FALSE}
 articulatory production bias = seq(0, 0.3, length.out = 4)
-prototype weight = seq(0, 0.4, length.out = 4)
+iconicity = seq(0, 0.4, length.out = 4)
 reinforcement rate = seq(0, 0.1, length.out = 4)
 corrective rate = seq(0, 0.06, length.out = 4)
 learning strength = seq(0, 0.1, length.out = 4)
@@ -482,7 +561,7 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
   # Generate a parameter grid to explore
   d.param_grid <- expand.grid(
     articulatory_production_bias = seq(0, 0.3, length.out = 4),
-    prototype_weight = seq(0, 0.4, length.out = 4),
+    iconicity = seq(0, 0.4, length.out = 4),
     reinforcement_rate = seq(0, 0.1, length.out = 4),
     corrective_rate = seq(0, 0.06, length.out = 4),
     learning_strength = seq(0, 0.1, length.out = 4))
@@ -514,7 +593,7 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
       n_rounds = 1000,
       drift_sd = 0.05,
       learning_strength = params$learning_strength,
-      prototype_weight = params$prototype_weight,
+      iconicity = params$iconicity,
       articulatory_production_bias = params$articulatory_production_bias,
       reinforcement_rate = params$reinforcement_rate,
       corrective_rate = params$corrective_rate,
