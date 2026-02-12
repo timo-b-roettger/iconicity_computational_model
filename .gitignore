@@ -8,3 +8,5 @@
 *.html
 *.woff
 *.pdf
+*.DS_Store
+*.log
