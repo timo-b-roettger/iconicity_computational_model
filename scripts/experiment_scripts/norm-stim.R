@@ -64,6 +64,16 @@ p.vowels <- d.ref.vowels %>%
   guides(color = "none")
 p.vowels
 
+d.vowels.normalized %>% filter(speaker == "experiment_stim") %>% ggplot(
+  aes(
+    x = F2,
+    y = F1)) +
+  geom_point(
+    aes(
+      colour = segment, shape = vowel)) +
+  scale_x_reverse("F2", position = "top") +
+  scale_y_reverse("F1", position = "right") + scale_shape_manual(values = 1:7) + facet_wrap(~word, ncol = 8)
+
 # d.vowels.normalized <- d.ref.vowels %>%
 #   normalize(
 #     formants = as.matrix(d.ref.vowels[, c("F1", "F2")]),
