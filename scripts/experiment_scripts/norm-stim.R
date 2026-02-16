@@ -143,4 +143,20 @@ p.vowels.normalized %+%
   geom_point(
     data = d.schwa)
 
+d.vowels.normalized %>%
+  #filter(speaker == "experiment_stim", word %in% c("NA", "bdg2", "bgb2", "dbm2", "gbm1", "gvg2", "hfs3", 
+  #                                                 "ksp3", "lbg3", "pkt3", "shk3", "vdg2", "vgm2")) %>%
+  filter(speaker == "experiment_stim", word %in% c("vgm1", "vgm2", "vgm3")) %>%
+  ggplot(
+    aes(x = F2, y = F1, color = word, shape = segment)) +
+  geom_point() +
+  geom_point(aes(y = -0.5349, x = 0.5902), color = "blue") +
+  geom_point(aes(y = 0.006, x = 0.37), color = "black") +
+  geom_point(aes(y = -.4487, x = 0.4738), color = "red") +
+  scale_x_reverse() +
+  scale_y_reverse() +
+  facet_wrap(~vowel)
+scale_shape_manual(values = 1:7) #+
+facet_wrap(~word)
+
 
