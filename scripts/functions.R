@@ -12,7 +12,7 @@ run_interaction_sim <- function(
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
     learning_strength = 0.05, # amount of added memory strengthening for words per round
-    iconicity = 0.2,  # multiplicator for iconicity
+    iconicity_weight = 0.2,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     reinforcement_rate = 0.05, # how much stored signals move toward produced signal on success
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
@@ -106,7 +106,7 @@ run_interaction_sim <- function(
     })
       
     # Combine in logodds space; lexical likelihood, the learned associative strength and iconicity
-    logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + iconicity * icon_ev
+    logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + iconicity_weight * icon_ev
     
     # Competition across referents
     exp_logits <- exp(lambda_softmax * logits)
@@ -550,27 +550,21 @@ compute_iconicity <- function(history, n_bins = 20, cutoff = 0.8) {
     mutate(bins = cut(round, breaks = n_bins, labels = FALSE)) %>%
     group_by(bins, type, sim) %>%
     summarise(
-      x = mean(stored_x),
       y = mean(stored_y),
       .groups = "drop"
     )
-  
   # compute distance effect
   hist_icon <- hist_agg %>%
     mutate(
-      target_x = ifelse(type == "small", 0, 1),
       target_y = ifelse(type == "small", 0, 1),
-      dist      = sqrt((x - target_x)^2 + (y - target_y)^2),
+      dist      = abs(y - target_y),
       iconicity = exp(-2 * dist)
     ) %>%
     group_by(bins, sim) %>%
     summarise(iconicity = mean(iconicity), .groups = "drop")
-  
   # final bins threshold
   last_bin <- max(hist_icon$bins)
   threshold <- last_bin * cutoff
-  
   # return mean iconicity in final 20% of bins
   mean(hist_icon$iconicity[hist_icon$bins >= threshold])
 }
-

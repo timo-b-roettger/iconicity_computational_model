@@ -50,9 +50,7 @@ source("functions.R")
 
 # TO DO
 
-  * Check initialization values to be of roughly the same magnitude
   * Revisit the question of linear noise in a bounded system
-  * Edit overview figure
   * Read up on feedback strength on success/failure
 
 ```{r global-options, include=FALSE}
@@ -63,28 +61,28 @@ RESET_MODELS = F        # switch on/off whether model is re-run
 <!--this entire section needs editing-->
 Iconicity refers to the linguistic phenomenon in which the sound of a word resembles aspects of its meaning. In studies of language evolution, iconicity has often been regarded as playing only a marginal role. The conventionalized complexity of modern languages suggests that the relation between form and meaning is largely arbitrary, and even if iconicity could have been a driving force in the early emergence of language---facilitating the initial establishment of communicative conventions---it is expected to erode over time through semantic and phonological change [referred to as de-iconization by @flaksman2017]. Yet, modern languages display examples of iconic forms that are both sustained and possibly continuously invented, indicating that iconicity can coexist with other types of structure, such as systematicity and combinatoriality [@johansson2020a; @johansson2020b; @sidhu2021; @winter2022]. From a learning perspective, it has been shown that iconic words are easier to learn, facilitating the mappings between label and signal [@imai-kita2014].<!--TR: maybe worth making explicit who learns what here. There are some language acquisition papers right? is this also L1 acquisition?-->
 
-Empirically, the emergence of iconicity is often studied in experiments of artificial language learning, through iterated learning across generations of participants, or in language interaction games. The artificial language is represented by a set of form-meaning pairs, where the form is either a written lexical item (sequences of graphemes), or an acoustic signal, such as a spoken lexical item (sequences of phonemes) or sound sequences<!--TR: maybe non-conventionalized continuous sound modulations? Its not a sequence when we talk about whistles right?; AP: well, it is a sequence of whistle tones? they count complexity by tone/pitch modulations--> (whistles, buzzer tones, etc.) [@hofer-levy2019; @kempe2019; @kempe2021; @verhoef2015; @verhoef2016]. The signal is assumed to convey an underlying semantic property of the item depicted in images shown to participants. These images differ along a perceptually salient semantic dimension referring to e.g., physical size (large vs. small), color, shape (spiky/pointy vs. round/fluffy), texture, motion (upward vs. downward movement), brightness (dark vs. light). In the mapping of an acoustic signal to a semantic referent, it has been shown that participants prefer high front vowels for smaller, brighter, and faster stimuli, and low back vowels for larger or rounded objects [see e.g., studies on the *bouba/kiki* effect; @ahlner-zlatev2010; @cwiek2022; @kohler1929]. Arguably, this association stems from the acoustic properties of vowels, where high front vowels resonate at frequencies that resemble those of small mammals [@ohala1983; @fitch1997]. While less is known about other acoustic properties of the speech signal, such as vowel duration, pitch trajectories, intensity patterns, studies have shown that participants tend to generate longer sounds for more complex objects [@vinson2021].<!--TR: would need to be more specific here-->
+Empirically, the emergence of iconicity is often studied in experiments of artificial language learning, through iterated learning across generations of participants, and/or in language interaction games. The artificial language is represented by a set of form-meaning pairs, where the form is either a written lexical item (sequences of graphemes), or an acoustic signal, such as a spoken lexical item (sequences of phonemes) or non-conventionalized continuous sound modulations (whistles, buzzer tones, etc.) [@hofer-levy2019; @kempe2019; @kempe2021; @verhoef2015; @verhoef2016]. The signal is assumed to convey an underlying semantic property of the item depicted in images shown to participants. These images differ along a perceptually salient semantic dimension referring to e.g., physical size (large vs. small), color, shape (spiky/pointy vs. round/fluffy), texture, motion (upward vs. downward movement), brightness (dark vs. light). In the mapping of an acoustic signal to a semantic referent, it has been shown that participants prefer high front vowels for smaller, brighter, and faster stimuli, and low back vowels for larger or rounded objects [see e.g., studies on the *bouba/kiki* effect, @ahlner-zlatev2010; @cwiek2022; @kohler1929]. Arguably, this association stems from the acoustic properties of vowels, where high front vowels resonate at frequencies that resemble those of small mammals [@ohala1983; @fitch1997]. While less is known about other acoustic properties of the speech signal, such as vowel duration, pitch trajectories, intensity patterns, some studies have shown that participants tend to generate longer sounds for more complex objects [@vinson2021].<!--TR: would need to be more specific here-->
 
-In studies of iterative learning, participants learn the form-meaning mappings and reproduce them multiple times, either in language interaction games, or across participant generations, where the reproductions of the first generation becomes the input for the second, etc. At reproduction, variability in pronunciation arises over trials, that can be affected by different biases. Arguably, iconicity is one such bias that can affect speakers to produce signals that resemble the underlying meaning of the referent. For instance, changing the signal to align iconically with the semantic property of the item by varying vowel quality, signal length, tone complexity, or number of segments in the signal.
+In studies of iterative learning, participants learn the form-meaning mappings and reproduce them multiple times, with (as in language interaction games) or without an interlocutor. The language evolves across participant generations, where the reproductions of the first generation becomes the input for the second, etc. At reproduction, variability in pronunciation arises over trials as participants tend to produce slightly different reproductions of the form. This variability can be affected by different biases. Arguably, iconicity is one such bias that can influence speakers to produce signals that resemble the underlying meaning of the referent. For instance, changing the signal to align iconically with the semantic property of the item by varying vowel quality, signal length, tone complexity, or number of segments in the signal.
 
-Previous work has found iconicity to emerge during artificial language learning under certain circumstances. First, in settings where there is communicative pressure for successful interaction, such as a language learning game between two participants, iconic strategies are used and reused by participants [@kempe2019; @verhoef2015]. These can be further induced by rewarding participants for successful interactions (earning points, stars, etc.).
+Previous work has found iconicity to emerge during artificial language learning under certain circumstances. First, in settings where there is communicative pressure for successful interaction, such as a language learning game between two participants, iconic strategies are used and reused by participants [@kempe2019; @verhoef2015]. These can be further reinforced by rewarding participants for successful interactions (earning points, stars, etc.).
 
 Second, as languages conventionalize, iconicity seems to loose its importance. Several studies have reported a trade-off between iconicity and the emergence of structured, combinatorial systems. For example, @hofer-levy2019 found that iconic mappings developed rapidly but gradually faded as combinatorial structure increased over successive interactions. Other work has shown that iconic forms can instead stabilize or even increase over repeated interactions [@perlman2015; @verhoef2015]. More broadly, studies of artificial language evolution demonstrate that languages become more learnable over time---through reductions in complexity and/or increases in combinatorial structure---while iconicity either stabilizes or declines [@hofer-levy2019; @vinson2021]. Verhoef and colleagues (2016) further observed that iconic forms persisted longer under conditions where opportunities for structural regularization were delayed, such as when form–meaning mappings were scrambled across generations.
 
-Third, research has shown that shorter training tends to favor iconic forms: when learners cannot rely on rote memorization of form–meaning mappings, they make greater use of iconicity [@kempe2021]. In @kempe2019, limited training and the absence of explicit communicative demands led to degeneration and reduced distinctiveness, with neither iconicity nor compositional structure emerging. Iconicity and some structural regularities only appeared when participants engaged in a referential communication task. In @kempe2021, combinatorial structure emerged under both long and short training conditions, but iconicity was specifically strengthened when learning opportunities were limited, with learners exploiting form–meaning resemblance (e.g., shorter signals for small referents).
+Third, research has shown that shorter training tends to favor iconic forms: when learners cannot rely on rote memorization of new form–meaning mappings, they make greater use of iconicity [@kempe2021]. In @kempe2019, limited training and the absence of explicit communicative demands led to degeneration and reduced distinctiveness, with neither iconicity nor compositional structure emerging. Iconicity and some structural regularities only appeared when participants engaged in a referential communication task. In @kempe2021, combinatorial structure emerged under both long and short training conditions, but iconicity was specifically strengthened when learning opportunities were limited, with learners exploiting form–meaning resemblance (e.g., shorter signals for small referents).
 
 Finally, some studies have also indicated differences in the strength of iconicity as dependent on the semantic dimension, with stronger effects for size over shape [@johansson2021]. Comparing the spoken and written domains, iconicity has been found to faster emerge in spoken domains [@vinson2021]. 
 
 To sum up, iconicity tends to emerge when learners cannot rely on rote memorization, when meaning (the semantic property of the item) is salient, and when communicative pressure is present. Combinatorial patterns tend to increase with repetition and transmission but are sometimes inhibited by highly iconic or semantically transparent mappings. Learnability typically improves over generations, but whether this improvement is driven by structure or iconicity depends on the design of each study.
 
 # Suggested mechanisms underlying the emergence of iconicity
-Based on what we know from previous work, we suggest three main mechanisms supporting the emergence of iconicity in interactive language learning. Based in the idea that iconicity can facilitate interaction and learning of an artificial language, these mechanisms target different parts of the interaction, affecting either the signal being produced, the interpretation ease of the signal during recognition, or biasing future signal production based on interaction outcome. The three mechanisms encompass: a *general articulatory bias* toward producing more iconic signals based on previous interactional outcomes, an *interpretation bias* that favor iconic signals and punishes anti-iconic signals in recognition, and finally, an *adaptive communicative bias* toward making future signals more iconic when communication fails.
+Given what we know from previous work, we suggest three main mechanisms supporting the emergence of iconicity in interactive language learning. Based in the idea that iconicity can facilitate interaction and learning of an artificial language, these mechanisms target different parts of the interaction; affecting either the signal being produced, the interpretation ease of the signal during recognition, or biasing future signal production based on interaction outcome. The three mechanisms encompass: a *general articulatory bias* that modulates production toward iconic prototypes as a function of mapping strength, an *interpretation bias* that favor iconic signals and punishes anti-iconic signals in recognition, and finally, an *adaptive communicative bias* toward making future signals more iconic when communication fails.
 
 ## General articulatory bias
 The *general articulatory bias* mechanism operates during production. In an interaction game, speakers retrieve a stored signal associated with a meaning and produce a phonetic realization of that signal. Here, production is assumed to be automatically biased toward producing semantically iconic targets, and that the strength of this bias is modulated by the speaker's prior experience with the form-meaning mapping. This prior experience is formalized as associative strength between form and meaning, and affects the variability with which a signal is produced. Low associative strength (i.e., when the mapping is uncertain) yields productions that are more variable and more strongly affected by iconicity, whereas high associative strength yields productions that remain closer to the speaker's stored forms and are less affected by iconicity. The *general articulatory bias* mechanism thus represents an automatic, experience-based production bias toward iconic targets that weakens as mappings become more established. It can thus be thought of as an accidental drift toward iconicity in signal production.
 
 ## Interpretation bias
-If iconic signals facilitate interaction and learning, they may provide an advantage in recognition compared to anti-iconic forms. This could play out as iconic and anti-iconic signals facilitating or punishing recognition relative to a neutral signal. The *interpretation bias* mechanism incentivizes signals based on their iconicity; boosting the ease of interpretation for signals that are closer to their referents' semantic prototype, and punishing signals that are further away from the semantic prototype. This means that the listener's success in identifying the referent increases with signal proximity to prototype, and iconicity thus boosts perception and interpretability. In a situation where the listener tries to identify what referent the speaker is signalling, more iconic signals would thus be easier for the listener to identify, and anti-iconic signals should be more difficult. This might result in a preference for iconic forms as they are easier to interpret.
+If iconicity facilitate interaction and learning, iconic forms may provide an advantage in recognition compared to anti-iconic forms. This could play out as iconic and anti-iconic signals facilitating or punishing recognition relative to a neutral signal. The *interpretation bias* mechanism incentivizes signals based on their iconicity; boosting the ease of interpretation for signals that are closer to their referents' semantic prototype, and punishing signals that are further away from the semantic prototype. This means that the listener's success in identifying the referent increases with signal proximity to prototype, and iconicity thus boosts perception and interpretability. In a situation where the listener tries to identify what referent the speaker is signalling, more iconic signals would thus be easier for the listener to recognize, and anti-iconic signals should be more difficult. This might result in a preference for iconic forms as they are easier to interpret.
 
 ## Adaptive communication bias
 In interaction, feedback on communicative success is expected to influence upcoming interactions and signal representations, such that both successful and unsuccessful interactions shape how signals are produced and learned. If iconic strategies arise from communicative pressure, intentionally adapting production toward more iconic signals should be stronger following unsuccessful trials, when interlocutors struggle to communicate in the emerging language. When communication fails, pressure to improve interpretability shifts signals toward the referent's iconic prototype, increasing the likelihood that future productions will be more semantically transparent and easier for listeners to interpret. When communication succeeds, the produced form is reinforced, stabilizing the emerging convention. The *adaptive communication bias* mechanism thus describes an intentional adjustment of signals in response to communicative outcomes, gradually increasing iconicity under uncertainty while stabilizing existing forms when communication succeeds.
@@ -92,35 +90,35 @@ In interaction, feedback on communicative success is expected to influence upcom
 Next, we describe how these suggested mechanisms are implemented in a computational model simulating the emergence of iconicity.
 
 # Model implementation and underlying assumptions
-The model we introduce here simulates the emergence of iconicity in an interactive game of artificial language learning, played in dyads. Guided by communicative pressure and incremental learning, the above mechanisms are implemented in the model as parameters supporting the emergence of iconicity. The central assumption is that successful interaction favors form-meaning mappings that are iconic, and that over repeated interactions, iconic signals emerge. Learning is considered gradual and experience-dependent as agents continuously update their internal representations of form-meaning associations and adjust their signal production based on interaction outcomes (success or failure). Success or failure is formalized as the probability of the current guess, $P$. Because learning is considered probabilistic, increases in guessing probabilities do not guarantee perfect performance on every trial, but raise the probability of correct recognition.
+The model we introduce here simulates the emergence of iconicity in an interactive game of artificial language learning, played in dyads. Guided by communicative pressure and incremental learning, the above mechanisms are implemented in the model as parameters supporting the emergence of iconicity. The central assumption is that successful interaction favors form-meaning mappings that are iconic, and that over repeated interactions, iconic signals emerge. Learning is considered gradual and experience-dependent as agents continuously update their internal representations of form-meaning mappings and adjust their signal production based on interaction outcomes (success or failure). Success or failure is formalized as the probability of the current guess, $P$. Because learning is considered probabilistic, increases in guessing probabilities do not guarantee perfect performance on every trial, but raise the probability of correct recognition.
 
 The emergence pressure of iconicity is formalized in two sets of parameters, in line with the above described mechanisms: one set of parameters operating on the listener's perception and retrieval of the referent, and one set of parameters operating on the production of the signal. We begin by accounting for the overall structure of the model, before describing how these parameters are implemented.
 
 ## Overall structure of model
-Any simple agent-based model of lexical learning that simulates the emergence of iconicity needs to account for 1) agents and the language to be learnt, 2) how agents produce and perceive form-meaning pairs, 3) how learning incrementally increases over time, and 4) the iconicity mechanisms affecting this process. As accounted for above, for iconicity to emerge, mechanisms need to exert pressure on agents to favor more iconic signals in production and perception. The output of interest is whether the signals becomes more iconic over time. In this model, this is assessed using a distance measure of the signal to the prototypical value in a continuous signal space. More iconic signals are closer located to the prototypical value of the underlying referent. This goes for both learned and produced signals.
+Any simple agent-based model of lexical learning that simulates the emergence of iconicity needs to account for 1) agents and the language to be learnt, 2) how agents produce and perceive form-meaning pairs, 3) how learning incrementally increases over time, and 4) the iconicity mechanisms affecting this process. As accounted for above, for iconicity to emerge, mechanisms need to exert pressure on agents to favor more iconic signals in production and perception. The output of interest is whether the signals becomes more iconic over time. In this model, this is operationalized as the distance between a signal and the referent's prototypical value in a continuous signal space. Signals that are closer to their referent's prototype are more iconic. This applies to both stored representations and produced tokens.
 
-In the language interaction game simulated here, size-related meanings are conveyed using acoustic signals. There are a limited number of referents that need to be learned and communicated in the language. Half of the referents are noticeably smaller than the other half of the referents. Physical size is assumed to be perceptually salient, consistent with extensive evidence that magnitude distinctions are readily mapped onto acoustic dimensions. Each referent has a fixed idiomatic meaning that is unambiguously signaled to the speaker by a unique bisyllabic sequence of consonants that is presented alongside an image of the referent. The consonant sequence signals lexical identity, while the image signals referent identity (semantic property; meaning). The task for the listener is to distinguish among lexical items and select the referent corresponding to the signal produced by the interlocutor. The probability of correct guess on each trial reflects the associative strength between lexeme and referent--how well the listener can guess the correct image from the signal. 
+In the language interaction game simulated here, agents communicate size-related meanings using acoustic signals. There are a limited number of referents that need to be learned and communicated in the language. Half of the referents are noticeably smaller than the other half of the referents. Physical size is assumed to be perceptually salient, consistent with extensive evidence that magnitude distinctions are readily mapped onto acoustic dimensions. Each referent is associated with a unique bisyllabic consonant sequence that signals lexical identity and is presented to the speaker alongside an image of the referent. The consonant sequence specifies lexical category, while the image specifies referent identity (i.e., its semantic property). The task for the listener is to identify the intended referent corresponding to the signal produced by the interlocutor. The probability of correct guess on each trial reflects the associative strength between lexeme and referent--how well the listener can guess the correct image from the signal. 
 
-Lexical identity serves as a categorical constraint on interpretation, uniquely cueing the referent category. Iconicity does not determine lexical identity but instead modulates recognition within a lexical category through variation along an acoustic dimension. During production, the speaker is given only the consonant context and produces a signal that may vary along other acoustic dimensions. This variability allows iconicity biases to affect signal production. The acoustic signal is thus an additional source of information for perception of the semantic dimension of size, though it is not required for lexical retrieval. This mirrors a scenario in which meaning is communicated within a conventionalized signal system allowing for extra communication channels to communicate specific meaning dimensions. This is reminiscent of modern languages in which for example certain acoustic dimensions tightly connected to sound identity communicate lexical meaning, while suprasegmental aspects of speech (duration, pitch, loudness) can signal additional meaning dimensions including iconicity. Since lexical retrieval can be achieved independently of iconic cues, iconicity is treated as facilitating recognition rather than being necessary for it. Accordingly, the model assumes a steady increase in learning across interaction rounds. Agents can acquire the lexeme–referent mappings without relying on iconic signals, though iconicity may enhance communicative efficiency.
+Lexical identity serves as a categorical constraint on interpretation, uniquely cueing the referent category. In the present implementation, lexical identity is defined by the fixed consonantal frame; during training, referents are presented with recordings containing a neutral schwa vowel in each syllable. At production, however, the speaker is given only the consonant context, leaving vowel slots unspecified and allowing the acoustic realization to vary. Iconicity does not determine lexical identity but instead modulates recognition within a lexical category through continuous variation along this acoustic dimension. This variability--potentially involving both segmental properties such as vowel quality and suprasegmental features--allows iconicity biases to affect signal production. The acoustic signal is thus an additional source of information for perception of the semantic dimension of size, though it is not required for lexical retrieval. This mirrors a scenario in which meaning is communicated within a conventionalized signal system allowing for extra communication channels to communicate specific meaning dimensions. This is reminiscent of modern languages in which for example certain acoustic dimensions tightly connected to segmental structure communicate lexical meaning, whereas other aspects of speech (e.g., duration, pitch, amplitude, vowel realization) can signal additional meaning dimensions, including iconicity. Since lexical retrieval can be achieved independently of iconic cues, iconicity is modeled as facilitating recognition rather than being necessary for it. Accordingly, the model assumes a steady increase in learning across interaction rounds: agents can acquire the lexeme–referent mappings without relying on iconic signals, though iconicity may enhance communicative efficiency.
 
-The model loops through several trials in the experiment where two participants, agent A and agent B, take turns alternating roles as listener and speaker. Each trial is initialized by randomly assigning agent A and agent B to either speaker or listener role. The speaker is given a random referent (that is either small or large) and the learned signal for that referent is retrieved, including the lexical information (the consonant context). The speaker then produces a signal, and the listener attempts to recognize the intended referent. The recognition is evaluated as either correct or incorrect, and both speaker and listener update their beliefs (= their learning) about the signal-to-referent mapping independently of iconicity, continuously becoming more and more certain about the language over trials. Finally, the listener updates its learned signal representation depending on the interactional outcome, and a new trial starts.
+The model loops through several trials in the experiment where two participants, agent A and agent B, alternate roles as listener and speaker. Each trial is initialized by randomly assigning agent A and agent B to either speaker or listener role. The speaker is given a random referent (small or large) and the stored signal for that referent is retrieved, including the lexical information (the consonant context). The speaker then produces a signal, and the listener attempts to recognize the intended referent. The recognition is evaluated as either correct or incorrect, and both speaker and listener update their associative strengths about the signal-to-referent mapping independently of iconicity, continuously becoming more and more certain about the language over trials. Finally, the listener updates its stored signal representation depending on the interactional outcome, and a new trial starts.
 
 ## Implementation of suggested mechanisms
 The suggested mechanisms are implemented at different stages of the interaction round accounted for above. Figure \@ref(fig:overview-figure) visualizes a single trial and highlights at what stages the mechanisms are assumed to operate.
 
-(ref:overview-figure) Graphic representation of the iconicity model. The figure shows one trial ($_t$) of the experiment where agents are taking turn as speaker (circles) and listener (squares); from producing a signal, to referent recognition and update of learned representations before proceeding to the next trial. The three mechanisms are implemented at different steps of the trial: the articulatory production bias at signal production, the interpretation bias at recognition, and the adaptive communication bias at signal update.
+(ref:overview-figure) Graphic representation of the iconicity model. The figure shows one trial ($_t$) of the experiment where agents are taking turn as speaker (circles) and listener (squares); from producing a signal ($\tilde{X}_{r,t} = [x_{r,t}, y_{r,t}]$), to referent recognition and update of associative strength ($P_{r,t}$), and finally update of stored representations ($S_{r} = [x_{r}, y_{r}]$) before proceeding to the next trial. The three mechanisms are implemented at different steps of the trial: the articulatory production bias at signal production, the interpretation bias at recognition, and the adaptive communication bias at signal update. Grey circles represent mechanisms and their parameters, callout text show formulas.
 
-```{r overview-figure, fig.width=base.width*1, fig.height=base.height*3, fig.align='center', out.width='90%', fig.cap="(ref:overview-figure)"}
+```{r overview-figure, fig.width=base.width*3, fig.height=base.height*5, fig.align='center', out.width='90%', fig.cap="(ref:overview-figure)"}
 knitr::include_graphics("p.overview.fig.pdf")
 ```
 ### Producing a signal
-Beginning at the bottom of Figure \@ref(fig:overview-figure), the speaker agent is given a referent ($r$) at random and retrieves the stored signal values, $S_{r} = (x_{r}, y_{r})$, for the referent. Each referent is associated with 4 pieces of information: a lexeme, a referent identity (represented by a unique image), a semantic property (size: small or large), and a signal value along the iconic dimension. The image uniquely identifies the referent and simultaneously conveys its semantic property (size). 
+Beginning at the bottom of Figure \@ref(fig:overview-figure), the speaker agent is given a referent ($_r$) at random and retrieves the stored signal values, $S_{r} = (x_{r}, y_{r})$, for the referent. Each referent is associated with 4 pieces of information: a lexeme, a referent identity (represented by a unique image), a semantic property (size: small or large), and a signal value along the iconic dimension. The image uniquely identifies the referent and simultaneously conveys its semantic property (size). 
 
 Signals are represented in a two-dimensional space $[x, y]$, but the two dimensions serve distinct functional roles. The x-dimension encodes lexical identity: it is a phonologically distinctive dimension that differentiates lexical items. Each lexeme occupies a fixed prototype location along this dimension, and lexical categorization is based on proximity to these prototypes ($\mu_{l}$). The y-dimension encodes iconicity: it is a continuous acoustic dimension ranging from $[0,1]$ that align with semantic size. Small referents are associated with a prototype at $\pi_{small} = 0$, and large referents with a prototype at $\pi_{large} = 1$. This dimension can be considered a simplified abstraction over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly can encode size-related meaning. The dimension does not correspond to specific acoustic parameters but captures the idea that signals vary continuously along multi-dimensional perceptual dimensions relevant for iconic mapping. These prototypes represent perceptually transparent signal–meaning correspondences and can be thought of e.g. a formant vowel space in which high front vowels are correlated with small referents and low back vowels are correlated with large referents.
 
 The initial signals at the start of the simulation are placed at the center of the space ($y=[.5]$), meaning that signals are initially not iconic. Lexical prototypes along the x-dimension are evenly spaced and fixed throughout the simulation.
 
-When producing a signal ($\tilde{X}_{r,t} = (x_{r,t}, y_{r,t})$), the speaker samples an x-value from a narrow Gaussian distribution centered on the lexeme's fixed prototype ($\mu$), introducing minimal phonetic noise. Thus, lexical identity is reliably preserved. The produced y-value is generated by Gaussian sampling around a mean that is dynamically shifted toward the referent's semantic prototype ($\pi$), as a function of the general *articulatory production bias* mechanism ($\alpha$). Specifically, the y-value is sampled from a normal distribution whose mean is a weighted average of the learned signal and the referent's iconic prototype (0 for small, 1 for large). This weighting depends on the speaker's current associative strength, $P_{r,t}$. Lower associative strength (greater uncertainty) increases the influence of the prototype, resulting in stronger iconic bias; higher associative strength reduces this influence, yielding productions closer to the stored form ($1-P_{speaker}$). Consequently, signals for small referents tend to shift toward 0 and signals for large referents toward 1, with the magnitude of the shift modulated by speaker confidence.
+When producing a signal ($\tilde{X}_{r,t} = (x_{r,t}, y_{r,t})$), the speaker samples an x-value from a narrow Gaussian distribution centered on the lexeme's fixed prototype ($\mu$), introducing minimal phonetic noise. Thus, lexical identity is reliably preserved. The produced y-value is generated by Gaussian sampling around a mean that is dynamically shifted toward the referent's semantic prototype ($\pi$), as a function of the *general articulatory bias* mechanism ($\alpha$). Specifically, the y-value is sampled from a normal distribution whose mean is a weighted average of the stored signal and the referent's iconic prototype (0 for small, 1 for large). This weighting depends on the speaker's current associative strength, $P_{r,t}$. Lower associative strength (greater uncertainty) increases the influence of the prototype, resulting in stronger iconic bias; higher associative strength reduces this influence, yielding productions closer to the stored form ($1-P_{speaker}$). Consequently, signals for small referents tend to shift toward 0 and signals for large referents toward 1, with the magnitude of the shift modulated by speaker confidence.
 
 The initial learning state of the listener at the first trial is on average a probability of $~.33$. This probability is established by drawing random values from a Beta distribution with a $\alpha = 2$ and $\beta = 4$. 
 
@@ -259,15 +257,7 @@ Lexical likelihood, prior associative strength, and iconicity-weighted signal ev
 
 Guessing involves uncertainty which leads to imperfect learning. This uncertainty reflects both perceptual noise (variability in processing the acoustic signal) and attentional lapses (uninformed responses that ignore the signal). A soft lapse mechanism ($\epsilon = .05$) is applied by mixing the model-derived probability distribution with a small proportion of uniform responding. This lapse parameter models the fact that agents are not perfectly attentive or rational on every trial, and prevents probabilities from collapsing to 0 or 1.
 
-The final outcome of the trial, success or failure, is implemented as random sampling from a binomial distribution with probability $P$ = current guessing probability, $O_{r,t} \in \{0,1\}$. A value of 1 indicates that the referent was correctly recognized, while 0 indicates an incorrect guess. 
-
-After calculating success or failure, learning is reinforced for both speaker and listener by implementing the *associative learning bias* mechanism. This is a learning mechanism and not an iconicity mechanism. It is parameterized as applying a baseline *learning strength* ($\Delta$) to the speaker's and listener's guessing probabilities. Successful trials receive a slightly larger update (scaled by $1.2$), while unsuccessful trials receive a slightly smaller update (scaled by $.8$), reflecting incremental strengthening of form-meaning mappings across interactions, with stronger learning on correct interactions.
-According to previous work on general learning, negative feedback has a stronger influence on subsequent interactions...
-
 ```{r echo=TRUE, eval=FALSE}
-speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
-listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
-
 listener_guess_probability <- function(agent_guess_vec, signal_x, signal_y, referents_info) {
   n <- nrow(referents_info)
   Delta_x <- mean(diff(sort(lex_prototypes)))
@@ -285,7 +275,7 @@ listener_guess_probability <- function(agent_guess_vec, signal_x, signal_y, refe
     signal_evidence(signal_y, referents_info$type[k])
   })
   
-  logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + iconicity * icon_ev
+  logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + iconicity_weight * icon_ev
   exp_logits <- exp(lambda_softmax * logits)
   probs <- exp_logits / sum(exp_logits)
   probs <- (lapse/n) + (1 - lapse) * probs
@@ -293,10 +283,18 @@ listener_guess_probability <- function(agent_guess_vec, signal_x, signal_y, refe
 }
 
 probs <- listener_guess_probability(listener_guess, x_prod, y_prod, referents_info)
+
+```
+
+The final outcome of the trial, success or failure, is implemented as random sampling from a binomial distribution with probability = current guessing probability; $O_{r,t} \in \{0,1\}$. A value of 1 indicates that the referent was correctly recognized, while 0 indicates an incorrect guess.
+
+After calculating success or failure, learning is reinforced for both speaker and listener by implementing the *associative learning bias* mechanism. This is a learning mechanism and not an iconicity mechanism. It is parameterized as applying a baseline *learning strength* ($\Delta$) to the speaker's and listener's guessing probabilities. Successful trials receive a slightly larger update (scaled by $1.2$), while unsuccessful trials receive a slightly smaller update (scaled by $.8$), reflecting incremental strengthening of form-meaning mappings across interactions, with stronger learning on correct interactions.
+According to previous work on general learning, negative feedback has a stronger influence on subsequent interactions...
+
+```{r echo=TRUE, eval=FALSE}
 success <- rbinom(1,1,probs[r])
 
 update_guess_logodds <- function(p_old, delta) plogis(qlogis(p_old) + delta)
-
 success_scale <- 1.2
 failure_scale <- 0.8
 delta <- learning_strength_logit * ifelse(success==1, success_scale, failure_scale)
@@ -306,9 +304,9 @@ listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
 ```
 
 ### Updating the signal
-After the listener and speaker have received feedback on the interaction, the learned y-representation is updated, ($S_{r} = (x_{r}, y_{r})$), Figure \@ref(fig:overview-figure). The updating is affected by the *adaptive communicative bias* mechanism ($\Upsilon$) that aligns the signal toward either the produced or the prototypical signal depending on whether interaction succeed or failed. The adaptive communicative bias is implemented by two parameters: a *reinforcement rate* on successful interactions, and a *corrective rate* on failed interactions. 
+After the listener and speaker have received feedback on the interaction, the stored y-representation is updated, ($S_{r} = (x_{r}, y_{r})$), Figure \@ref(fig:overview-figure). The updating is affected by the *adaptive communicative bias* mechanism that aligns the signal toward either the produced or the prototypical signal depending on whether interaction succeed or failed. The adaptive communicative bias is implemented by two parameters: a *reinforcement rate* on successful interactions, and a *corrective rate* on failed interactions. 
 
-When communication succeeds, the listener retrieves the signal for the referent and the learned y-value is updated by a weighted average of the previous y-value and the speaker's production, with weight given by the reinforcement rate ($\rho$). When communication fails, the learned y-value takes a proportional step toward the referent's iconic prototype, scaled by a corrective rate ($\kappa$) and perturbed by small drift noise ($\sigma_{y} = .05/2$) to capture variability in updating failed signals.
+When communication succeeds, the listener retrieves the signal for the referent and the stored y-value is updated by a weighted average of the previous y-value and the speaker's production, with weight given by the reinforcement rate ($\rho$). When communication fails, the stored y-value takes a proportional step toward the referent's iconic prototype, scaled by a corrective rate ($\kappa$) and perturbed by small drift noise ($\sigma_{y} = .05/2$) to capture variability in updating failed signals.
 
 ```{r echo=TRUE, eval=FALSE}
 reinforce_Y <- function(stored_y, produced_y) {
@@ -337,15 +335,15 @@ Next, we compare the different mechanisms and assess their relative importance f
 ```
 
 # Comparison of mechanisms and their relative importance for the emergence of iconicity
-For the comparison presented below, we ran 10 simulations of the model, each simulation with 1000 interaction rounds for a total of 10 000 trials. Simulations were run with fixed random seeds for reproducibility.<!--AP: changing the seed did not qualitatively alter the results -- haven't checked if that is actually true--> The number of unique referents in the guessing game was set to 6; 3 small referents and 3 large referents.
+For the comparison presented below, we ran 10 simulations of the model, each simulation with 1000 interaction rounds for a total of 10 000 trials. Simulations were run with fixed random seeds for reproducibility.<!--AP: changing the seed did not qualitatively alter the results -- haven't checked if that is actually true--> The number of unique referents in the guessing game was set to 4; 2 small referents and 2 large referents.
 
-The simulations used the following parameter settings: learning strength ($.005$), iconicity ($.2$), articulatory production bias ($.15$), reinforcement rate ($.05$), and corrective rate ($.03$).<!--AP: theses values should have approx. the same magnitude, depending on their role in respective function-->
+The simulations used the following parameter settings: learning strength ($.005$), iconicity weight ($.2$), general articulatory bias ($.15$), reinforcement rate ($.05$), and corrective rate ($.03$). Because parameters operate on different computational scales (log-odds space, weighted average, and linear updates), they are not directly comparable in magnitude; however, all were set to relatively small values to produce gradual dynamics where no single bias mechanism should have disproportional influence.
 
 We generated 6 types of models. The main model included all of the above described parameters set at their intialization values, as described above. The remaining 5 models were generated by switching off one of the parameters at a time by setting their value to 0.
 
-Figure \@ref(fig:iconicity-plot) illustrates the emergence of iconicity over trials for each of these 6 models. All models display similar patterns of iconicity emergence over time, besides the model for which failure drift is switched off. This highlights the importance of pushing produced signals on failed interactions toward more prototypical values. Iconicity might thus not be a by-product of communicative success, but requires specific signal-space dynamics. Interestingly, the best performing model seems to be the model where no learning strength is added to the updated speaker and listener guess rates.
+Figure \@ref(fig:iconicity-plot) illustrates the emergence of iconicity over trials for each of these 6 models. All models display similar patterns of iconicity emergence over time, besides the model for which corrective rate is switched off. This highlights the importance of pushing produced signals on failed interactions toward more prototypical values. Iconicity might thus not be a by-product of communicative success, but requires specific signal-space dynamics. Interestingly, the best performing model seems to be the model where no learning strength is added to the updated speaker and listener guess rates.
 
-(ref:iconicity-plot) Evolution of iconicity for learned tokens across simulation time. Iconicity is averaged in bins of 100 rounds and showed separately for each parameter setting (facets). Light lines trace individual simulations, the bold line denotes the average across simulations. The dashed horizontal line represents baseline iconicity expected from random signals without structure or learning.
+(ref:iconicity-plot) Evolution of iconicity for stored tokens across simulation time. Iconicity is averaged in bins of 100 rounds and showed separately for each parameter setting (facets). Light lines trace individual simulations, the bold line denotes the average across simulations. The dashed horizontal line represents baseline iconicity expected from random signals without structure or learning.
 
 ```{r parameters}
 set.seed(2139752)
@@ -378,17 +376,11 @@ d.simulation <- rbind(
     mutate(parameter_space = "noReinforcement"),
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learning_strength = 0) %>%
     mutate(parameter_space = "noLearning"),
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, iconicity = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, iconicity_weight = 0) %>%
     mutate(parameter_space = "noIconicity"),
   # Also add one simulation that resembles the old model
   d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0, reinforcement_rate = 0) %>%
     mutate(parameter_space = "onlyLearning"))
-
-# Diagnostics
-# d.onlyDrift <- d.empty %>%
-#   run_interaction_sim(n_sim = 10, n_rounds = 1000, learn_rate = 0, prod_bias = 0, reinforcement_rate = 0, iconicity_boost = 0) %>%
-#   mutate(parameter_space = "onlyDrift")
-
 ```
 
 ```{r iconicity}
@@ -545,11 +537,12 @@ Visualizing the learned and produced signal spaces further suggested that catego
 In order to investigate what parameter settings generate the largest increase in iconicity across trials and simulations, we generated a grid search over the five model parameters: articulatory production bias, prototype weighting, reinforcement rate, learning rate, and corrective rate. The grid search explored the following values for each of the parameters.
 
 ```{r echo=TRUE, eval=FALSE}
-articulatory production bias = seq(0, 0.3, length.out = 4)
-iconicity = seq(0, 0.4, length.out = 4)
-reinforcement rate = seq(0, 0.1, length.out = 4)
-corrective rate = seq(0, 0.06, length.out = 4)
-learning strength = seq(0, 0.1, length.out = 4)
+# Set sequences to include baseline in main model
+articulatory production bias = c(0, 0.1, 0.15, 0.25)
+iconicity weight = c(0, 0.1, 0.2, 0.35)
+reinforcement rate = c(0, 0.03, 0.05, 0.08)
+corrective rate = c(0, 0.02, 0.03, 0.05)
+learning strength = c(0, 0.0025, 0.005, 0.01)
 ```
 
 Similarly to the figures presented above, each panel of Figure \@ref(fig:grid-search) visualizes iconicity across the parameter space for when one of the parameters is switched off. Replicating previous figures, Figure \@ref(fig:grid-search) shows that 1) iconicity struggles to emerge when corrective rate is switched off, 2) learning strength does not seem to support the emergence of iconicity, and 3) switching off the other three parameters (reinforcement rate, articulatory production bias, prototype weighting) generates highly similar patterns of iconicity, suggesting that these might play less of a role in the model.
@@ -562,14 +555,14 @@ We also note that under some conditions, iconicity still emerges when corrective
 
 ```{r}
 if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
-  
+
   # Generate a parameter grid to explore
   d.param_grid <- expand.grid(
-    articulatory_production_bias = seq(0, 0.3, length.out = 4),
-    iconicity = seq(0, 0.4, length.out = 4),
-    reinforcement_rate = seq(0, 0.1, length.out = 4),
-    corrective_rate = seq(0, 0.06, length.out = 4),
-    learning_strength = seq(0, 0.1, length.out = 4))
+    articulatory_production_bias = c(0, 0.1, 0.15, 0.25),
+    iconicity_weight = c(0, 0.1, 0.2, 0.35),
+    reinforcement_rate = c(0, 0.03, 0.05, 0.08),
+    corrective_rate = c(0, 0.02, 0.03, 0.05),
+    learning_strength = c(0, 0.0025, 0.005, 0.01))
   
   # Prepare results container
   d.grid_results <- d.param_grid %>%
@@ -587,8 +580,7 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
       p_correct = numeric(), success = integer(),
       stored_x = numeric(), stored_y = numeric(),
       produced_x = numeric(), produced_y = numeric(),
-      stringsAsFactors = FALSE
-    )
+      stringsAsFactors = FALSE)
     
     # run simulation
     history <- run_interaction_sim(
@@ -596,13 +588,15 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
       n_sim = 10,
       n_referents = 6,
       n_rounds = 1000,
-      drift_sd = 0.05,
+      drift_sd_x = 0.01,
+      drift_sd_y = 0.05,
       learning_strength = params$learning_strength,
-      iconicity = params$iconicity,
+      iconicity_weight = params$iconicity_weight,
       articulatory_production_bias = params$articulatory_production_bias,
       reinforcement_rate = params$reinforcement_rate,
       corrective_rate = params$corrective_rate,
-      lapse = 0.05)
+      lapse = 0.05,
+      lambda_softmax = 10)
     
     # store full dataframe
     d.grid_results$history[[i]] <- history
@@ -623,17 +617,16 @@ d.full.history <- bind_rows(d.grid_results$history, .id = "param_set")
 ```
 
 ```{r grid-search, fig.width=base.width*6, fig.height=base.height*4, fig.align='center', out.width='100%', fig.cap="(ref:grid-search)"}
-#COMMENTED out since grid search isn't yet re-generated with new naming scheme
 # plot for different param settings
 # p.noReinforce <- d.grid_results %>%
 #   mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
 #   filter(reinforcement_rate == 0) %>%
 #   #filter(corrective_rate == 0) %>%
-#   rename(`corrective rate` = corrective_rate, `articulatory production bias` = prod_bias) %>%
+#   rename(`corrective rate` = corrective_rate, `articulatory bias` = articulatory_production_bias) %>%
 #   ggplot(
 #     aes(
-#       x = learn_rate, 
-#       y = iconicity_boost, 
+#       x = learning_strength,
+#       y = iconicity_weight,
 #       fill = iconicity,
 #       color = ifelse(iconicity != max(iconicity), "red", "black"))) +
 #   geom_tile() +
@@ -649,52 +642,52 @@ d.full.history <- bind_rows(d.grid_results$history, .id = "param_set")
 #     shape = 4) +
 #   scale_color_manual(values = c("red", "black")) +
 #   scale_fill_viridis_c() +
-#   facet_grid(`articulatory production bias` ~ `corrective rate`, labeller = label_both) +
+#   facet_grid(`articulatory bias` ~ `corrective rate`, labeller = label_both) +
 #   theme_minimal() +
 #   guides(color = "none") +
 #   labs(
 #     title = "Iconicity across the parameter space (no reinforcement)",
 #     x = "Learning rate",
-#     y = "Prototype weighting",
+#     y = "Iconicity weighting",
 #     fill = "Iconicity")
 # 
 # p.noProdBias <- p.noReinforce +
 #   (d.grid_results %>%
 #      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-#      filter(prod_bias == 0) %>%
+#      filter(articulatory_production_bias == 0) %>%
 #      rename(`corrective rate` = corrective_rate, reinforcement = reinforcement_rate)) +
 #   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
-#   labs(title = "Iconicity across the parameter space (no articulatory production bias)")
+#   labs(title = "Iconicity across the parameter space (no articulatory bias)")
 # 
 # p.noDrift <- p.noReinforce +
 #   (d.grid_results %>%
 #      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
 #      filter(corrective_rate == 0) %>%
-#      rename(reinforcement = reinforcement_rate, `articulatory production bias` = prod_bias)) +
-#   facet_grid(reinforcement ~ `articulatory production bias`, labeller = label_both) +
+#      rename(reinforcement = reinforcement_rate, `articulatory bias` = articulatory_production_bias)) +
+#   facet_grid(reinforcement ~ `articulatory bias`, labeller = label_both) +
 #   labs(title = "Iconicity across the parameter space (no corrective rate)") +
 #   guides(fill = "none")
 # 
 # p.NoLearning <- p.noReinforce +
 #   (d.grid_results %>%
 #      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-#      filter(learn_rate == 0) %>%
+#      filter(learning_strength == 0) %>%
 #      rename(reinforcement = reinforcement_rate, `corrective rate` = corrective_rate)) +
-#   aes(x = prod_bias) +
+#   aes(x = articulatory_production_bias) +
 #   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
 #   labs(title = "Iconicity across the parameter space (no learning strength)") +
-#   scale_x_continuous("articulatory production bias") +
+#   scale_x_continuous("articulatory bias") +
 #   guides(fill = "none")
 # 
 # p.NoBoost <- p.noReinforce +
 #   (d.grid_results %>%
 #      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-#      filter(iconicity_boost == 0) %>%
+#      filter(iconicity_weight == 0) %>%
 #      rename(`reinforcement` = reinforcement_rate, `corrective rate` = corrective_rate)) +
-#   aes(y = prod_bias) +
+#   aes(y = articulatory_production_bias) +
 #   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
-#   labs(title = "Iconicity across the parameter space (no prototype weighting)") +
-#   scale_y_continuous("articulatory production bias") +
+#   labs(title = "Iconicity across the parameter space (no iconicity weighting)") +
+#   scale_y_continuous("articulatory bias") +
 #   guides(fill = "none")
 # 
 # (p.noReinforce  +
