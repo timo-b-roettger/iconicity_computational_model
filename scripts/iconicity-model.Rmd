@@ -612,89 +612,87 @@ if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
   
 } else { d.grid_results <- readRDS("../models/grid-search.rds") }
 
-d.full.history <- bind_rows(d.grid_results$history, .id = "param_set")
+d.full.history <- d.grid_results %>%
+  unnest(history)
 
 ```
 
 ```{r grid-search, fig.width=base.width*6, fig.height=base.height*4, fig.align='center', out.width='100%', fig.cap="(ref:grid-search)"}
 # plot for different param settings
-# p.noReinforce <- d.grid_results %>%
-#   mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-#   filter(reinforcement_rate == 0) %>%
-#   #filter(corrective_rate == 0) %>%
-#   rename(`corrective rate` = corrective_rate, `articulatory bias` = articulatory_production_bias) %>%
-#   ggplot(
-#     aes(
-#       x = learning_strength,
-#       y = iconicity_weight,
-#       fill = iconicity,
-#       color = ifelse(iconicity != max(iconicity), "red", "black"))) +
-#   geom_tile() +
-#   geom_tile(
-#     data = . %>%
-#       filter(iconicity >= 0.24 & iconicity <= 0.26),
-#     color = "yellow",
-#     size = .3,
-#     fill = NA) +
-#   geom_point(
-#     data = . %>%
-#       filter(iconicity == max(iconicity)),
-#     shape = 4) +
-#   scale_color_manual(values = c("red", "black")) +
-#   scale_fill_viridis_c() +
-#   facet_grid(`articulatory bias` ~ `corrective rate`, labeller = label_both) +
-#   theme_minimal() +
-#   guides(color = "none") +
-#   labs(
-#     title = "Iconicity across the parameter space (no reinforcement)",
-#     x = "Learning rate",
-#     y = "Iconicity weighting",
-#     fill = "Iconicity")
-# 
-# p.noProdBias <- p.noReinforce +
-#   (d.grid_results %>%
-#      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-#      filter(articulatory_production_bias == 0) %>%
-#      rename(`corrective rate` = corrective_rate, reinforcement = reinforcement_rate)) +
-#   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
-#   labs(title = "Iconicity across the parameter space (no articulatory bias)")
-# 
-# p.noDrift <- p.noReinforce +
-#   (d.grid_results %>%
-#      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-#      filter(corrective_rate == 0) %>%
-#      rename(reinforcement = reinforcement_rate, `articulatory bias` = articulatory_production_bias)) +
-#   facet_grid(reinforcement ~ `articulatory bias`, labeller = label_both) +
-#   labs(title = "Iconicity across the parameter space (no corrective rate)") +
-#   guides(fill = "none")
-# 
-# p.NoLearning <- p.noReinforce +
-#   (d.grid_results %>%
-#      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-#      filter(learning_strength == 0) %>%
-#      rename(reinforcement = reinforcement_rate, `corrective rate` = corrective_rate)) +
-#   aes(x = articulatory_production_bias) +
-#   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
-#   labs(title = "Iconicity across the parameter space (no learning strength)") +
-#   scale_x_continuous("articulatory bias") +
-#   guides(fill = "none")
-# 
-# p.NoBoost <- p.noReinforce +
-#   (d.grid_results %>%
-#      mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-#      filter(iconicity_weight == 0) %>%
-#      rename(`reinforcement` = reinforcement_rate, `corrective rate` = corrective_rate)) +
-#   aes(y = articulatory_production_bias) +
-#   facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
-#   labs(title = "Iconicity across the parameter space (no iconicity weighting)") +
-#   scale_y_continuous("articulatory bias") +
-#   guides(fill = "none")
-# 
-# (p.noReinforce  +
-#   guides(fill = "none") + p.noProdBias + plot_spacer()) /
-#   (p.noDrift + p.NoLearning + p.NoBoost) +
-#   plot_layout(widths = c(1,1,1),
-#               heights = c(1,1))
+p.noReinforce <- d.grid_results %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+  filter(reinforcement_rate == 0) %>%
+  rename(`corrective rate` = corrective_rate, `articulatory bias` = articulatory_production_bias) %>%
+  ggplot(
+    aes(
+      x = factor(learning_strength),
+      y = factor(iconicity_weight),
+      fill = iconicity)) +
+  geom_tile() +
+  geom_tile(
+    data = . %>%
+      filter(iconicity >= 0.24 & iconicity <= 0.26),
+    color = "yellow",
+    size = .3,
+    fill = NA) +
+  geom_point(
+    data = . %>%
+      filter(iconicity == max(iconicity)),
+    shape = 4) +
+  scale_fill_viridis_c() +
+  facet_grid(`articulatory bias` ~ `corrective rate`, labeller = label_both) +
+  theme_minimal() +
+  guides(color = "none") +
+  labs(
+    title = "Iconicity across the parameter space (no reinforcement)",
+    x = "Learning rate",
+    y = "Iconicity weighting",
+    fill = "Iconicity")
+
+p.noProdBias <- p.noReinforce +
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(articulatory_production_bias == 0) %>%
+     rename(`corrective rate` = corrective_rate, reinforcement = reinforcement_rate)) +
+  facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space (no articulatory bias)")
+
+p.noDrift <- p.noReinforce +
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(corrective_rate == 0) %>%
+     rename(reinforcement = reinforcement_rate, `articulatory bias` = articulatory_production_bias)) +
+  facet_grid(reinforcement ~ `articulatory bias`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space (no corrective rate)") +
+  guides(fill = "none")
+
+p.NoLearning <- p.noReinforce +
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(learning_strength == 0) %>%
+     rename(reinforcement = reinforcement_rate, `corrective rate` = corrective_rate)) +
+  aes(x = factor(articulatory_production_bias)) +
+  facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space (no learning strength)") +
+  scale_x_discrete("Articulatory bias") +
+  guides(fill = "none")
+
+p.NoBoost <- p.noReinforce +
+  (d.grid_results %>%
+     mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+     filter(iconicity_weight == 0) %>%
+     rename(`reinforcement` = reinforcement_rate, `corrective rate` = corrective_rate)) +
+  aes(y = factor(articulatory_production_bias)) +
+  facet_grid(reinforcement ~ `corrective rate`, labeller = label_both) +
+  labs(title = "Iconicity across the parameter space (no iconicity weighting)") +
+  scale_y_discrete("Articulatory bias") +
+  guides(fill = "none")
+
+(p.noReinforce  +
+  guides(fill = "none") + p.noProdBias + plot_spacer()) /
+  (p.noDrift + p.NoLearning + p.NoBoost) +
+  plot_layout(widths = c(1,1,1),
+              heights = c(1,1))
 ```
 
 ```{r}
