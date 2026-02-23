@@ -159,7 +159,7 @@ signal_evidence <- function(signal_y, referent_type, k = 5) {
   2 * evidence - 1
 }
 
-grid <- grid %>%
+grid.evidence <- grid %>%
   rowwise() %>%
   mutate(
     evidence = signal_evidence(y, type)) %>%
@@ -222,8 +222,7 @@ grid <- grid %>%
 #   theme_minimal() +
 #   theme(legend.position = "bottom")
 
-
-grid %>%
+grid.evidence %>%
   ggplot(
     aes(
       x=x, 
@@ -231,6 +230,49 @@ grid %>%
       fill=evidence)) +
   geom_tile(width = 1) +
   facet_wrap(~ type) +
+  scale_y_continuous() +
+  scale_fill_viridis_c() +
+  labs(title="Raw signal evidence as a function of Y",
+       x=NULL, y="Y (iconicity)") +
+  guides(fill = guide_legend("Evidence (pre-weighting)")) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank())
+
+# Alternative way of implementing signal ease function, contrastive and fully symmetric
+# Signal evidence function (contrastive version)
+signal_evidence_contrastive <- function(signal_y, referent_type, k = 5) {
+  
+  target <- ifelse(referent_type == "small", 0, 1)
+  opposite <- ifelse(referent_type == "small", 1, 0)
+  
+  prox_target   <- exp(-k * abs(signal_y - target))
+  prox_opposite <- exp(-k * abs(signal_y - opposite))
+  
+  prox_target - prox_opposite
+}
+
+grid.new <- grid %>%
+  rowwise() %>%
+  mutate(
+    evidence_current = signal_evidence(y, type),
+    evidence_contrastive = signal_evidence_contrastive(y, type)
+  ) %>%
+  ungroup() %>%
+  pivot_longer(cols = c("evidence_current", "evidence_contrastive"),
+               names_to = "version",
+              values_to = "evidence")
+
+grid.new %>%
+  ggplot(
+    aes(
+      x=x, 
+      y=y, 
+      fill=evidence)) +
+  geom_tile(width = 1) +
+  facet_grid(version~ type) +
   scale_y_continuous() +
   scale_fill_viridis_c() +
   labs(title="Raw signal evidence as a function of Y",
@@ -433,7 +475,8 @@ p.learned.iconicity <- d.iconicity %>%
               group_by(parameter_space, bins) %>%
               summarise(iconicity = mean(iconicity)), 
             aes(group = 1), size = 1.5) +
-  geom_hline(yintercept = exp(-2 * sqrt((0.5)^2 + (0.5)^2)), lty = "dashed") +
+  #geom_hline(yintercept = exp(-2 * sqrt((0.5)^2 + (0.5)^2)), lty = "dashed") +
+  geom_hline(yintercept = exp(-2 * 0.5), lty = "dashed") +
   scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
   labs(title = "Iconicity over time (learned tokens)",
        y = "Iconicity (high = iconic)", x = "Bins (rounds in 100s)") +
