@@ -51,7 +51,6 @@ source("functions.R")
 # TO DO
 
   * Revisit the question of linear noise in a bounded system
-  * Read up on feedback strength on success/failure
 
 ```{r global-options, include=FALSE}
 RESET_MODELS = F        # switch on/off whether model is re-run
@@ -152,7 +151,7 @@ grid <- expand.grid(
   y = seq(0, 1, length.out = n_grid),
   type = c("small", "large"))
 
-# Signal evidence function
+# Signal evidence function (monotonic exponential decay from 1 tw 0; rescales from 0,1 to -1,1--if y=prototype return +1, if y=far away from prototype return -1; centered on iconic prototype)
 signal_evidence <- function(signal_y, referent_type, k = 5) {
   target <- ifelse(referent_type == "small", 0, 1)
   evidence <- exp(-k * abs(signal_y - target))
@@ -164,63 +163,6 @@ grid.evidence <- grid %>%
   mutate(
     evidence = signal_evidence(y, type)) %>%
   ungroup()
-
-#alternative plots
-# n_grid <- 200
-# iconicity <- 0.2   # use the same value as in the model
-# k <- 3
-# 
-# grid <- expand.grid(
-#   y = seq(0, 1, length.out = n_grid),
-#   type = c("small", "large")
-# )
-# 
-# signal_evidence <- function(signal_y, referent_type, k = 5) {
-#   target <- ifelse(referent_type == "small", 0, 1)
-#   evidence <- exp(-k * abs(signal_y - target))
-#   2 * evidence - 1
-# }
-# 
-# 
-# grid <- grid %>%
-#   rowwise() %>%
-#   mutate(
-#     evidence = signal_evidence(y, type, k),
-#     delta_logit = iconicity * evidence
-#   ) %>%
-#   ungroup()
-# 
-# ggplot(grid, aes(x = y, y = delta_logit, color = type)) +
-#   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
-#   geom_line(linewidth = 1.2) +
-#   scale_color_viridis_d() +
-#   labs(
-#     title = "Net logit contribution of iconicity cue",
-#     subtitle = "Positive values boost, negative values penalize the intended referent",
-#     x = "Y (acoustic iconicity dimension)",
-#     y = expression(Delta * "logit from iconicity"),
-#     color = "Referent type"
-#   ) +
-#   theme_minimal() +
-#   theme(
-#     legend.position = "bottom"
-#   )
-# 
-# ggplot(grid, aes(x = y, y = delta_logit, fill = delta_logit > 0)) +
-#   geom_area(alpha = 0.6) +
-#   facet_wrap(~ type) +
-#   scale_fill_manual(
-#     values = c("firebrick", "steelblue"),
-#     labels = c("Punishment", "Boost")
-#   ) +
-#   labs(
-#     title = "Iconicity cue contribution by signal value",
-#     x = "Y",
-#     y = expression(Delta * "logit"),
-#     fill = "Effect"
-#   ) +
-#   theme_minimal() +
-#   theme(legend.position = "bottom")
 
 grid.evidence %>%
   ggplot(
@@ -330,8 +272,7 @@ probs <- listener_guess_probability(listener_guess, x_prod, y_prod, referents_in
 
 The final outcome of the trial, success or failure, is implemented as random sampling from a binomial distribution with probability = current guessing probability; $O_{r,t} \in \{0,1\}$. A value of 1 indicates that the referent was correctly recognized, while 0 indicates an incorrect guess.
 
-After calculating success or failure, learning is reinforced for both speaker and listener by implementing the *associative learning bias* mechanism. This is a learning mechanism and not an iconicity mechanism. It is parameterized as applying a baseline *learning strength* ($\Delta$) to the speaker's and listener's guessing probabilities. Successful trials receive a slightly larger update (scaled by $1.2$), while unsuccessful trials receive a slightly smaller update (scaled by $.8$), reflecting incremental strengthening of form-meaning mappings across interactions, with stronger learning on correct interactions.
-According to previous work on general learning, negative feedback has a stronger influence on subsequent interactions...
+After calculating success or failure, learning is reinforced for both speaker and listener by implementing the *associative learning bias* mechanism. This is a learning mechanism and not an iconicity mechanism. It is parameterized as applying a baseline *learning strength* ($\Delta$) to the speaker's and listener's guessing probabilities. Unsuccessful trials receive a slightly larger update (scaled by $1.2$), while successful trials receive a slightly smaller update (scaled by $.8$), reflecting incremental strengthening of form-meaning mappings across interactions, with stronger learning on incorrect interactions [see e.g., work on error-driven learning and artificial language learning, where learning slows down as certainty increases making successes less impactful over time while negative feedback signal remains impactful throughout learning, @holroyd-coles2002; @opitz2011].<!--This has not changed in implementation yet!!-->
 
 ```{r echo=TRUE, eval=FALSE}
 success <- rbinom(1,1,probs[r])
@@ -504,7 +445,7 @@ p.learned.iconicity
 
 ```
 
-We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no associative learning bias is applied, see Figure \@ref(fig:accuracy). This seems to suggest that slower development of iconicity is beneficial for learning?
+We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no learning strength is applied, see Figure \@ref(fig:accuracy). This seems to suggest that slower development of iconicity is beneficial for learning?
 
 (ref:accuracy) Success rate across simulation rounds. A binomial GLM with smoothing is fit to the proportion of successful interactions. Shaded bands indicate the model-based standard error. Panels correspond to the different parameter settings.
 
@@ -594,7 +535,7 @@ p.produced.signals
 #   facet_grid(~ parameter_space)
 ```
 
-Overall, the results seem to suggest that iconicity emerged reliably except when the corrective rate mechanism was disabled. Removing failure drift eliminated the tendency for signals to move toward their iconic prototypes on failed trials, indicating that this mechanism plays a central role in shaping the signal space. This suggests that iconicity in this model depends on specific signal-space dynamics that bias failed forms toward iconic attractors.
+Overall, the results seem to suggest that iconicity emerged reliably except when the corrective rate mechanism was disabled. Removing corrective rate eliminated the tendency for signals to move toward their iconic prototypes on failed trials, indicating that this mechanism plays a central role in shaping the signal space. This suggests that iconicity in this model depends on specific signal-space dynamics that bias failed forms toward iconic attractors.
 
 Interestingly, learning strength appeared to influence communicative accuracy without substantially affecting iconicity. When learning strength was removed, agents reached relatively high levels of iconicity but reduced communicative success, indicating that learning strength governs guessing accuracy whereas failure drift governs the emergence of form-meaning structure. This seems to suggest that agents can learn to communicative successfully without producing iconic forms, and that iconic forms can emerge without directly improving recognition accuracy.
 
