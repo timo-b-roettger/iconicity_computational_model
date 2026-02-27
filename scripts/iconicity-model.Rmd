@@ -185,46 +185,16 @@ grid.evidence %>%
 
 # Alternative way of implementing signal ease function, contrastive and fully symmetric
 # Signal evidence function (contrastive version)
-signal_evidence_contrastive <- function(signal_y, referent_type, k = 5) {
-  
-  target <- ifelse(referent_type == "small", 0, 1)
-  opposite <- ifelse(referent_type == "small", 1, 0)
-  
-  prox_target   <- exp(-k * abs(signal_y - target))
-  prox_opposite <- exp(-k * abs(signal_y - opposite))
-  
-  prox_target - prox_opposite
-}
-
-grid.new <- grid %>%
-  rowwise() %>%
-  mutate(
-    evidence_current = signal_evidence(y, type),
-    evidence_contrastive = signal_evidence_contrastive(y, type)
-  ) %>%
-  ungroup() %>%
-  pivot_longer(cols = c("evidence_current", "evidence_contrastive"),
-               names_to = "version",
-              values_to = "evidence")
-
-grid.new %>%
-  ggplot(
-    aes(
-      x=x, 
-      y=y, 
-      fill=evidence)) +
-  geom_tile(width = 1) +
-  facet_grid(version~ type) +
-  scale_y_continuous() +
-  scale_fill_viridis_c() +
-  labs(title="Raw signal evidence as a function of Y",
-       x=NULL, y="Y (iconicity)") +
-  guides(fill = guide_legend("Evidence (pre-weighting)")) +
-  theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank())
+# signal_evidence_contrastive <- function(signal_y, referent_type, k = 5) {
+#   
+#   target <- ifelse(referent_type == "small", 0, 1)
+#   opposite <- ifelse(referent_type == "small", 1, 0)
+#   
+#   prox_target   <- exp(-k * abs(signal_y - target))
+#   prox_opposite <- exp(-k * abs(signal_y - opposite))
+#   
+#   prox_target - prox_opposite
+# }
 
 ```
 
@@ -424,25 +394,7 @@ p.learned.iconicity <- d.iconicity %>%
   theme_minimal() +
   facet_grid(~parameter_space)
 
-# p.produced.iconicity <- p.learned.iconicity +
-#   (d.iconicity %>%
-#   filter(process == "produced") %>%
-#   group_by(parameter_space, bins, sim) %>% 
-#   summarise(iconicity = mean(iconicity))) +
-#   labs(title = "Iconicity over time (produced signals)") +
-#   facet_grid(~parameter_space)
-
 p.learned.iconicity
-
-# d.simulation %>%
-#   mutate(
-#     dx = produced_x - stored_x,
-#     dy = produced_y - stored_y) %>%
-#   group_by(parameter_space, success) %>%
-#   summarise(
-#     mean_step = mean(sqrt(dx^2 + dy^2)),
-#     .groups = "drop")
-
 ```
 
 We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no learning strength is applied, see Figure \@ref(fig:accuracy). This seems to suggest that slower development of iconicity is beneficial for learning?
@@ -473,11 +425,6 @@ d.simulation %>%
   facet_grid( ~ parameter_space) +
   scale_y_continuous(limits = c(0,1)) + 
   theme_minimal()
-
-# ggplot(d.iconicity, aes(bins, iconicity, color=process)) +
-#   geom_smooth() + facet_grid(~parameter_space)
-
-
 ```
 
 Figure \@ref(fig:signal-space) visualizes the distribution of produced signals across simulations 1, 5 and 10, for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge strongly, e.g., the model without corrective rate (third row).
@@ -508,17 +455,6 @@ p.produced.signals <- d.simulation %>%
   scale_color_viridis_d(begin = 0.1, end = 0.9) +
   theme_minimal() +
   theme(legend.position = "bottom")
-
-# Is this relevant? Now that the signals don't update along x?
-# p.learned.signals <- p.produced.signals +
-#   aes(stored_x,
-#       stored_y) +
-#   labs(title = "Evolution of learned signal space", x = "x", y = "y")
-
-# p.learned.signals + p.produced.signals +
-#   plot_layout(guides = "collect") &
-#   theme(
-#     legend.position = "bottom")
 
 p.produced.signals
 ```
@@ -560,7 +496,7 @@ For most combinations of parameters, the trade-off between learning strength and
 
 We also note that under some conditions, iconicity still emerges when corrective rate is switched off (bottom-left panel, Figure \@ref(fig:grid-search)). This suggests that failure-based drift is not strictly necessary but is normally the dominant pathway (error-driven vs. success-driven iconicity). If this mechanism is not available, iconicity can still emerge by generating a positive feedback-loop of biased production--higher success--reinforcement--more biased learned signals--higher success.
 
-(ref:grid-search) Heatmaps of iconicity across the parameter space for different model configurations. Each panel shows simulations where one parameter is disabled: no reinforcement, no articulatory production bias, no signal drift, no learning, or no prototype weighting. Color indicates mean iconicity; yellow outlines mark the iconicity baseline (\~.25) and black crosses indicate the parameter values that generates maximum iconicity.
+(ref:grid-search) Heatmaps of iconicity across the parameter space for different model configurations. Each panel shows simulations where one parameter is disabled: no reinforcement, no articulatory production bias, no signal drift, no learning, or no prototype weighting. Color indicates mean iconicity; yellow outlines mark the iconicity baseline (\~.37) and black crosses indicate the parameter values that generates maximum iconicity.
 
 ```{r}
 if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
@@ -640,7 +576,7 @@ p.noReinforce <- d.grid_results %>%
   geom_tile() +
   geom_tile(
     data = . %>%
-      filter(iconicity >= 0.24 & iconicity <= 0.26),
+      filter(iconicity >= 0.36 & iconicity <= 0.38),
     color = "yellow",
     size = .3,
     fill = NA) +
