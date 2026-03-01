@@ -399,16 +399,10 @@ d.learned.iconicity <- d.iconicity %>%
                                   noIconicity = "No iconicity",
                                   noLearning = "No free learning",
                                   noReinforcement = "No reinforcement"))
-# aggs
+# Aggregated over bins
 d.learned.iconicity.mean <- d.learned.iconicity |> 
   group_by(parameter_space, bins) %>%
            summarise(iconicity = mean(iconicity))
-
-d.learned.iconicity.minmax <- d.learned.iconicity |> 
-  filter(bins == 20) |> 
-  group_by(parameter_space, sim) %>%
-  summarise(iconicity_min = min(iconicity, na.rm = T),
-            iconicity_max = max(iconicity, na.rm = T))
 
 # plot
 d.learned.iconicity |> 
