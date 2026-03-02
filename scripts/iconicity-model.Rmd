@@ -424,8 +424,6 @@ ggplot(aes(x = bins, y = iconicity, group = sim,
        y = "Iconicity (high = iconic)", x = "Rounds in 100s") +
   theme_minimal() +
   facet_wrap(~parameter_space, ncol = 3)
-
-p.learned.iconicity
 ```
 
 We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no learning strength is applied, see Figure \@ref(fig:accuracy). This seems to suggest that slower development of iconicity is beneficial for learning?

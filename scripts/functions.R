@@ -9,15 +9,15 @@ run_interaction_sim <- function(
     n_sim = 10, # number of simulations
     n_referents = 4, # number of unique referents in guessing game
     n_rounds = 1000, # number of interaction rounds
-    drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
+    drift_sd_x = 0.05,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
-    learning_strength = 0.05, # amount of added memory strengthening for words per round
-    iconicity_weight = 0.2,  # multiplicator for iconicity
+    learning_strength = 0.01, # amount of added memory strengthening for words per round
+    iconicity_weight = 0.05,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     reinforcement_rate = 0.05, # how much stored signals move toward produced signal on success
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
     lapse = 0.05, # soft lapse in guess_probability
-    lambda_softmax = 10     # sensitivity for multinomial choice
+    lambda_softmax = 1.5     # sensitivity for multinomial choice
 ) {
   
   # assign input data frame to history internally
@@ -40,6 +40,7 @@ run_interaction_sim <- function(
     lexeme = lexemes,
     type = types
   )
+  
   
   # Convert learning strength from probability to log-odds
   p0 <- 0.3 # approximate starting value
@@ -88,9 +89,9 @@ run_interaction_sim <- function(
     
     # Scalable perceptual noise (moderate overlap between neighbouring categories)
     Delta_x <- mean(diff(sort(lex_prototypes))) # spacing between prototypes
-    sigma_x <- .5 * Delta_x # moderate overlap
+    sigma_x <- 1.5 * Delta_x # moderate overlap
     
-    # Lexical likelihood P(lexeme | perceived X)
+    # Lexical likelihood P(lexeme | perceived X); loop over all referents and calculate the likelihood of each under the signal
     lex_likelihood <- sapply(1:n, function(k) {
       mu <- lex_prototypes[ referents_info$lexeme[k] ]
       exp(- (signal_x - mu)^2 / (2 * sigma_x^2))
@@ -128,8 +129,10 @@ run_interaction_sim <- function(
     
     # initial learning status of referents (after training)
     ## each agent has initial probability ~ 0.3 ± noise
-    agentA_guess <- rbeta(n_referents, 2, 4)
-    agentB_guess <- rbeta(n_referents, 2, 4)
+    #agentA_guess <- rbeta(n_referents, 2, 4)
+    #agentB_guess <- rbeta(n_referents, 2, 4)
+    agentA_guess <- rep(1/n_referents, n_referents)
+    agentB_guess <- rep(1/n_referents, n_referents)
     
     for (t in 1:n_rounds) {
       # speakers/listeners are taking turns
