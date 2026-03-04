@@ -40,18 +40,9 @@ run_interaction_sim <- function(
     lexeme = lexemes,
     type = types)
   
-<<<<<<< HEAD
-  
-  # Convert learning strength from probability to log-odds
-  p0 <- 0.3 # approximate starting value
-  learning_strength_logit <- qlogis(p0 + learning_strength) #- qlogis(p0)
-  
-  # produce a token (produced signal) given stored signal and speaker skill; 
-=======
   # HELPER FUNCTIONS CALLED IN SIMULATION LOOP
   # SIGNAL PRODUCTION + MECHANISMS AFFECTING Y-DIMENSION
   # Produce a token (produced signal) given stored signal and speaker skill (previous associative strength in probability space); 
->>>>>>> dd4d3627ae97c84c2bf03d440d2e18e698d2da00
   # x = fixed lexeme + tiny noise
   # y = stored y + articulatory bias
   produce_signal <- function(stored_y, lexeme, referent_type, speaker_guess) {
