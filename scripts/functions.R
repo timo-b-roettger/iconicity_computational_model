@@ -44,7 +44,7 @@ run_interaction_sim <- function(
   
   # Convert learning strength from probability to log-odds
   p0 <- 0.3 # approximate starting value
-  learning_strength_logit <- qlogis(p0 + learning_strength) - qlogis(p0)
+  learning_strength_logit <- qlogis(p0 + learning_strength) #- qlogis(p0)
   
   # produce a token (produced signal) given stored signal and speaker skill; 
   # x = fixed lexeme + tiny noise
