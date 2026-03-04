@@ -6,9 +6,9 @@
 # Main interaction loop function
 run_interaction_sim <- function(
     data,
-    n_sim = 10, # number of simulations
+    n_sim = 1, # number of simulations
     n_referents = 4, # number of unique referents in guessing game
-    n_rounds = 1000, # number of interaction rounds
+    n_rounds = 100, # number of interaction rounds
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
     learning_strength = 0.04, # amount of added memory strengthening for words per round; corresponding to an 0.01 increase for a probability of 0.5
@@ -22,7 +22,7 @@ run_interaction_sim <- function(
   # assign input data frame to history internally
   history <- data
   #clamp to [0,1]
-  clamp01 <- function(x) pmax(0, pmin(1, x))
+  clamp01 <- function(x) pmax(0, pmin(0.95, x))
   
   # SETTING UP SIGNAL-MEANING INFORMATION
   # Semantic prototypes
@@ -100,12 +100,16 @@ run_interaction_sim <- function(
     })
       
     # Combine in logodds space; lexical likelihood, the learned associative strength between lexeme and referent (agent_guess_vec), and iconicity
-    logits <- log(lex_likelihood + 1e-12) + qlogis(agent_guess_vec) + (iconicity_weight * icon_ev)
-
+    #logits <- log(lex_likelihood + 1e-12) + qlogis(agent_guess_vec) + (iconicity_weight * icon_ev)
+    # comment TR: likelihood is a probability so log(likelihood) is not in logit space
+    # comment TR: but I also still not sure what lex-likelihood does here and why
+    # comment TR: we need to clamp01 it here (clamp adjusted to 0.95 max)
+    logits <- qlogis(clamp01(agent_guess_vec + (iconicity_weight * icon_ev)))
+    
     # final output in probability space for success/failure calculation and storing of speaker listener guess
     probs <- plogis(logits)
     # apply lapse
-    probs <- (lapse/n) + (1 - lapse) * probs
+    #probs <- (lapse/n) + (1 - lapse) * probs
     probs
   }
 
