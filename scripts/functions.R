@@ -2,22 +2,21 @@
 
 
 # Functions ------------------------------------------------------------------
-## Functions for iconicity simulation ----------------------------------------
+## Iconicity simulation function ----------------------------------------
 # Main interaction loop function
 run_interaction_sim <- function(
     data,
     n_sim = 10, # number of simulations
     n_referents = 4, # number of unique referents in guessing game
     n_rounds = 1000, # number of interaction rounds
-    drift_sd_x = 0.05,   # tiny drift to simulate less than perfect production; motor noise
+    drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
-    learning_strength = 0.01, # amount of added memory strengthening for words per round
+    learning_strength = 0.04, # amount of added memory strengthening for words per round; corresponding to an 0.01 increase for a probability of 0.5
     iconicity_weight = 0.05,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     reinforcement_rate = 0.05, # how much stored signals move toward produced signal on success
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
-    lapse = 0.05, # soft lapse in guess_probability
-    lambda_softmax = 1.5     # sensitivity for multinomial choice
+    lapse = 0.05 # soft lapse in probability space
 ) {
   
   # assign input data frame to history internally
@@ -25,6 +24,7 @@ run_interaction_sim <- function(
   #clamp to [0,1]
   clamp01 <- function(x) pmax(0, pmin(1, x))
   
+  # SETTING UP SIGNAL-MEANING INFORMATION
   # Semantic prototypes
   size_prototypes <- c(small = 0, large = 1)
   
@@ -38,15 +38,20 @@ run_interaction_sim <- function(
   referents_info <- tibble(
     id = seq_len(n_referents),
     lexeme = lexemes,
-    type = types
-  )
+    type = types)
   
+<<<<<<< HEAD
   
   # Convert learning strength from probability to log-odds
   p0 <- 0.3 # approximate starting value
   learning_strength_logit <- qlogis(p0 + learning_strength) #- qlogis(p0)
   
   # produce a token (produced signal) given stored signal and speaker skill; 
+=======
+  # HELPER FUNCTIONS CALLED IN SIMULATION LOOP
+  # SIGNAL PRODUCTION + MECHANISMS AFFECTING Y-DIMENSION
+  # Produce a token (produced signal) given stored signal and speaker skill (previous associative strength in probability space); 
+>>>>>>> dd4d3627ae97c84c2bf03d440d2e18e698d2da00
   # x = fixed lexeme + tiny noise
   # y = stored y + articulatory bias
   produce_signal <- function(stored_y, lexeme, referent_type, speaker_guess) {
@@ -59,7 +64,7 @@ run_interaction_sim <- function(
     c(x, clamp01(y))
   }
   
-  # Adaptive communicative bias (for Y only)
+  # Adaptive communicative bias
   # reinforce stored signal toward produced signal after success
   reinforce_Y <- function(stored_y, produced_y) {
     ((1 - reinforcement_rate) * stored_y + reinforcement_rate * produced_y)
@@ -83,43 +88,35 @@ run_interaction_sim <- function(
     2 * evidence - 1
   }
   
-  # Listener inference
+  ## LISTENER INFERENCE
+  # Listener inference in log-odds space
   listener_guess_probability <- function(agent_guess_vec, signal_x, signal_y, referents_info) {
     n <- nrow(referents_info)
     
     # Scalable perceptual noise (moderate overlap between neighbouring categories)
-    Delta_x <- mean(diff(sort(lex_prototypes))) # spacing between prototypes
-    sigma_x <- 1.5 * Delta_x # moderate overlap
+    delta_x <- mean(diff(sort(lex_prototypes))) # spacing between prototypes
+    sigma_x <- 0.5 * delta_x # moderate overlap
     
     # Lexical likelihood P(lexeme | perceived X); loop over all referents and calculate the likelihood of each under the signal
     lex_likelihood <- sapply(1:n, function(k) {
       mu <- lex_prototypes[ referents_info$lexeme[k] ]
       exp(- (signal_x - mu)^2 / (2 * sigma_x^2))
     })
-    lex_likelihood <- lex_likelihood / sum(lex_likelihood) #normalize over all possible options
-    
-    # Previous associative strength (lexeme--referent)
-    strength <- agent_guess_vec
     
     # Iconicity bias
     icon_ev <- sapply(1:n, function(k) {
       signal_evidence(signal_y, referents_info$type[k])
     })
       
-    # Combine in logodds space; lexical likelihood, the learned associative strength and iconicity
-    logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + iconicity_weight * icon_ev
-    
-    # Competition across referents
-    exp_logits <- exp(lambda_softmax * logits)
-    probs <- exp_logits / sum(exp_logits)
-    
+    # Combine in logodds space; lexical likelihood, the learned associative strength between lexeme and referent (agent_guess_vec), and iconicity
+    logits <- log(lex_likelihood + 1e-12) + qlogis(agent_guess_vec) + (iconicity_weight * icon_ev)
+
+    # final output in probability space for success/failure calculation and storing of speaker listener guess
+    probs <- plogis(logits)
     # apply lapse
     probs <- (lapse/n) + (1 - lapse) * probs
     probs
   }
-
-  # log-odds learning update for guessing probabilities (additive in logit space)
-  update_guess_logodds <- function(p_old, delta) plogis(qlogis(p_old) + delta)
 
   # MAIN SIMULATION LOOP
   for (sim in 1:n_sim) {
@@ -129,10 +126,8 @@ run_interaction_sim <- function(
     
     # initial learning status of referents (after training)
     ## each agent has initial probability ~ 0.3 ± noise
-    #agentA_guess <- rbeta(n_referents, 2, 4)
-    #agentB_guess <- rbeta(n_referents, 2, 4)
-    agentA_guess <- rep(1/n_referents, n_referents)
-    agentB_guess <- rep(1/n_referents, n_referents)
+    agentA_guess <- rbeta(n_referents, 3, 9)
+    agentB_guess <- rbeta(n_referents, 3, 9)
     
     for (t in 1:n_rounds) {
       # speakers/listeners are taking turns
@@ -154,17 +149,18 @@ run_interaction_sim <- function(
       
       # Listener inference (x+y)
       probs <- listener_guess_probability(listener_guess, x_prod, y_prod, referents_info)
+      
       # actual outcome, binomial sampling
       success <- rbinom(1,1,probs[r])
       
       # Learning in lexical mapping depends on success/failure
       success_scale <- 1.2 # slightly more learning with success
       failure_scale <- 0.8 # also increase in learning with failure, but less so
-      delta <- learning_strength_logit * ifelse(success==1, success_scale, failure_scale)
-      # learning: speaker improves guess rate, in logodds space
-      speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
-      # listener also learns due to feedback
-      listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
+      delta <- learning_strength * ifelse(success==1, success_scale, failure_scale)
+      # learning: speaker improves guess rate, in logodds space, but final output in probability space
+      speaker_guess[r] <- plogis(qlogis(speaker_guess[r]) + delta)
+      # listener also learns due to feedback, in logodds space, but final output in probability space
+      listener_guess[r] <- plogis(qlogis(listener_guess[r]) + delta)
       
       # Adaptive communicative bias in Y, signal memory updates: success -> reinforce toward produced form; failure -> nudge toward prototype
       if(success==1) {
@@ -197,6 +193,38 @@ run_interaction_sim <- function(
   return(history)
 }
 
+
+## Grid search functions----------------------------------------
+
+# Code for generating grid search in the parameter space
+compute_iconicity <- function(history, n_bins = 20, cutoff = 0.8) {
+  
+  # bin rounds
+  hist_agg <- history %>%
+    mutate(bins = cut(round, breaks = n_bins, labels = FALSE)) %>%
+    group_by(bins, type, sim) %>%
+    summarise(
+      y = mean(stored_y),
+      .groups = "drop"
+    )
+  # compute distance effect
+  hist_icon <- hist_agg %>%
+    mutate(
+      target_y = ifelse(type == "small", 0, 1),
+      dist      = abs(y - target_y),
+      iconicity = exp(-2 * dist)
+    ) %>%
+    group_by(bins, sim) %>%
+    summarise(iconicity = mean(iconicity), .groups = "drop")
+  # final bins threshold
+  last_bin <- max(hist_icon$bins)
+  threshold <- last_bin * cutoff
+  # return mean iconicity in final 20% of bins
+  mean(hist_icon$iconicity[hist_icon$bins >= threshold])
+}
+
+
+# Cut-outs -------------------------------------------------------------------------------------
 
 # Main interaction loop function
 run_interaction_sim_old <- function(
@@ -545,29 +573,3 @@ run_interaction_sim_separate_memory <- function(
   return(history)
 }
 
-# Code for generating grid search in the parameter space
-compute_iconicity <- function(history, n_bins = 20, cutoff = 0.8) {
-  
-  # bin rounds
-  hist_agg <- history %>%
-    mutate(bins = cut(round, breaks = n_bins, labels = FALSE)) %>%
-    group_by(bins, type, sim) %>%
-    summarise(
-      y = mean(stored_y),
-      .groups = "drop"
-    )
-  # compute distance effect
-  hist_icon <- hist_agg %>%
-    mutate(
-      target_y = ifelse(type == "small", 0, 1),
-      dist      = abs(y - target_y),
-      iconicity = exp(-2 * dist)
-    ) %>%
-    group_by(bins, sim) %>%
-    summarise(iconicity = mean(iconicity), .groups = "drop")
-  # final bins threshold
-  last_bin <- max(hist_icon$bins)
-  threshold <- last_bin * cutoff
-  # return mean iconicity in final 20% of bins
-  mean(hist_icon$iconicity[hist_icon$bins >= threshold])
-}
