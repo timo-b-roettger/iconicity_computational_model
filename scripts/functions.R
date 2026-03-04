@@ -12,7 +12,7 @@ run_interaction_sim <- function(
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
     learning_strength = 0.04, # amount of added memory strengthening for words per round; corresponding to an 0.01 increase for a probability of 0.5
-    iconicity_weight = 0.05,  # multiplicator for iconicity
+    iconicity_weight = 0.2,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     reinforcement_rate = 0.05, # how much stored signals move toward produced signal on success
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
