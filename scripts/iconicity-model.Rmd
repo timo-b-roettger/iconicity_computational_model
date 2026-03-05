@@ -516,7 +516,8 @@ Figure \@ref(fig:signal-space) visualizes the distribution of produced signals a
 ```{r signal-space, fig.width=base.width*5, fig.height=base.height*4, fig.align='center', out.width='90%', fig.cap="(ref:signal-space)"}
 # Signal space use
 p.produced.signals <- d.simulation %>%
-  filter(round %in% c(1,200,1000), parameter_space != "onlyLearning") %>%
+  mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
+  filter(bins %in% c(1,25,50), parameter_space != "onlyLearning") %>%
   mutate(parameter_space = recode(parameter_space,
                                   allParams = "All parameters",
                                   noArticulatoryProductionBias = "No articulatory bias",
@@ -524,14 +525,16 @@ p.produced.signals <- d.simulation %>%
                                   noIconicity = "No iconicity",
                                   noLearning = "No learning strength",
                                   noReinforcement = "No reinforcement")) %>%
+  group_by(bins, type, parameter_space) |> 
+  summarise(produced_y = mean(produced_y, na.rm = T)) |> 
   ggplot(
-    aes(produced_x,
-        produced_y,
+    aes(x = type,
+        y = produced_y,
         shape = type,
-        color = lexeme)) +
-  geom_point(alpha = 1) +
-  labs(title = "Evolution of produced signal space", x = "x", y = "y") +
-  facet_grid(parameter_space ~ round) +
+        fill = type)) +
+  geom_col() +
+  labs(title = "Evolution of produced signal space", x = "type", y = "y") +
+  facet_grid(parameter_space ~ bins) +
   #scale_x_continuous(limits = c(0,1)) +
   #scale_y_continuous(limits = c(0,1)) +
   scale_color_viridis_d(begin = 0.1, end = 0.9) +

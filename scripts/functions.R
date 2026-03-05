@@ -77,10 +77,14 @@ run_interaction_sim <- function(
     target <- size_prototypes[referent_type]   # 0 or 1
     dist <- abs(signal_y - target)
     # exponential decay for stronger effect near or far away from target
-    evidence <- exp(-k * dist)
+    # TR: this function is the problem in the way it scales IMO
+    # evidence <- exp(-k * dist)
+    # TR: alternative linear for now, flip distance to reflect iconicity and center on 0
+    flip <- abs(dist - 1)
+    evidence <- flip - 0.5
     # rescale to [-1,1] so that far-away signals are punished while close signals are rewarded
-    # TR comment: but this does not rescale to [-1,1], it ranges from 0.007 to -0.98
-    2 * evidence - 1
+    #2 * evidence - 1
+    evidence
   }
   
   ## LISTENER INFERENCE
