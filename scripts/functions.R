@@ -11,8 +11,8 @@ run_interaction_sim <- function(
     n_rounds = 100, # number of interaction rounds
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
-    learning_strength = 0.04, # amount of added memory strengthening for words per round; corresponding to an 0.01 increase for a probability of 0.5
-    iconicity_weight = 0.5,  # multiplicator for iconicity
+    learning_strength = 0.02, # amount of added memory strengthening for words per round; corresponding to an half a % increase for a probability of 0.5
+    iconicity_weight = 0.2,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     reinforcement_rate = 0.05, # how much stored signals move toward produced signal on success
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
@@ -61,7 +61,7 @@ run_interaction_sim <- function(
   # Adaptive communicative bias
   # reinforce stored signal toward produced signal after success
   reinforce_Y <- function(stored_y, produced_y) {
-    ((1 - reinforcement_rate) * stored_y + reinforcement_rate * produced_y)
+    #((1 - reinforcement_rate) * stored_y + reinforcement_rate * produced_y)
   }
   # when failure occurs, nudge stored signal toward prototype
   correct_Y <- function(stored_y, referent_type) {
@@ -97,10 +97,10 @@ run_interaction_sim <- function(
     sigma_x <- 0.5 * delta_x # moderate overlap
     
     # Lexical likelihood P(lexeme | perceived X); loop over all referents and calculate the likelihood of each under the signal
-    lex_likelihood <- sapply(1:n, function(k) {
-      mu <- lex_prototypes[ referents_info$lexeme[k] ]
-      exp(- (signal_x - mu)^2 / (2 * sigma_x^2))
-    })
+    # lex_likelihood <- sapply(1:n, function(k) {
+    #   mu <- lex_prototypes[ referents_info$lexeme[k] ]
+    #   exp(- (signal_x - mu)^2 / (2 * sigma_x^2))
+    # })
     
     # Iconicity bias
     icon_ev <- sapply(1:n, function(k) {
@@ -112,7 +112,7 @@ run_interaction_sim <- function(
     # comment TR: likelihood is a probability so log(likelihood) is not in logit space
     # comment TR: but I also still not sure what lex-likelihood does here and why
     # comment TR: we need to clamp02 it here (clamp adjusted to 0.95 max)
-    logits <- qlogis(clamp02(agent_guess_vec + (iconicity_weight * icon_ev)))
+    logits <- qlogis(clamp02(agent_guess_vec)) + (iconicity_weight * icon_ev)
     
     # final output in probability space for success/failure calculation and storing of speaker listener guess
     probs <- plogis(logits)
@@ -161,11 +161,15 @@ run_interaction_sim <- function(
       failure_scale <- 0.8 # also increase in learning with failure, but less so
       delta <- learning_strength * ifelse(success==1, success_scale, failure_scale)
       # learning: speaker improves guess rate, in logodds space, but final output in probability space
-      speaker_guess[r] <- plogis(qlogis(speaker_guess[r]) + delta)
+      # TR here we disconnected iconicity from p_guess, iconicity affected success rate, success rate affects p_guess, 
+      # TR now iconicity affects success but also p_guess directly which can be additionally boosted by learning strength
+      #speaker_guess[r] <- plogis(qlogis(speaker_guess[r]) + delta)
+      speaker_guess[r] <- plogis(qlogis(probs[r]) + delta)
       # listener also learns due to feedback, in logodds space, but final output in probability space
-      listener_guess[r] <- plogis(qlogis(listener_guess[r]) + delta)
+      #listener_guess[r] <- plogis(qlogis(listener_guess[r]) + delta)
+      listener_guess[r] <- plogis(qlogis(probs[r]) + delta)
       
-      # Adaptive communicative bias in Y, signal memory updates: success -> reinforce toward produced form; failure -> nudge toward prototype
+      #Adaptive communicative bias in Y, signal memory updates: success -> reinforce toward produced form; failure -> nudge toward prototype
       if(success==1) {
         stored_y[r] <- reinforce_Y(stored_y[r], y_prod)
       } else {
@@ -183,12 +187,18 @@ run_interaction_sim <- function(
       
       # Log trials
       history <- rbind(history, data.frame(
-        sim = sim, round = t,
-        referent = r, lexeme = ref$lexeme, type = ref$type,
-        speaker = speaker, listener = listener,
-        produced_x = x_prod, produced_y = y_prod,
+        sim = sim, 
+        round = t,
+        referent = r, 
+        lexeme = ref$lexeme, 
+        type = ref$type,
+        speaker = speaker, 
+        listener = listener,
+        produced_x = x_prod, 
+        produced_y = y_prod,
         stored_y = stored_y[r],
-        p_guess = probs[r], success = success
+        p_guess = probs[r], 
+        success = success
       ))
     }
   }
