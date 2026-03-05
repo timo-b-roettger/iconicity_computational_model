@@ -354,14 +354,12 @@ d.simulation <- rbind(
     mutate(parameter_space = "noArticulatoryProductionBias"),
   d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, corrective_rate = 0) %>%
     mutate(parameter_space = "noCorrectiveRate"),
-  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, reinforcement_rate = 0) %>%
-    mutate(parameter_space = "noReinforcement"),
   d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, learning_strength = 0) %>%
     mutate(parameter_space = "noLearning"),
   d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, iconicity_weight = 0) %>%
     mutate(parameter_space = "noIconicity"),
   # Also add one simulation that resembles the old model
-  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0, reinforcement_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0) %>%
     mutate(parameter_space = "onlyLearning"))
 ```
 
@@ -406,8 +404,7 @@ d.learned.iconicity <- d.iconicity %>%
                                   noArticulatoryProductionBias = "No production bias",
                                   noCorrectiveRate = "No adaptive comm bias",
                                   noIconicity = "No iconicity",
-                                  noLearning = "No free learning",
-                                  noReinforcement = "No reinforcement"))
+                                  noLearning = "No free learning"))
 # Aggregated over bins
 d.learned.iconicity.mean <- d.learned.iconicity |> 
   group_by(parameter_space, bins) %>%
@@ -448,8 +445,7 @@ d.simulation_success <- d.simulation %>%
                                   noArticulatoryProductionBias = "No production bias",
                                   noCorrectiveRate = "No adaptive comm bias",
                                   noIconicity = "No iconicity",
-                                  noLearning = "No free learning",
-                                  noReinforcement = "No reinforcement")) |> 
+                                  noLearning = "No free learning")) |> 
   mutate(round_bin = cut(round, 100, labels = FALSE)) |> 
   group_by(parameter_space, sim, round_bin) %>%
   summarise(success = mean(success),
@@ -514,8 +510,7 @@ d.simulation_success_beginning <- d.simulation %>%
                                   noArticulatoryProductionBias = "No production bias",
                                   noCorrectiveRate = "No adaptive comm bias",
                                   noIconicity = "No iconicity",
-                                  noLearning = "No free learning",
-                                  noReinforcement = "No reinforcement")) |> 
+                                  noLearning = "No free learning")) |> 
   filter(round < 10) |> 
   group_by(parameter_space, sim, round) %>%
   summarise(success = mean(success),

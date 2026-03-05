@@ -14,7 +14,6 @@ run_interaction_sim <- function(
     learning_strength = 0.02, # amount of added memory strengthening for words per round; corresponding to an half a % increase for a probability of 0.5
     iconicity_weight = 0.2,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
-    reinforcement_rate = 0.05, # how much stored signals move toward produced signal on success
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
     lapse = 0.05 # soft lapse in probability space
 ) {
@@ -58,12 +57,7 @@ run_interaction_sim <- function(
     c(x, clamp01(y))
   }
   
-  # Adaptive communicative bias
-  # reinforce stored signal toward produced signal after success
-  reinforce_Y <- function(stored_y, produced_y) {
-    #((1 - reinforcement_rate) * stored_y + reinforcement_rate * produced_y)
-  }
-  # when failure occurs, nudge stored signal toward prototype
+  # Adaptive communicative bias; when failure occurs, nudge stored signal toward prototype along y
   correct_Y <- function(stored_y, referent_type) {
     target_y <- size_prototypes[referent_type]
     clamp01(
@@ -80,13 +74,28 @@ run_interaction_sim <- function(
     # TR: this function is the problem in the way it scales IMO
     # evidence <- exp(-k * dist)
     # TR: alternative linear for now, flip distance to reflect iconicity and center on 0
-    flip <- abs(dist - 1)
-    evidence <- flip - 0.5
+    #flip <- abs(dist - 1)
+    #evidence <- flip - 0.5
     # rescale to [-1,1] so that far-away signals are punished while close signals are rewarded
     #2 * evidence - 1
-    evidence
+    # For signals in the 'neutral' mid-part of the space, make evidence = 0; define boundaries for when evidence begin to matter
+    if(dist >= 0.2 & dist <= 0.8) {
+      evidence <- 0
+      } else {
+      # calculate distance from signal to boundaries
+      edge_dist <- ifelse(dist < 0.2, 0.2 - dist, dist - 0.8)
+      # calculate the magnitude of decay/boost, exponentially (same for boost and decay)
+      magnitude <- exp(-k * edge_dist)
+      # determine sign of evidence (boost or decay)
+      if((target == 1 & dist > 0.8) | (target == 0 & dist < 0.2)) {
+        evidence <- magnitude
+      } else {
+        evidence <- -magnitude
+      }
+    }
+    return(evidence)
   }
-  
+
   ## LISTENER INFERENCE
   # Listener inference in log-odds space
   listener_guess_probability <- function(agent_guess_vec, signal_x, signal_y, referents_info) {
@@ -169,9 +178,9 @@ run_interaction_sim <- function(
       #listener_guess[r] <- plogis(qlogis(listener_guess[r]) + delta)
       listener_guess[r] <- plogis(qlogis(probs[r]) + delta)
       
-      #Adaptive communicative bias in Y, signal memory updates: success -> reinforce toward produced form; failure -> nudge toward prototype
+      #Adaptive communicative bias in Y, signal memory updates: success -> keep stored signal identical to produced signal, failure -> nudge toward prototype
       if(success==1) {
-        stored_y[r] <- reinforce_Y(stored_y[r], y_prod)
+        stored_y[r] <- y_prod
       } else {
         stored_y[r] <- correct_Y(stored_y[r], ref$type)
       }
