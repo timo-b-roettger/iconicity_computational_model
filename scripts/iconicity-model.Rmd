@@ -348,20 +348,20 @@ d.empty <- data.frame(
 
 # Generate one data frame with different simulations where params are switched on/off
 d.simulation <- rbind(
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000) %>%
+  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000) %>%
     mutate(parameter_space = "allParams"),
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, articulatory_production_bias = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, articulatory_production_bias = 0) %>%
     mutate(parameter_space = "noArticulatoryProductionBias"),
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, corrective_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, corrective_rate = 0) %>%
     mutate(parameter_space = "noCorrectiveRate"),
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, reinforcement_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, reinforcement_rate = 0) %>%
     mutate(parameter_space = "noReinforcement"),
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, learning_strength = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, learning_strength = 0) %>%
     mutate(parameter_space = "noLearning"),
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, iconicity_weight = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, iconicity_weight = 0) %>%
     mutate(parameter_space = "noIconicity"),
   # Also add one simulation that resembles the old model
-  d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0, reinforcement_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0, reinforcement_rate = 0) %>%
     mutate(parameter_space = "onlyLearning"))
 ```
 

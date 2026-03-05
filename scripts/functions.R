@@ -12,7 +12,7 @@ run_interaction_sim <- function(
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
     learning_strength = 0.04, # amount of added memory strengthening for words per round; corresponding to an 0.01 increase for a probability of 0.5
-    iconicity_weight = 0.2,  # multiplicator for iconicity
+    iconicity_weight = 0.5,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     reinforcement_rate = 0.05, # how much stored signals move toward produced signal on success
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
@@ -21,8 +21,11 @@ run_interaction_sim <- function(
   
   # assign input data frame to history internally
   history <- data
-  #clamp to [0,1]
+  #clamp to [0,1] for signal
   clamp01 <- function(x) pmax(0, pmin(0.95, x))
+  #clamp to [0,0.95] for accuracy
+  clamp02 <- function(x) pmax(0, pmin(0.95, x))
+  
   
   # SETTING UP SIGNAL-MEANING INFORMATION
   # Semantic prototypes
@@ -76,6 +79,7 @@ run_interaction_sim <- function(
     # exponential decay for stronger effect near or far away from target
     evidence <- exp(-k * dist)
     # rescale to [-1,1] so that far-away signals are punished while close signals are rewarded
+    # TR comment: but this does not rescale to [-1,1], it ranges from 0.007 to -0.98
     2 * evidence - 1
   }
   
@@ -103,8 +107,8 @@ run_interaction_sim <- function(
     #logits <- log(lex_likelihood + 1e-12) + qlogis(agent_guess_vec) + (iconicity_weight * icon_ev)
     # comment TR: likelihood is a probability so log(likelihood) is not in logit space
     # comment TR: but I also still not sure what lex-likelihood does here and why
-    # comment TR: we need to clamp01 it here (clamp adjusted to 0.95 max)
-    logits <- qlogis(clamp01(agent_guess_vec + (iconicity_weight * icon_ev)))
+    # comment TR: we need to clamp02 it here (clamp adjusted to 0.95 max)
+    logits <- qlogis(clamp02(agent_guess_vec + (iconicity_weight * icon_ev)))
     
     # final output in probability space for success/failure calculation and storing of speaker listener guess
     probs <- plogis(logits)
