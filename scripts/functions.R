@@ -83,7 +83,9 @@ run_interaction_sim <- function(
       evidence <- 0
       } else {
       # calculate distance from signal to boundaries
-      edge_dist <- ifelse(dist < 0.2, 0.2 - dist, dist - 0.8)
+      # TR: You are calculatating the distance to the 0.2 and 0.8 y value here, which basically makes more iconic patterns (e.g. 0.9) less boosted then 0.8  
+      #edge_dist <- ifelse(dist < 0.2, 0.2 - dist, dist - 0.8)
+      edge_dist <- ifelse(dist < 0.2, 0.2 - signal_y, signal_y - 0.8)
       # calculate the magnitude of decay/boost, exponentially (same for boost and decay)
       magnitude <- exp(-k * edge_dist)
       # determine sign of evidence (boost or decay)

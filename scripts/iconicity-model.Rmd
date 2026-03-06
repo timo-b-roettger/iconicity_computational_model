@@ -364,6 +364,12 @@ d.simulation <- rbind(
 ```
 
 ```{r iconicity}
+
+# normalization function
+normalize_01 <- function(x) {
+  return((x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE)))
+}
+
 # you can compute iconicity either from stored signals or produced tokens
 d.iconicity <- d.simulation %>%
   group_by(parameter_space) %>%
@@ -386,7 +392,11 @@ d.iconicity <- d.simulation %>%
   mutate(
     target_y = ifelse(type == "small", 0, 1),
     dist = abs(value - target_y),
-    iconicity = exp(-2 * dist)) %>%
+    # TR: new iconicity measure accoring to changes
+    # if in neutral space, zero iconicity, if in iconicity band,
+    iconicity = ifelse(dist>0.2, 0, exp(-5 * dist)),
+    iconicity_norm = normalize_01(iconicity)
+    ) %>%
   # collapse across referent types to get overall iconicity
   group_by(parameter_space, bins, sim, process) %>%
   summarise(iconicity = mean(iconicity), .groups = "drop")
