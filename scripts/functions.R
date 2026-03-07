@@ -1,6 +1,5 @@
 # Constants ------------------------------------------------------------------
 
-
 # Functions ------------------------------------------------------------------
 ## Iconicity simulation function ----------------------------------------
 # Main interaction loop function
@@ -11,8 +10,8 @@ run_interaction_sim <- function(
     n_rounds = 100, # number of interaction rounds
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise 
-    learning_strength = 0.02, # amount of added memory strengthening for words per round; corresponding to an half a % increase for a probability of 0.5
-    iconicity_weight = 0.2,  # multiplicator for iconicity
+    learning_strength = 0.0004, # amount of added memory strengthening for words per round; corresponding to 0.1 % increase for a probability of 0.5
+    iconicity_weight = 0.05,  # multiplicator for iconicity
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
     corrective_rate = 0.03, # how much stored signal moves toward prototype on failure
     lapse = 0.05 # soft lapse in probability space
@@ -21,7 +20,7 @@ run_interaction_sim <- function(
   # assign input data frame to history internally
   history <- data
   #clamp to [0,1] for signal
-  clamp01 <- function(x) pmax(0, pmin(0.95, x))
+  clamp01 <- function(x) pmax(0, pmin(1, x))
   #clamp to [0,0.95] for accuracy
   clamp02 <- function(x) pmax(0, pmin(0.95, x))
   
@@ -83,16 +82,21 @@ run_interaction_sim <- function(
       evidence <- 0
       } else {
       # calculate distance from signal to boundaries
-      # TR: You are calculatating the distance to the 0.2 and 0.8 y value here, which basically makes more iconic patterns (e.g. 0.9) less boosted then 0.8  
+      # TR: You are calculating the distance to the 0.2 and 0.8 y value here, which basically makes more iconic patterns (e.g. 0.9) less boosted then 0.8  
       #edge_dist <- ifelse(dist < 0.2, 0.2 - dist, dist - 0.8)
-      edge_dist <- ifelse(dist < 0.2, 0.2 - signal_y, signal_y - 0.8)
+      edge_dist <- ifelse(dist < 0.2, dist - 0.8, 0.2 - dist)
       # calculate the magnitude of decay/boost, exponentially (same for boost and decay)
       magnitude <- exp(-k * edge_dist)
+      # TR: normalize that magnitude to [0,1] manually, need to be done relatively to k later
+      min_magnitude = 20.08554
+      max_magnitude = 54.59815
+      magnitude_norm <- (magnitude - min_magnitude / max_magnitude - min_magnitude)
+      
       # determine sign of evidence (boost or decay)
-      if((target == 1 & dist > 0.8) | (target == 0 & dist < 0.2)) {
-        evidence <- magnitude
+      if(dist > 0.8) {
+        evidence <- -magnitude_norm
       } else {
-        evidence <- -magnitude
+        evidence <- magnitude_norm
       }
     }
     return(evidence)
@@ -123,7 +127,7 @@ run_interaction_sim <- function(
     # comment TR: likelihood is a probability so log(likelihood) is not in logit space
     # comment TR: but I also still not sure what lex-likelihood does here and why
     # comment TR: we need to clamp02 it here (clamp adjusted to 0.95 max)
-    logits <- qlogis(clamp02(agent_guess_vec)) + (iconicity_weight * icon_ev)
+    logits <- qlogis(clamp02(agent_guess_vec + (iconicity_weight * icon_ev)))
     
     # final output in probability space for success/failure calculation and storing of speaker listener guess
     probs <- plogis(logits)
@@ -175,10 +179,10 @@ run_interaction_sim <- function(
       # TR here we disconnected iconicity from p_guess, iconicity affected success rate, success rate affects p_guess, 
       # TR now iconicity affects success but also p_guess directly which can be additionally boosted by learning strength
       #speaker_guess[r] <- plogis(qlogis(speaker_guess[r]) + delta)
-      speaker_guess[r] <- plogis(qlogis(probs[r]) + delta)
+      speaker_guess[r] <- plogis(qlogis(clamp02(probs[r] + delta)))
       # listener also learns due to feedback, in logodds space, but final output in probability space
       #listener_guess[r] <- plogis(qlogis(listener_guess[r]) + delta)
-      listener_guess[r] <- plogis(qlogis(probs[r]) + delta)
+      listener_guess[r] <- plogis(qlogis(clamp02(probs[r] + delta)))
       
       #Adaptive communicative bias in Y, signal memory updates: success -> keep stored signal identical to produced signal, failure -> nudge toward prototype
       if(success==1) {

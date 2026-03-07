@@ -347,37 +347,35 @@ d.empty <- data.frame(
   stringsAsFactors = FALSE)
 
 # Generate one data frame with different simulations where params are switched on/off
+n_sim = 50
+
 d.simulation <- rbind(
-  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000) %>%
     mutate(parameter_space = "allParams"),
-  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, articulatory_production_bias = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, articulatory_production_bias = 0) %>%
     mutate(parameter_space = "noArticulatoryProductionBias"),
-  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, corrective_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, corrective_rate = 0) %>%
     mutate(parameter_space = "noCorrectiveRate"),
-  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, learning_strength = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, learning_strength = 0) %>%
     mutate(parameter_space = "noLearning"),
-  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, iconicity_weight = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, iconicity_weight = 0) %>%
     mutate(parameter_space = "noIconicity"),
   # Also add one simulation that resembles the old model
-  d.empty %>% run_interaction_sim(n_sim = 5, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0) %>%
     mutate(parameter_space = "onlyLearning"))
 ```
 
 ```{r iconicity}
 
-# normalization function
-normalize_01 <- function(x) {
-  return((x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE)))
-}
-
 # you can compute iconicity either from stored signals or produced tokens
 d.iconicity <- d.simulation %>%
   group_by(parameter_space) %>%
   # bin rounds for temporal smoothing
-  mutate(bins = cut(round, breaks = 20, labels = FALSE)) %>%
+  mutate(bins = cut(round, breaks = 10, labels = FALSE)) %>%
   # average within bin × type × simulation
   group_by(parameter_space, bins, type, sim) %>%
   summarise(
+    evidence = mean(evidence),
     y_learned   = mean(stored_y),
     y_produced  = mean(produced_y),
     x_produced  = mean(produced_x),   # kept for completeness
@@ -388,13 +386,13 @@ d.iconicity <- d.simulation %>%
     names_to = c("signal", "process"),
     values_to = "value",
     names_sep = "_") %>%
-  # only evaluate iconicity along y (semantic dimension)
+  #only evaluate iconicity along y (semantic dimension)
   mutate(
     target_y = ifelse(type == "small", 0, 1),
     dist = abs(value - target_y),
-    # TR: new iconicity measure accoring to changes
-    # if in neutral space, zero iconicity, if in iconicity band,
-    iconicity = ifelse(dist>0.2, 0, exp(-5 * dist)),
+    #TR: new iconicity measure according to changes
+    #if in neutral space, zero iconicity, if in iconicity band,
+    iconicity = ifelse(dist >= 0.2 & dist <= 0.8, 0, exp(-5 * dist)),
     iconicity_norm = normalize_01(iconicity)
     ) %>%
   # collapse across referent types to get overall iconicity
@@ -413,7 +411,7 @@ d.learned.iconicity <- d.iconicity %>%
                                   allParams = "All parameters",
                                   noArticulatoryProductionBias = "No production bias",
                                   noCorrectiveRate = "No adaptive comm bias",
-                                  noIconicity = "No iconicity",
+                                  noIconicity = "No iconicity learning boost",
                                   noLearning = "No free learning"))
 # Aggregated over bins
 d.learned.iconicity.mean <- d.learned.iconicity |> 
@@ -424,18 +422,17 @@ d.learned.iconicity.mean <- d.learned.iconicity |>
 d.learned.iconicity |> 
 ggplot(aes(x = bins, y = iconicity, group = sim,
            color = iconicity)) +
-  geom_path(size = 0.5, alpha = 0.2,
+  geom_path(size = 0.5, alpha = 0.05,
             color = "black") +
   geom_path(data = d.learned.iconicity.mean, 
             aes(group = 1), size = 2,
             color = "black") +
   geom_path(data = d.learned.iconicity.mean, 
             aes(group = 1), size = 1) +
-  #geom_hline(yintercept = exp(-2 * sqrt((0.5)^2 + (0.5)^2)), lty = "dashed") +
-  geom_hline(yintercept = exp(-2 * 0.5), lty = "dashed") +
   scale_color_viridis_c(begin = 0,
                         end = 1)+
-  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(limits = c(0,10), breaks = seq(0,10,2)) +
   labs(title = "Iconicity over time (learned tokens)",
        y = "Iconicity (high = iconic)", x = "Rounds in 100s") +
   theme_minimal() +
@@ -454,7 +451,7 @@ d.simulation_success <- d.simulation %>%
                                   allParams = "All parameters",
                                   noArticulatoryProductionBias = "No production bias",
                                   noCorrectiveRate = "No adaptive comm bias",
-                                  noIconicity = "No iconicity",
+                                  noIconicity = "No iconicity learning boost",
                                   noLearning = "No free learning")) |> 
   mutate(round_bin = cut(round, 100, labels = FALSE)) |> 
   group_by(parameter_space, sim, round_bin) %>%
@@ -471,11 +468,10 @@ d.simulation_success |>
   summarise(min = min(round_bin))
 
 
-
 # plot guessing probabiltiy
 ggplot(d.simulation_success,
        aes(x = round_bin, y = p_guess, group = sim)) +
-  geom_path(size = 0.5, alpha = 0.1,
+  geom_path(size = 0.5, alpha = 0.05,
             color = "black") +
   geom_path(data = d.simulation_success |>
               group_by(parameter_space, round_bin) |>
@@ -491,24 +487,6 @@ ggplot(d.simulation_success,
                      labels = c("0", "200", "400", "600", "800", "1000")) + 
   theme_minimal()
 
-# plot actual success 
-ggplot(d.simulation_success,
-       aes(x = round_bin, y = success, group = sim)) +
-  geom_path(size = 0.5, alpha = 0.1,
-            color = "black") +
-  geom_path(data = d.simulation_success |>
-              group_by(parameter_space, round_bin) |>
-              summarise(success = mean(success)),
-            group = 1,
-            lwd = 1) +
-  labs(title = "Success rate over time (across simulations)", 
-       y = "Success", 
-       x = "Round") +
-  facet_wrap( ~ parameter_space, ncol = 3) +
-  scale_y_continuous(limits = c(0,1)) + 
-  scale_x_continuous(breaks = c(0,20,40,60,80,100),
-                     labels = c("0", "200", "400", "600", "800", "1000")) + 
-  theme_minimal()
 ```
 
 ```{r eval == FALSE}
@@ -519,7 +497,7 @@ d.simulation_success_beginning <- d.simulation %>%
                                   allParams = "All parameters",
                                   noArticulatoryProductionBias = "No production bias",
                                   noCorrectiveRate = "No adaptive comm bias",
-                                  noIconicity = "No iconicity",
+                                  noIconicity = "No iconicity learning boost",
                                   noLearning = "No free learning")) |> 
   filter(round < 10) |> 
   group_by(parameter_space, sim, round) %>%
@@ -552,27 +530,28 @@ Figure \@ref(fig:signal-space) visualizes the distribution of produced signals a
 ```{r signal-space, fig.width=base.width*5, fig.height=base.height*4, fig.align='center', out.width='90%', fig.cap="(ref:signal-space)"}
 # Signal space use
 p.produced.signals <- d.simulation %>%
-  mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
-  filter(bins %in% c(1,25,50), parameter_space != "onlyLearning") %>%
+  mutate(bins = cut(round, breaks = 100, labels = FALSE)) %>%
+  filter(parameter_space != "onlyLearning") %>%
   mutate(parameter_space = recode(parameter_space,
                                   allParams = "All parameters",
                                   noArticulatoryProductionBias = "No articulatory bias",
                                   noCorrectiveRate = "No corrective rate",
-                                  noIconicity = "No iconicity",
+                                  noIconicity = "No iconicity learning boost",
                                   noLearning = "No learning strength",
                                   noReinforcement = "No reinforcement")) %>%
   group_by(bins, type, parameter_space) |> 
   summarise(produced_y = mean(produced_y, na.rm = T)) |> 
   ggplot(
-    aes(x = type,
+    aes(x = bins,
         y = produced_y,
-        shape = type,
-        fill = type)) +
-  geom_col() +
-  labs(title = "Evolution of produced signal space", x = "type", y = "y") +
-  facet_grid(bins ~ parameter_space) +
+        colour = type)) +
+  geom_path(aes(group = type)) +
+  geom_hline(yintercept = c(0.2,0.8), lty = "dashed") +
+  labs(title = "Evolution of produced signal space", bins = "type", y = "y") +
+  facet_grid(. ~ parameter_space) +
   #scale_x_continuous(limits = c(0,1)) +
-  #scale_y_continuous(limits = c(0,1)) +
+  scale_y_continuous(limits = c(0,1),
+                     breaks = c(0,0.2,0.5,0.8,1)) +
   scale_color_viridis_d(begin = 0.1, end = 0.9) +
   theme_minimal() +
   theme(legend.position = "bottom")
