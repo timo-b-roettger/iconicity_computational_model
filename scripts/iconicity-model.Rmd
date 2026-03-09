@@ -218,7 +218,8 @@ ggplot(df, aes(y = signal_y, x = signal_x, fill = evidence)) +
   theme_minimal() +
   theme(
     legend.position = "right",
-    axis.ticks.x = element_blank())
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank())
 
 # Alternative way of implementing signal ease function, contrastive and fully symmetric
 # Signal evidence function (contrastive version)
@@ -359,24 +360,33 @@ d.empty <- data.frame(
 
 # Generate one data frame with different simulations where params are switched on/off
 n_sim = 50
+n_rounds = 2000
 
 d.simulation <- rbind(
-  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = n_rounds) %>%
     mutate(parameter_space = "allParams"),
-  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, articulatory_production_bias = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = n_rounds, articulatory_production_bias = 0) %>%
     mutate(parameter_space = "noArticulatoryProductionBias"),
-  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, corrective_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = n_rounds, corrective_rate = 0) %>%
     mutate(parameter_space = "noCorrectiveRate"),
-  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, learning_strength = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = n_rounds, learning_strength = 0) %>%
     mutate(parameter_space = "noLearning"),
-  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, iconicity_weight = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = n_rounds, iconicity_weight = 0) %>%
     mutate(parameter_space = "noIconicity"),
   # Also add one simulation that resembles the old model
-  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 1000, articulatory_production_bias = 0, corrective_rate = 0) %>%
+  d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = n_rounds, articulatory_production_bias = 0, corrective_rate = 0) %>%
     mutate(parameter_space = "onlyLearning"))
+
+# store
+write_csv(d.simulation, "temp_data/temp_data.csv")
+
+
 ```
 
 ```{r iconicity}
+
+# read data
+d.simulation <- read_csv("temp_data/temp_data.csv")
 
 # you can compute iconicity either from stored signals or produced tokens
 d.iconicity <- d.simulation %>%
@@ -447,7 +457,7 @@ ggplot(aes(x = bins, y = iconicity, group = sim,
   scale_x_continuous(limits = c(0,50), breaks = seq(0,50,5),
                      labels = paste0(seq(0,10,1))) +
   labs(title = "Iconicity over time (learned tokens)",
-       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Rounds in 100s") +
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Rounds in 200s") +
   theme_minimal() +
   facet_wrap(~parameter_space, ncol = 3)
 ```
@@ -493,7 +503,7 @@ ggplot(d.simulation_success,
             lwd = 1) +
   labs(title = "Guess rate over time (across simulations)", 
        y = "Guess rate", 
-       x = "Round in 100s") +
+       x = "Round in 200s") +
   facet_wrap( ~ parameter_space, ncol = 3) +
   scale_y_continuous(limits = c(0,1)) + 
   scale_x_continuous(breaks = seq(0,50,5),
@@ -545,30 +555,28 @@ Figure \@ref(fig:signal-space) visualizes the distribution of produced signals a
 d_signal <- d.simulation %>%
   mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
   filter(parameter_space != "onlyLearning") %>%
-  mutate(parameter_space = recode(parameter_space,
+   mutate(parameter_space = recode(parameter_space,
                                   allParams = "All parameters",
-                                  noArticulatoryProductionBias = "No articulatory bias",
-                                  noCorrectiveRate = "No corrective rate",
+                                  noArticulatoryProductionBias = "No production bias",
+                                  noCorrectiveRate = "No adaptive comm bias",
                                   noIconicity = "No iconicity learning boost",
-                                  noLearning = "No learning strength",
-                                  noReinforcement = "No reinforcement")) %>%
+                                  noLearning = "No free learning")) |> 
   group_by(bins, type, parameter_space) |> 
   summarise(produced_y = mean(produced_y, na.rm = T)) 
 
 d_signal_sim <- d.simulation %>%
   mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
   filter(parameter_space != "onlyLearning") %>%
-  mutate(parameter_space = recode(parameter_space,
+   mutate(parameter_space = recode(parameter_space,
                                   allParams = "All parameters",
-                                  noArticulatoryProductionBias = "No articulatory bias",
-                                  noCorrectiveRate = "No corrective rate",
+                                  noArticulatoryProductionBias = "No production bias",
+                                  noCorrectiveRate = "No adaptive comm bias",
                                   noIconicity = "No iconicity learning boost",
-                                  noLearning = "No learning strength",
-                                  noReinforcement = "No reinforcement")) %>%
+                                  noLearning = "No free learning")) |> 
   group_by(bins, type, sim, parameter_space) |> 
   summarise(produced_y = mean(produced_y, na.rm = T)) 
 
-  ggplot(d_signal,
+ggplot(d_signal,
          aes(x = bins,
              y = produced_y,
         colour = type)) +
@@ -579,7 +587,9 @@ d_signal_sim <- d.simulation %>%
   geom_path(aes(group = type),
             size = 2) +
   geom_hline(yintercept = c(0.2,0.8), lty = "dashed") +
-  labs(title = "Evolution of produced signal space", bins = "type", y = "y") +
+  labs(title = "Evolution of produced signal space",
+       x = "Rounds in 200s",
+       bins = "type", y = "y") +
   facet_wrap(~ parameter_space,
              ncol = 3) +
   scale_y_continuous(limits = c(0,1),
