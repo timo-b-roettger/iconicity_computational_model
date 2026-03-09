@@ -471,12 +471,12 @@ d.simulation_success <- d.simulation %>%
   summarise(success = mean(success),
             p_guess = mean(p_guess)) 
 
-# trying to pull value at which saturation is reached
+# trying to pull value at which certain accuracy is reached
 d.simulation_success |> 
   group_by(parameter_space, round_bin) |> 
   summarise(p_guess = mean(p_guess)) |> 
   #group_by(parameter_space) |> 
-  filter(p_guess > 0.949) |> 
+  filter(p_guess > 0.75) |> 
   group_by(parameter_space) |> 
   summarise(min = min(round_bin))
 

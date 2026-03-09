@@ -13,7 +13,7 @@ run_interaction_sim <- function(
     learning_strength = 0.0004, # amount of added memory strengthening for words per round; corresponding to 0.1 % increase for a probability of 0.5
     iconicity_weight = 0.0004,  # multiplicator for iconicity; corresponding to 0.1 % increase for a probability of 0.5
     articulatory_production_bias = 0.15, # baseline production bias toward prototype
-    corrective_rate = 0.0004, # how much stored signal moves toward prototype on failure;corresponding to 0.1 % increase for a probability of 0.5
+    corrective_rate = 0.01, # how much stored signal moves toward prototype on failure;
     lapse = 0.05 # soft lapse in probability space
 ) {
   
