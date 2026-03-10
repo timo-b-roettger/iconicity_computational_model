@@ -1,6 +1,11 @@
 # Constants ------------------------------------------------------------------
 
 # Functions ------------------------------------------------------------------
+normalize_01 <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
+
 ## Iconicity simulation function ----------------------------------------
 # Main interaction loop function
 run_interaction_sim <- function(
