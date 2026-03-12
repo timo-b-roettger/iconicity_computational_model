@@ -356,11 +356,12 @@ d.empty <- data.frame(
   stored_y  = numeric(),
   produced_x = numeric(),
   produced_y = numeric(),
+  evidence = numeric(),
   stringsAsFactors = FALSE)
 
 # Generate one data frame with different simulations where params are switched on/off
-n_sim = 50
-n_rounds = 2000
+n_sim = 1
+n_rounds = 500
 
 d.simulation <- rbind(
   d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = n_rounds) %>%
@@ -390,11 +391,11 @@ d.simulation <- read_csv("temp_data/temp_data.csv")
 
 # you can compute iconicity either from stored signals or produced tokens
 d.iconicity <- d.simulation %>%
-  group_by(parameter_space) %>%
+  group_by(parameter_space, lexeme) %>%
   # bin rounds for temporal smoothing
   mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
   # average within bin × type × simulation
-  group_by(parameter_space, bins, type, sim) %>%
+  group_by(parameter_space, bins, type, sim, lexeme) %>%
   summarise(
     evidence = mean(evidence),
     y_learned   = mean(stored_y),
@@ -417,8 +418,9 @@ d.iconicity <- d.simulation %>%
     iconicity_norm = normalize_01(iconicity)
     ) %>%
   # collapse across referent types to get overall iconicity
-  group_by(parameter_space, bins, sim, process) %>%
-  summarise(iconicity = mean(iconicity), .groups = "drop")
+  group_by(parameter_space, bins, sim, process, lexeme) |>
+  #summarise(iconicity = mean(iconicity), .groups = "drop")
+  summarise(iconicity = mean(evidence), .groups = "drop")
 
 ```
 
@@ -460,6 +462,7 @@ ggplot(aes(x = bins, y = iconicity, group = sim,
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Rounds in 200s") +
   theme_minimal() +
   facet_wrap(~parameter_space, ncol = 3)
+
 ```
 
 We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no learning strength is applied, see Figure \@ref(fig:accuracy). This seems to suggest that slower development of iconicity is beneficial for learning?
@@ -481,14 +484,14 @@ d.simulation_success <- d.simulation %>%
   summarise(success = mean(success),
             p_guess = mean(p_guess)) 
 
-# trying to pull value at which certain accuracy is reached
-d.simulation_success |> 
-  group_by(parameter_space, round_bin) |> 
-  summarise(p_guess = mean(p_guess)) |> 
-  #group_by(parameter_space) |> 
-  filter(p_guess > 0.75) |> 
-  group_by(parameter_space) |> 
-  summarise(min = min(round_bin))
+# # trying to pull value at which certain accuracy is reached
+# d.simulation_success |> 
+#   group_by(parameter_space, round_bin) |> 
+#   summarise(p_guess = mean(p_guess)) |> 
+#   #group_by(parameter_space) |> 
+#   filter(p_guess > 0.75) |> 
+#   group_by(parameter_space) |> 
+#   summarise(min = min(round_bin))
 
 
 # plot guessing probabiltiy

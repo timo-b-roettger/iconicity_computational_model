@@ -72,7 +72,7 @@ run_interaction_sim <- function(
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
   signal_evidence <- function(signal_y, referent_type, k=5) { # change k for steeper or more shallow decay
-    target <- size_prototypes[referent_type]   # 0 or 1
+    target <- size_prototypes[referent_type][[1]]   # 0 or 1
     dist <- abs(signal_y - target)
     # exponential decay for stronger effect near or far away from target
     # TR: this function is the problem in the way it scales IMO
@@ -95,7 +95,7 @@ run_interaction_sim <- function(
       # TR: normalize that magnitude to [0,1] manually, need to be done relatively to k later
       min_magnitude = 20.08554
       max_magnitude = 54.59815
-      magnitude_norm <- (magnitude - min_magnitude / max_magnitude - min_magnitude)
+      magnitude_norm <- ((magnitude - min_magnitude) / (max_magnitude - min_magnitude))
       
       # determine sign of evidence (boost or decay)
       if(dist > 0.8) {
@@ -124,7 +124,7 @@ run_interaction_sim <- function(
     
     # Iconicity bias
     icon_ev <- sapply(1:n, function(k) {
-      signal_evidence(signal_y, referents_info$type[k])
+      signal_evidence(signal_y, referents_info$type[r][[1]])
     })
       
     # Combine in logodds space; lexical likelihood, the learned associative strength between lexeme and referent (agent_guess_vec), and iconicity
@@ -169,6 +169,9 @@ run_interaction_sim <- function(
       sig <- produce_signal(stored_y[r], ref$lexeme, ref$type, speaker_guess[r])
       x_prod <- sig[1]
       y_prod <- sig[2]
+      
+      # TR add evidence as variable into loop
+      evidence <- signal_evidence(y_prod, referents_info$type[r][[1]], k=5)
       
       # Listener inference (x+y)
       probs <- listener_guess_probability(listener_guess, x_prod, y_prod, referents_info)
@@ -215,10 +218,13 @@ run_interaction_sim <- function(
         speaker = speaker, 
         listener = listener,
         produced_x = x_prod, 
+        # remove the indexing
         produced_y = y_prod,
-        stored_y = stored_y[r],
-        p_guess = probs[r], 
-        success = success
+        stored_y = stored_y,
+        p_guess = probs, 
+        success = success,
+        # add evidence
+        evidence = evidence
       ))
     }
   }
