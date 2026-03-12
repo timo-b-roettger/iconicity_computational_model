@@ -72,7 +72,8 @@ run_interaction_sim <- function(
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
   signal_evidence <- function(signal_y, referent_type, k=5) { # change k for steeper or more shallow decay
-    target <- size_prototypes[referent_type][[1]]   # 0 or 1
+    # TR changed this and it broke
+    target <-  size_prototypes[referent_type] # 0 or 1
     dist <- abs(signal_y - target)
     # exponential decay for stronger effect near or far away from target
     # TR: this function is the problem in the way it scales IMO
@@ -124,6 +125,7 @@ run_interaction_sim <- function(
     
     # Iconicity bias
     icon_ev <- sapply(1:n, function(k) {
+      # changed this and it broke
       signal_evidence(signal_y, referents_info$type[r][[1]])
     })
       
