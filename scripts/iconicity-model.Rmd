@@ -360,8 +360,8 @@ d.empty <- data.frame(
   stringsAsFactors = FALSE)
 
 # Generate one data frame with different simulations where params are switched on/off
-n_sim = 1
-n_rounds = 500
+n_sim = 5
+n_rounds = 2000
 
 d.simulation <- rbind(
   d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = n_rounds) %>%

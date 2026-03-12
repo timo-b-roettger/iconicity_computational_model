@@ -126,7 +126,7 @@ run_interaction_sim <- function(
     # Iconicity bias
     icon_ev <- sapply(1:n, function(k) {
       # changed this and it broke
-      signal_evidence(signal_y, referents_info$type[r][[1]])
+      signal_evidence(signal_y, referents_info$type[k])
     })
       
     # Combine in logodds space; lexical likelihood, the learned associative strength between lexeme and referent (agent_guess_vec), and iconicity
