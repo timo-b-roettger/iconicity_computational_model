@@ -113,7 +113,7 @@ update_logit <- function(x, delta) {
 # The output of the final round is stored to be the input for the next generation. 
 # Learning bias only applies between generations, while noise along the y-dimension is reset to the initial value of first generation.
 
-lapse = 0.05
+#lapse = 0.05
 drift_sd_x = 0.01
 drift_sd_y = 0.05  # this should be the same at each generational overturn
 clamp01 <- function(x) pmax(0, pmin(1, x))
@@ -122,6 +122,9 @@ iconicity_weight = 0.0004
 learning_strength = 0.0004
 success_scale <- 1.2 # slightly more learning with success; or only learning with success???
 failure_scale <- 0.8 # also increase in learning with failure, but less so
+
+
+
 
 # INTERACTION LOOP (within and across generations)
 # Main interaction loop function
@@ -132,11 +135,11 @@ run_interaction_sim <- function(
     n_generations = 4, # no of generations
     n_rounds = 10, # number of interaction rounds; 10
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
-    drift_sd_y = 0.05,       # amount of variation introduced during production; motor noise; should be the same at eac generational overturn
-    learning_strength = 0.0004, # amount of added memory strengthening for referents per generational overturn; corresponding to 0.1 % increase for a probability of 0.5
+    drift_sd_y = 0.23,       # amount of variation introduced during production; motor noise; equivalent to approx. 10% chance of wandering into a pocket when the signal is at .5
+    learning_strength = 0.0004, # amount of added memory strengthening for referents as dependent on success; corresponding to 0.1 % increase for a probability of 0.5
     iconicity_weight = 0.0004,  # multiplicator for iconicity; corresponding to 0.1 % increase for a probability of 0.5
-    success_scale = 1.2, # slightly more learning with success; or only learning with success???
-    failure_scale = 0.8, # also increase in learning with failure, but less so
+    success_scale = 1.9, # more learning with success
+    failure_scale = 0.1, # also increase in learning with failure, but less so
     lapse = 0.05 # soft lapse in probability space
 ) {
   
@@ -149,7 +152,7 @@ run_interaction_sim <- function(
   produce_signal <- function(stored_y, lex_prototypes, size_prototypes, speaker_guess, k) {
     x <- rnorm(1, mean = lex_prototypes, sd = drift_sd_x)
     y <- rnorm(1, mean = stored_y,
-               sd = drift_sd_y * (1 + k * (0.5 - speaker_guess)))
+               sd = drift_sd_y * (1 + k * (0.5 - speaker_guess))) ## when prob = .5, sd = drift_sd_y, prob < .5, sd increase and vv
     c(x, clamp01(y)) ## I think X also needs to be clamped, as it otherwise also produces negative values with noise?
   }
   
@@ -161,7 +164,7 @@ run_interaction_sim <- function(
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
   signal_evidence <- function(produced_y, type, k=5) { # change k for steeper or more shallow decay
-    target <-  referents_info$size_prototypes[r] # 0 or 1
+    target <-  referents_info$size_prototypes[ref_id] # 0 or 1
     dist <- abs(produced_y - target)
     # For signals in the 'neutral' mid-part of the space, make evidence = 0; define boundaries for when evidence begin to matter
     if(dist >= 0.2 & dist <= 0.8) {
@@ -196,11 +199,10 @@ run_interaction_sim <- function(
     probs <- plogis(logits)
     return(list(probs = probs, evidence = icon_ev))
   }
-  
-  probs <- listener_guess_probability(listener_guess, produced_y, referents_info)
-  
-  # UPDATE LEARNING AT GENERATIONAL OVERTURN
-  update_logit <- function(x, delta) {
+
+  # UPDATE LEARNING AS DEPENDENT ON SUCCESS
+  update_logit <- function(x, learning_strength, success, success_scale = 1.9, failure_scale = 0.1) {
+    delta <- learning_strength * ifelse(success == 1, success_scale, failure_scale)
     plogis(qlogis(clamp02(x)) + delta)
   }
   
@@ -212,7 +214,8 @@ run_interaction_sim <- function(
     type = rep(c("small","large"), length.out = n_referents),
     lex_prototypes = seq(0, 1, length.out = n_referents),
     size_prototypes = ifelse(type == "small", 0, 1),
-    stored_y = rep(0.5, n_referents))
+    agentA_stored_y = rep(0.5, n_referents),
+    agentB_stored_y = rep(0.5, n_referents))
   
   simulation_log <- list()
   
@@ -221,10 +224,9 @@ run_interaction_sim <- function(
     
     for (gen in 1:n_generations) {
       
-      # Initialize agents; reset guessing rate at each generation but add learning strength
-      delta <- learning_strength * ifelse(success==1, success_scale, failure_scale)
-      agentA_guess <- rbeta(n_referents, 3, 9) %>% update_logit(delta)
-      agentB_guess <- rbeta(n_referents, 3, 9) %>% update_logit(delta)
+      # Initialize agents; reset representation strength at each generation
+      agentA_guess <- rbeta(n_referents, 3, 9)
+      agentB_guess <- rbeta(n_referents, 3, 9)
       
       for (round in 1:n_rounds) {
         # Shuffle referents so the order is different each round
@@ -249,7 +251,11 @@ run_interaction_sim <- function(
           # Store guesses before trial updates
           old_guess_A <- agentA_guess[ref_id]
           old_guess_B <- agentB_guess[ref_id]
-          old_stored_y <- referents_info$stored_y[ref_id]
+          if (speaker == "A") {
+            old_stored_y <- referents_info$agentA_stored_y[ref_id]
+          } else {
+            old_stored_y <- referents_info$agentB_stored_y[ref_id]
+          }
           
           # Signal production (speaker knows lexeme & size)
           signal <- produce_signal(
@@ -270,25 +276,29 @@ run_interaction_sim <- function(
           
           prob <- recognition$probs
           
-          # Update listener's guess for this referent
-          if (listener == "A") {
-            agentA_guess[ref_id] <- prob
-          } else {
-            agentB_guess[ref_id] <- prob
-          }
-          
           # Success or failure
           success <- rbinom(1, 1, prob)
           
-          # Update stored_y if success
+          # Update listener's guess for this referent as dependent on success or failure
+          if (listener == "A") {
+            agentA_guess[ref_id] <- update_logit(prob, learning_strength, success)
+          } else {
+            agentB_guess[ref_id] <- update_logit(prob, learning_strength, success)
+          }
+          
+          # Update stored_y of both listener and speaker if success; integrate over stored and produced y
           if (success == 1) {
-            referents_info$stored_y[ref_id] <- produced_y
+            referents_info$agentA_stored_y[ref_id] <- 
+              (produced_y + referents_info$agentA_stored_y[ref_id]) / 2
+            referents_info$agentB_stored_y[ref_id] <- 
+              (produced_y + referents_info$agentB_stored_y[ref_id]) / 2
           }
           
           # Store POST-UPDATE values
           new_guess_A <- agentA_guess[ref_id]
           new_guess_B <- agentB_guess[ref_id]
-          new_stored_y <- referents_info$stored_y[ref_id]
+          new_stored_y_A <- referents_info$agentA_stored_y[ref_id]
+          new_stored_y_B <- referents_info$agentB_stored_y[ref_id]
           
           # Log everything
           simulation_log[[length(simulation_log) + 1]] <- tibble(
@@ -296,7 +306,7 @@ run_interaction_sim <- function(
             lexeme = referents_info$lexeme[ref_id], type = referents_info$type[ref_id], produced_x = produced_x, produced_y = produced_y,
             prob = prob, evidence = recognition$evidence, success = success,
             old_guess_A = old_guess_A, new_guess_A = new_guess_A, old_guess_B = old_guess_B, new_guess_B = new_guess_B,
-            old_stored_y = old_stored_y, new_stored_y = new_stored_y
+            old_stored_y = old_stored_y, new_stored_y_A = new_stored_y_A, new_stored_y_B = new_stored_y_B
           )
         }
       }
@@ -316,16 +326,15 @@ d.empty <- data.frame(
   old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
   old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
 
-d.simulation <- d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 100, n_generations = 10) %>%
-  mutate(parameter_space = "allParams")
+d.simulation <- d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 10, n_generations = 10)
 
 
 d.iconicity <- d.simulation %>%
-  group_by(parameter_space, lexeme, generation) %>%
+  group_by(lexeme, generation) %>%
   # bin rounds for temporal smoothing
   mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
   # average within bin × type × simulation
-  group_by(parameter_space, bins, type, simulation, lexeme, generation) %>%
+  group_by(bins, type, simulation, lexeme, generation) %>%
   summarise(
     evidence = mean(evidence),
     y_oldLearned   = mean(old_stored_y),
@@ -348,7 +357,7 @@ d.iconicity <- d.simulation %>%
     iconicity = ifelse(dist >= 0.2 & dist <= 0.8, 0, exp(-5 * dist)),
     iconicity_norm = normalize_01(iconicity)) %>%
   # collapse across referent types to get overall iconicity
-  group_by(parameter_space, bins, simulation, process, lexeme, generation) |>
+  group_by(bins, simulation, process, lexeme, generation) |>
   #summarise(iconicity = mean(iconicity), .groups = "drop")
   summarise(iconicity = mean(evidence), .groups = "drop")
 
