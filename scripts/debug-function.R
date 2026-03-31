@@ -329,6 +329,89 @@ d.empty <- data.frame(
 d.simulation <- d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 10, n_generations = 10)
 
 
+# 4. CHECK SCALING OF SD FUNCTION ----------------------------------------
+# The sd of y at producing a signal is dependent on previous associative strength and previous signal
+# Check the scaling of this sd; what is the probability of the signal walking out of the 'pocket' if the previous guess is low?
+# That is, if your previous guess was a fail.
+sim_runs <- function(n,
+                     sd_base,
+                     k = 0.5,
+                     n_means = 20,
+                     mean_fun = NULL,
+                     associative_strength = seq(0, 1, length.out = 20)) {
+  
+  # generate means
+  means <- if (is.null(mean_fun)) {
+    seq(0.05, 1, length.out = n_means)
+  } else {
+    mean_fun(n_means)
+  }
+  
+  # full parameter grid
+  params <- expand_grid(
+    sd_base = sd_base,
+    mean = means,
+    assoc = associative_strength
+  ) %>%
+    mutate(
+      sd_eff = sd_base * (1 + k * (0.5 - assoc))
+    )
+  
+  # simulate
+  sims <- pmap(params, function(sd_base, mean, assoc, sd_eff) {
+    tibble(
+      value = clamp01(rnorm(n, mean = mean, sd = sd_eff)),
+      sd_base = sd_base,
+      sd_eff = sd_eff,
+      mean = mean,
+      assoc = assoc,
+      run = seq_len(n)
+    )
+  })
+  
+  bind_rows(sims)
+}
+
+
+test.sd <- sim_runs(
+  n = 100,
+  sd_base = c(.1, .23, .3),
+  k = 0.5,
+  n_means = 40)
+
+
+test.sd_long <- test.sd %>%
+  rename(stored_y = mean) %>%
+  mutate(
+    case = case_when(
+      stored_y >= 0.8 ~ "high",
+      stored_y <= 0.2 ~ "low",
+      TRUE ~ NA_character_)) %>%
+  filter(!is.na(case)) %>%
+  group_by(sd_base, sd_eff, stored_y, assoc, case) %>%
+  summarise(
+    probability = mean(
+      if (first(case) == "high") value <= 0.8 else value >= 0.2),
+    .groups = "drop")
+
+p.sd.high <- test.sd_long %>% 
+  filter(case == "high") %>%
+  ggplot(aes(x = stored_y, y = assoc, fill = probability)) +
+  geom_tile() +
+  scale_x_continuous(limits = c(.79,1)) +
+  facet_grid(case ~ sd_base, scales = "free_x") +
+  scale_fill_viridis_c(limits = c(0,1))
+
+p.sd.low <- p.sd.high %+%
+  (test.sd_long %>% filter(case == "low")) +
+  scale_x_continuous(limits = c(0,.21))
+
+p.sd.high / p.sd.low
+
+
+
+# 5. APPLY ADJUSTED FUNCTION ----------------------------------------
+# Calculate iconicity based on the current implementation of the model function
 d.iconicity <- d.simulation %>%
   group_by(lexeme, generation) %>%
   # bin rounds for temporal smoothing
