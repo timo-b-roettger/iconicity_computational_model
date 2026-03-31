@@ -113,19 +113,6 @@ update_logit <- function(x, delta) {
 # The output of the final round is stored to be the input for the next generation. 
 # Learning bias only applies between generations, while noise along the y-dimension is reset to the initial value of first generation.
 
-#lapse = 0.05
-drift_sd_x = 0.01
-drift_sd_y = 0.05  # this should be the same at each generational overturn
-clamp01 <- function(x) pmax(0, pmin(1, x))
-clamp02 <- function(x) pmax(0, pmin(0.95, x))
-iconicity_weight = 0.0004
-learning_strength = 0.0004
-success_scale <- 1.2 # slightly more learning with success; or only learning with success???
-failure_scale <- 0.8 # also increase in learning with failure, but less so
-
-
-
-
 # INTERACTION LOOP (within and across generations)
 # Main interaction loop function
 run_interaction_sim <- function(
@@ -136,7 +123,7 @@ run_interaction_sim <- function(
     n_rounds = 10, # number of interaction rounds; 10
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.23,       # amount of variation introduced during production; motor noise; equivalent to approx. 10% chance of wandering into a pocket when the signal is at .5
-    learning_strength = 0.0004, # amount of added memory strengthening for referents as dependent on success; corresponding to 0.1 % increase for a probability of 0.5
+    learning_strength = 0.001, # amount of added memory strengthening for referents as dependent on success; corresponding to 0.1 % increase for a probability of 0.5
     iconicity_weight = 0.0004,  # multiplicator for iconicity; corresponding to 0.1 % increase for a probability of 0.5
     success_scale = 1.9, # more learning with success
     failure_scale = 0.1, # also increase in learning with failure, but less so
@@ -163,36 +150,30 @@ run_interaction_sim <- function(
   
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
-  signal_evidence <- function(produced_y, type, k=5) { # change k for steeper or more shallow decay
-    target <-  referents_info$size_prototypes[ref_id] # 0 or 1
+   signal_evidence <- function(produced_y, target, k = 5) {
     dist <- abs(produced_y - target)
-    # For signals in the 'neutral' mid-part of the space, make evidence = 0; define boundaries for when evidence begin to matter
-    if(dist >= 0.2 & dist <= 0.8) {
+    
+    if (dist >= 0.2 & dist <= 0.8) {
       evidence <- 0
     } else {
-      # calculate distance from signal to boundaries
       edge_dist <- ifelse(dist < 0.2, dist - 0.8, 0.2 - dist)
-      # calculate the magnitude of decay/boost, exponentially (same for boost and decay)
+      
       magnitude <- exp(-k * edge_dist)
-      # TR: normalize that magnitude to [0,1] manually, need to be done relatively to k later
-      min_magnitude = 20.08554
-      max_magnitude = 54.59815
+      
+      min_magnitude <- 20.08554
+      max_magnitude <- 54.59815
       magnitude_norm <- ((magnitude - min_magnitude) / (max_magnitude - min_magnitude))
       
-      # determine sign of evidence (boost or decay)
-      if(dist > 0.8) {
-        evidence <- -magnitude_norm
-      } else {
-        evidence <- magnitude_norm
-      }
+      evidence <- ifelse(dist > 0.8, -magnitude_norm, magnitude_norm)
     }
+    
     return(evidence)
   }
   
   # LISTENER RECOGNITION PROBABILITY UPDATED ---lapse missing?
   listener_guess_probability <- function(listener_guess, produced_y, type, size_prototypes) {
     # Iconicity bias
-    icon_ev <- signal_evidence(produced_y, type)
+    icon_ev <- signal_evidence(produced_y, size_prototypes)
     # Combine in logodds space
     logits <- qlogis(clamp02(listener_guess + (iconicity_weight * icon_ev)))
     # Return final probability
@@ -251,11 +232,10 @@ run_interaction_sim <- function(
           # Store guesses before trial updates
           old_guess_A <- agentA_guess[ref_id]
           old_guess_B <- agentB_guess[ref_id]
-          if (speaker == "A") {
-            old_stored_y <- referents_info$agentA_stored_y[ref_id]
-          } else {
-            old_stored_y <- referents_info$agentB_stored_y[ref_id]
-          }
+          old_stored_y_A <- referents_info$agentA_stored_y[ref_id]
+          old_stored_y_B <- referents_info$agentB_stored_y[ref_id]
+          
+          old_stored_y <- if (speaker == "A") old_stored_y_A else old_stored_y_B
           
           # Signal production (speaker knows lexeme & size)
           signal <- produce_signal(
@@ -300,13 +280,14 @@ run_interaction_sim <- function(
           new_stored_y_A <- referents_info$agentA_stored_y[ref_id]
           new_stored_y_B <- referents_info$agentB_stored_y[ref_id]
           
+          
           # Log everything
           simulation_log[[length(simulation_log) + 1]] <- tibble(
             simulation = sim, generation = gen, round = round, trial = trial, referent = ref_id, speaker = speaker, listener = listener, 
             lexeme = referents_info$lexeme[ref_id], type = referents_info$type[ref_id], produced_x = produced_x, produced_y = produced_y,
             prob = prob, evidence = recognition$evidence, success = success,
             old_guess_A = old_guess_A, new_guess_A = new_guess_A, old_guess_B = old_guess_B, new_guess_B = new_guess_B,
-            old_stored_y = old_stored_y, new_stored_y_A = new_stored_y_A, new_stored_y_B = new_stored_y_B
+            old_stored_y_A = old_stored_y_A, old_stored_y_B = old_stored_y_B, new_stored_y_A = new_stored_y_A, new_stored_y_B = new_stored_y_B
           )
         }
       }
@@ -326,8 +307,82 @@ d.empty <- data.frame(
   old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
   old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
 
-d.simulation <- d.empty %>% run_interaction_sim(n_sim = n_sim, n_rounds = 10, n_generations = 10)
+d.simulation <- d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10)
 
+# Check whether the signal updates only on successes
+test_signal_update <- function(df) {
+  df %>%
+    mutate(
+      A_changed = new_stored_y_A != old_stored_y_A,
+      B_changed = new_stored_y_B != old_stored_y_B
+    ) %>%
+    summarise(
+      # violation should be 0 (no update on failure)
+      A_violation = mean(A_changed & success == 0),
+      B_violation = mean(B_changed & success == 0),
+      # missed should be ~ 0 (updates happen on success)
+      A_missed    = mean(!A_changed & success == 1),
+      B_missed    = mean(!B_changed & success == 1)
+    )
+}
+
+#signals should match as agents update signals identically; 0 = signals are synchronised, >0 = bug in shared update
+test_signal_sync <- function(df) {
+  df %>%
+    summarise(
+      mismatch = mean(abs(new_stored_y_A - new_stored_y_B) > 1e-10)
+    )
+}
+
+# Check whether probabilities are updated after each trial
+test_listener_update <- function(df) {
+  df %>%
+    mutate(
+      A_changed = new_guess_A != old_guess_A,
+      B_changed = new_guess_B != old_guess_B
+    ) %>%
+    summarise(
+      # wrong = 0, speaker should not update
+      A_wrong = mean(A_changed & listener != "A"),
+      B_wrong = mean(B_changed & listener != "B"),
+      # missed ~ 0 listener should update
+      A_missed = mean(!A_changed & listener == "A"),
+      B_missed = mean(!B_changed & listener == "B")
+    )
+}
+
+# belief is carried over, ~1 = perfect carry over, <1 = memory bug
+test_carryover <- function(df) {
+  
+  df_listener <- df %>%
+    mutate(
+      listener_old = if_else(listener == "A", old_guess_A, old_guess_B),
+      listener_new = if_else(listener == "A", new_guess_A, new_guess_B)
+    ) %>%
+    arrange(simulation, generation, referent, round, trial)
+  
+  df_listener %>%
+    group_by(simulation, generation, listener, referent) %>%
+    mutate(
+      prev_new = lag(listener_new),
+      correct = abs(listener_old - prev_new) < 1e-10
+    ) %>%
+    summarise(
+      carry_accuracy = mean(correct, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
+run_all_tests <- function(df) {
+  list(
+    signal_update = test_signal_update(df),
+    listener_update = test_listener_update(df),
+    carryover = test_carryover(df),
+    signal_sync = test_signal_sync(df)
+  )
+}
+
+run_all_tests(d.simulation)
 
 # 4. CHECK SCALING OF SD FUNCTION ----------------------------------------
 # The sd of y at producing a signal is dependent on previous associative strength and previous signal
@@ -411,37 +466,76 @@ p.sd.high / p.sd.low
 
 
 # 5. APPLY ADJUSTED FUNCTION ----------------------------------------
+normalize_01 <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
 # Calculate iconicity based on the current implementation of the model function
 d.iconicity <- d.simulation %>%
   group_by(lexeme, generation) %>%
   # bin rounds for temporal smoothing
-  mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
+  #mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
+  mutate(bins = (generation - 1) * 10 + round) %>%
   # average within bin × type × simulation
   group_by(bins, type, simulation, lexeme, generation) %>%
   summarise(
     evidence = mean(evidence),
-    y_oldLearned   = mean(old_stored_y),
-    y_newLearned   = mean(new_stored_y),
+    y_oldLearnedA = mean(old_stored_y_A),
+    y_oldLearnedB = mean(old_stored_y_B),
+    y_newLearnedA   = mean(new_stored_y_A),
+    y_newLearnedB = mean(new_stored_y_B),
     y_produced  = mean(produced_y),
     x_produced  = mean(produced_x),   # kept for completeness
     .groups = "drop") %>%
   # reshape for learned vs produced comparison
   pivot_longer(
-    cols = c(y_oldLearned, y_newLearned, y_produced),
+    cols = c(y_oldLearnedA, y_oldLearnedB, y_newLearnedA, y_newLearnedB, y_produced),
     names_to = c("signal", "process"),
     values_to = "value",
     names_sep = "_") %>%
   #only evaluate iconicity along y (semantic dimension)
-  mutate(
-    target_y = ifelse(type == "small", 0, 1),
-    dist = abs(value - target_y),
-    #TR: new iconicity measure according to changes
-    #if in neutral space, zero iconicity, if in iconicity band,
-    iconicity = ifelse(dist >= 0.2 & dist <= 0.8, 0, exp(-5 * dist)),
-    iconicity_norm = normalize_01(iconicity)) %>%
+  # mutate(
+  #   target_y = ifelse(type == "small", 0, 1),
+  #   dist = abs(value - target_y),
+  #   #TR: new iconicity measure according to changes
+  #   #if in neutral space, zero iconicity, if in iconicity band,
+  #   iconicity = ifelse(dist >= 0.2 & dist <= 0.8, 0, exp(-5 * dist)),
+  #   iconicity_norm = normalize_01(iconicity)) %>%
   # collapse across referent types to get overall iconicity
   group_by(bins, simulation, process, lexeme, generation) |>
   #summarise(iconicity = mean(iconicity), .groups = "drop")
   summarise(iconicity = mean(evidence), .groups = "drop")
+
+#iconicity trajectories
+d.learned.iconicity <- d.iconicity %>%
+  filter(process %in% c("newLearnedA", "newLearnedB")) %>%
+  group_by(generation, bins, simulation) %>% 
+  summarise(iconicity = mean(iconicity), .groups = "drop_last")
+
+# Aggregated over bins
+d.learned.iconicity.mean <- d.learned.iconicity |> 
+  group_by(bins) %>%
+  summarise(iconicity = mean(iconicity), .groups = "drop_last")
+
+d.learned.iconicity |> 
+  ggplot(aes(x = bins, y = iconicity, group = simulation,
+             color = iconicity)) +
+  geom_path(size = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_path(data = d.learned.iconicity.mean, 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data = d.learned.iconicity.mean, 
+            aes(group = 1), size = 1) +
+  scale_color_viridis_c(begin = 0,
+                        end = 1) +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(limits = c(0,10), breaks = seq(0,10,1),
+                     labels = paste0(seq(0,10,1))) +
+  labs(title = "Iconicity over time (learned tokens)",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generations (each with 10 rounds") +
+  theme_minimal()
+
+
 
 
