@@ -123,10 +123,10 @@ run_interaction_sim <- function(
     n_rounds = 10, # number of interaction rounds; 10
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.23,       # amount of variation introduced during production; motor noise; equivalent to approx. 10% chance of wandering into a pocket when the signal is at .5
-    learning_strength = 0.001, # amount of added memory strengthening for referents as dependent on success; corresponding to 0.1 % increase for a probability of 0.5
-    iconicity_weight = 0.0004,  # multiplicator for iconicity; corresponding to 0.1 % increase for a probability of 0.5
-    success_scale = 1.9, # more learning with success
-    failure_scale = 0.1, # also increase in learning with failure, but less so
+    learning_strength = 0.04, # amount of added memory strengthening for referents as dependent on success; corresponding to 0.1% increase for a probability of 0.5
+    iconicity_weight = 0.0004,  # multiplicator for iconicity; corresponding to 0.1% increase for a probability of 0.5
+    success_scale = 7.5, # more learning with success; 95% accuracy at the end of 10th round
+    failure_scale = 1, # also increase in learning with failure, but less so; 60% accuracy at the end of 10th round
     lapse = 0.05 # soft lapse in probability space
 ) {
   
@@ -182,7 +182,7 @@ run_interaction_sim <- function(
   }
 
   # UPDATE LEARNING AS DEPENDENT ON SUCCESS
-  update_logit <- function(x, learning_strength, success, success_scale = 1.9, failure_scale = 0.1) {
+  update_logit <- function(x, learning_strength, success, success_scale = 7.5, failure_scale = 1) {
     delta <- learning_strength * ifelse(success == 1, success_scale, failure_scale)
     plogis(qlogis(clamp02(x)) + delta)
   }
@@ -464,6 +464,81 @@ p.sd.low <- p.sd.high %+%
 p.sd.high / p.sd.low
 
 
+# CHECK SCALING OF LEARNING STRENGTH
+# change function of learning scale so that it scales directly to update in logodds
+# additive updates in log-odds space
+# At probability 0.5 (log-odds = 0):
+# success_scale = 0.3 increases probability to ~0.57
+# failure_scale = 0.04 decreases probability to ~0.49
+# update_logit <- function(x, success,
+#                          success_scale = 0.3,
+#                          failure_scale = 0.04) {
+#   
+#   delta <- ifelse(success == 1, success_scale, -failure_scale)
+#   
+#   plogis(qlogis(clamp02(x)) + delta)
+# }
+
+# helper function to simulate learning across 10 trials
+simulate_learning <- function(trials,
+                              n_paths = 4,
+                              start = rbeta(n_paths, 3, 9),
+                              success_scale = 7.5,
+                              failure_scale = 1,
+                              learning_strength = 0.04) {
+  
+  n_steps <- length(trials)
+  
+  p <- matrix(NA, nrow = n_steps + 1, ncol = n_paths)
+  p[1, ] <- start
+  
+  for (i in seq_len(n_steps)) {
+    
+    success <- trials[i]
+    
+    p[i + 1, ] <- p[i, ] |> 
+      vapply(function(x) {
+        update_logit(
+          x,
+          success = success,
+          success_scale = success_scale,
+          failure_scale = failure_scale,
+          learning_strength = learning_strength
+        )
+      }, numeric(1))
+  }
+  
+  p
+}
+
+simulate_learning(rep(1, 10))
+
+
+## CHECK ICONICITY WEIGTHING
+iconicity_effect_over_10 <- function(y, target = 0.8, weight = 0.01, rounds = 10) {
+  
+  ev <- signal_evidence(y, target)
+  
+  delta_logit <- rounds * weight * ev
+  
+  baseline_p <- 0.5
+  
+  final_p <- plogis(qlogis(baseline_p) + delta_logit)
+  
+  list(
+    signal = ev,
+    delta_logit = delta_logit,
+    final_p = final_p
+  )
+}
+
+ys <- seq(0.8, 0.9, by = 0.01)
+
+res <- lapply(ys, iconicity_effect_over_10,
+              target = 0.8,
+              weight = 0.1)
+
+do.call(rbind, lapply(res, as.data.frame))
 
 # 5. APPLY ADJUSTED FUNCTION ----------------------------------------
 normalize_01 <- function(x) {
@@ -472,12 +547,7 @@ normalize_01 <- function(x) {
 
 # Calculate iconicity based on the current implementation of the model function
 d.iconicity <- d.simulation %>%
-  group_by(lexeme, generation) %>%
-  # bin rounds for temporal smoothing
-  #mutate(bins = cut(round, breaks = 50, labels = FALSE)) %>%
-  mutate(bins = (generation - 1) * 10 + round) %>%
-  # average within bin × type × simulation
-  group_by(bins, type, simulation, lexeme, generation) %>%
+  group_by(type, simulation, lexeme, generation) %>%
   summarise(
     evidence = mean(evidence),
     y_oldLearnedA = mean(old_stored_y_A),
@@ -494,48 +564,65 @@ d.iconicity <- d.simulation %>%
     values_to = "value",
     names_sep = "_") %>%
   #only evaluate iconicity along y (semantic dimension)
-  # mutate(
-  #   target_y = ifelse(type == "small", 0, 1),
-  #   dist = abs(value - target_y),
-  #   #TR: new iconicity measure according to changes
-  #   #if in neutral space, zero iconicity, if in iconicity band,
-  #   iconicity = ifelse(dist >= 0.2 & dist <= 0.8, 0, exp(-5 * dist)),
-  #   iconicity_norm = normalize_01(iconicity)) %>%
+  mutate(
+    target_y = ifelse(type == "small", 0, 1),
+    dist = abs(value - target_y),
+    #TR: new iconicity measure according to changes
+    #if in neutral space, zero iconicity, if in iconicity band,
+    iconicity = ifelse(dist >= 0.2 & dist <= 0.8, 0, exp(-5 * dist)),
+    iconicity_norm = normalize_01(iconicity)) %>%
   # collapse across referent types to get overall iconicity
-  group_by(bins, simulation, process, lexeme, generation) |>
-  #summarise(iconicity = mean(iconicity), .groups = "drop")
-  summarise(iconicity = mean(evidence), .groups = "drop")
+  group_by(simulation, generation, process) |>
+  summarise(iconicity = mean(iconicity), 
+            evidence = mean(evidence), .groups = "drop")
 
 #iconicity trajectories
 d.learned.iconicity <- d.iconicity %>%
   filter(process %in% c("newLearnedA", "newLearnedB")) %>%
-  group_by(generation, bins, simulation) %>% 
-  summarise(iconicity = mean(iconicity), .groups = "drop_last")
+  group_by(generation, simulation, process) %>% 
+  summarise(iconicity = mean(iconicity),
+            evidence = mean(evidence), .groups = "drop")
+
+d.produced.iconicity <- d.iconicity %>%
+  filter(process == "produced") %>%
+  group_by(generation, simulation, process) %>% 
+  summarise(iconicity = mean(iconicity),
+            evidence = mean(evidence), .groups = "drop")
 
 # Aggregated over bins
-d.learned.iconicity.mean <- d.learned.iconicity |> 
-  group_by(bins) %>%
-  summarise(iconicity = mean(iconicity), .groups = "drop_last")
+d.learned.iconicity.mean <- d.learned.iconicity %>%
+  filter(process %in% c("newLearnedA", "newLearnedB")) %>% 
+  group_by(generation, process) %>%
+  summarise(iconicity = mean(iconicity),
+            evidence = mean(evidence), .groups = "drop")
 
-d.learned.iconicity |> 
-  ggplot(aes(x = bins, y = iconicity, group = simulation,
-             color = iconicity)) +
+# Aggregated over bins
+d.produced.iconicity.mean <- d.produced.iconicity %>%
+  filter(process == "produced") %>% 
+  group_by(generation, process) %>%
+  summarise(iconicity = mean(iconicity),
+            evidence = mean(evidence), .groups = "drop")
+
+#d.learned.iconicity |> 
+d.produced.iconicity |> 
+  ggplot(aes(x = generation, y = evidence, group = simulation,
+             color = evidence)) +
   geom_path(size = 0.5, alpha = 0.05,
             color = "black") +
-  geom_path(data = d.learned.iconicity.mean, 
+  #geom_path(data = d.learned.iconicity.mean, 
+  geom_path(data = d.produced.iconicity.mean, 
             aes(group = 1), size = 2,
             color = "black") +
-  geom_path(data = d.learned.iconicity.mean, 
+  #geom_path(data = d.learned.iconicity.mean,
+  geom_path(data =  d.produced.iconicity.mean, 
             aes(group = 1), size = 1) +
   scale_color_viridis_c(begin = 0,
                         end = 1) +
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(limits = c(0,10), breaks = seq(0,10,1),
-                     labels = paste0(seq(0,10,1))) +
-  labs(title = "Iconicity over time (learned tokens)",
-       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generations (each with 10 rounds") +
+  scale_x_continuous(limits = c(1,10), breaks = seq(1:10),
+                     labels = paste0(seq(1:10))) +
+  labs(title = "Iconicity over generations (learned tokens)",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
   theme_minimal()
-
-
 
 
