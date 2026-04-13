@@ -119,12 +119,12 @@ run_interaction_sim <- function(
     data,
     n_sim = 1, # number of simulations
     n_referents = 4, # number of unique referents in guessing game
-    n_generations = 4, # no of generations
+    n_generations = 10, # no of generations
     n_rounds = 10, # number of interaction rounds; 10
     drift_sd_x = 0.01,   # tiny drift to simulate less than perfect production; motor noise
     drift_sd_y = 0.23,       # amount of variation introduced during production; motor noise; equivalent to approx. 10% chance of wandering into a pocket when the signal is at .5
-    learning_strength = 0.04, # amount of added memory strengthening for referents as dependent on success; corresponding to 0.1% increase for a probability of 0.5
-    iconicity_weight = 0.0004,  # multiplicator for iconicity; corresponding to 0.1% increase for a probability of 0.5
+    learning_strength = 0.015, # amount of added memory strengthening for referents as dependent on success; corresponding to .01 increase for a probability of 0.5 on failure, and .09 increase on success
+    iconicity_weight = 0.04,  # multiplicator for iconicity; corresponding to 1% absolute increase for a probability of 0.5 (for the perfectly iconic signal)
     success_scale = 7.5, # more learning with success; 95% accuracy at the end of 10th round
     failure_scale = 1, # also increase in learning with failure, but less so; 60% accuracy at the end of 10th round
     lapse = 0.05 # soft lapse in probability space
@@ -150,7 +150,7 @@ run_interaction_sim <- function(
   
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
-   signal_evidence <- function(produced_y, target, k = 5) {
+   signal_evidence <- function(produced_y, target, k = 4) {
     dist <- abs(produced_y - target)
     
     if (dist >= 0.2 & dist <= 0.8) {
@@ -159,17 +159,17 @@ run_interaction_sim <- function(
       edge_dist <- ifelse(dist < 0.2, dist - 0.8, 0.2 - dist)
       
       magnitude <- exp(-k * edge_dist)
-      
-      min_magnitude <- 20.08554
-      max_magnitude <- 54.59815
-      magnitude_norm <- ((magnitude - min_magnitude) / (max_magnitude - min_magnitude))
+      #calculate bounds dynamically based on k
+      min_magnitude <- exp(-k * -0.6)
+      max_magnitude <- exp(-k * -0.8)
+      magnitude_norm <- (magnitude - min_magnitude) / (max_magnitude - min_magnitude)
       
       evidence <- ifelse(dist > 0.8, -magnitude_norm, magnitude_norm)
     }
     
     return(evidence)
-  }
-  
+   }
+
   # LISTENER RECOGNITION PROBABILITY UPDATED ---lapse missing?
   listener_guess_probability <- function(listener_guess, produced_y, type, size_prototypes) {
     # Iconicity bias
@@ -388,9 +388,9 @@ run_all_tests(d.simulation)
 # The sd of y at producing a signal is dependent on previous associative strength and previous signal
 # Check the scaling of this sd; what is the probability of the signal walking out of the 'pocket' if the previous guess is low?
 # That is, if your previous guess was a fail.
-sim_runs <- function(n,
+simulate_production <- function(n,
                      sd_base,
-                     k = 0.5,
+                     k = 1.5,
                      n_means = 20,
                      mean_fun = NULL,
                      associative_strength = seq(0, 1, length.out = 20)) {
@@ -428,10 +428,10 @@ sim_runs <- function(n,
 }
 
 
-test.sd <- sim_runs(
+test.sd <- simulate_production(
   n = 100,
   sd_base = c(.1, .23, .3),
-  k = 0.5,
+  k = 1.5,
   n_means = 40)
 
 
@@ -479,13 +479,13 @@ p.sd.high / p.sd.low
 #   plogis(qlogis(clamp02(x)) + delta)
 # }
 
-# helper function to simulate learning across 10 trials
+# helper function to check learning across 10 trials
 simulate_learning <- function(trials,
-                              n_paths = 4,
+                              n_paths = 8,
                               start = rbeta(n_paths, 3, 9),
                               success_scale = 7.5,
                               failure_scale = 1,
-                              learning_strength = 0.04) {
+                              learning_strength = 0.015) {
   
   n_steps <- length(trials)
   
@@ -510,35 +510,69 @@ simulate_learning <- function(trials,
   
   p
 }
+# For when there is 40 successful trials in a row
+simulate_learning(rep(1, 40))
 
-simulate_learning(rep(1, 10))
-
-
-## CHECK ICONICITY WEIGTHING
-iconicity_effect_over_10 <- function(y, target = 0.8, weight = 0.01, rounds = 10) {
+# CHECK iconicity scaling
+simulate_vector_learning <- function(trials, 
+                                     y_produced = 0.9, 
+                                     icon_weight = 0.04, 
+                                     k = 4) {
   
-  ev <- signal_evidence(y, target)
+  n_steps <- length(trials)
+  p <- numeric(n_steps + 1)
+  p[1] <- 0.25 # Start probability (1/4 chance)
   
-  delta_logit <- rounds * weight * ev
+  # Calculate iconicity evidence once
+  icon_ev <- signal_evidence(y_produced, target = 1, k = k)
   
-  baseline_p <- 0.5
+  # Your specific calibrations (at p=0.5)
+  # Success: +0.364 log-odds (~ +9% gain)
+  # Failure: +0.040 log-odds (~ +1% gain)
   
-  final_p <- plogis(qlogis(baseline_p) + delta_logit)
+  for (i in seq_len(n_steps)) {
+    current_logit <- qlogis(p[i])
+    
+    # Check if this specific trial was a success or failure
+    step_success <- trials[i]
+    trial_impact <- ifelse(step_success == 1, 0.364, 0.04)
+    
+    # Apply the iconicity boost for this trial
+    icon_impact <- icon_weight * icon_ev
+    
+    p[i+1] <- plogis(current_logit + trial_impact + icon_impact)
+  }
   
-  list(
-    signal = ev,
-    delta_logit = delta_logit,
-    final_p = final_p
-  )
+  return(p)
 }
 
-ys <- seq(0.8, 0.9, by = 0.01)
+# Define a history of 40 trials (e.g., struggling at first, then succeeding)
+my_trials <- c(0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1) 
 
-res <- lapply(ys, iconicity_effect_over_10,
-              target = 0.8,
-              weight = 0.1)
+# Call for an Iconic word
+iconic_results <- simulate_vector_learning(
+  trials = my_trials, 
+  y_produced = 0.95, 
+  icon_weight = 0.04, 
+  k = 4
+)
 
-do.call(rbind, lapply(res, as.data.frame))
+# Call for a Neutral word with the SAME trial history
+neutral_results <- simulate_vector_learning(
+  trials = my_trials, 
+  y_produced = 0.5, 
+  icon_weight = 0.04, 
+  k = 4
+)
+
+# Compare the learning paths
+data.frame(
+  Trial = 0:40,
+  Success = c(NA, my_trials),
+  Neutral_P = round(neutral_results, 3),
+  Iconic_P = round(iconic_results, 3),
+  Difference = round(iconic_results - neutral_results, 3)
+)
 
 # 5. APPLY ADJUSTED FUNCTION ----------------------------------------
 normalize_01 <- function(x) {
@@ -573,40 +607,35 @@ d.iconicity <- d.simulation %>%
     iconicity_norm = normalize_01(iconicity)) %>%
   # collapse across referent types to get overall iconicity
   group_by(simulation, generation, process) |>
-  summarise(iconicity = mean(iconicity), 
-            evidence = mean(evidence), .groups = "drop")
+  summarise(iconicity = mean(iconicity), .groups = "drop")
 
 #iconicity trajectories
 d.learned.iconicity <- d.iconicity %>%
   filter(process %in% c("newLearnedA", "newLearnedB")) %>%
   group_by(generation, simulation, process) %>% 
-  summarise(iconicity = mean(iconicity),
-            evidence = mean(evidence), .groups = "drop")
+  summarise(iconicity = mean(iconicity), .groups = "drop")
 
 d.produced.iconicity <- d.iconicity %>%
   filter(process == "produced") %>%
   group_by(generation, simulation, process) %>% 
-  summarise(iconicity = mean(iconicity),
-            evidence = mean(evidence), .groups = "drop")
+  summarise(iconicity = mean(iconicity), .groups = "drop")
 
-# Aggregated over bins
+# Aggregated over bins; shared iconicity across learners?
 d.learned.iconicity.mean <- d.learned.iconicity %>%
   filter(process %in% c("newLearnedA", "newLearnedB")) %>% 
-  group_by(generation, process) %>%
-  summarise(iconicity = mean(iconicity),
-            evidence = mean(evidence), .groups = "drop")
+  group_by(generation) %>%
+  summarise(iconicity = mean(iconicity), .groups = "drop")
 
 # Aggregated over bins
 d.produced.iconicity.mean <- d.produced.iconicity %>%
   filter(process == "produced") %>% 
-  group_by(generation, process) %>%
-  summarise(iconicity = mean(iconicity),
-            evidence = mean(evidence), .groups = "drop")
+  group_by(generation) %>%
+  summarise(iconicity = mean(iconicity), .groups = "drop")
 
 #d.learned.iconicity |> 
 d.produced.iconicity |> 
-  ggplot(aes(x = generation, y = evidence, group = simulation,
-             color = evidence)) +
+  ggplot(aes(x = generation, y = iconicity, group = simulation,
+             color = iconicity)) +
   geom_path(size = 0.5, alpha = 0.05,
             color = "black") +
   #geom_path(data = d.learned.iconicity.mean, 
@@ -623,6 +652,46 @@ d.produced.iconicity |>
                      labels = paste0(seq(1:10))) +
   labs(title = "Iconicity over generations (learned tokens)",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
+  theme_minimal()
+
+
+# Check learning
+d.simulation_success <- d.simulation %>%
+  select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
+  pivot_longer(
+    cols = c(new_guess_A, new_guess_B),
+    names_to = c("process", "guess", "agent"),
+    values_to = "associative_strength",
+    names_sep = "_") %>%
+  select(-guess) %>%
+  # filter down to rows for which the guess pertains to the listener
+  filter((listener == "A" & agent == "A") | (listener == "B" & agent == "B")) %>%
+  #cumulative rounds
+  mutate(total_round = (generation - 1) * 10 + round) %>%
+  group_by(simulation, generation, total_round) %>%
+  summarise(success = mean(success),
+            associative_strength = mean(associative_strength))
+
+d.simulation_success  %>%
+  ggplot(
+    aes(x = total_round, y = associative_strength, group = interaction(simulation, generation))) +
+  # Individual simulation paths
+  geom_path(linewidth = 0.5, alpha = 0.1, color = "black") +
+  # mean across all simulations
+  geom_line(data = d.simulation_success |>
+              group_by(total_round) |>
+              summarise(associative_strength = mean(associative_strength), .groups = "drop"),
+            aes(x = total_round, y = associative_strength),
+            inherit.aes = FALSE,
+            color = "blue", 
+            linewidth = 1) +
+  labs(title = "Learning Progress across Generations", 
+       subtitle = "10 Generations, 10 Rounds each (Total 100 steps)",
+       y = "Probability of Guessing", 
+       x = "Total Rounds (Cumulative)") +
+  scale_y_continuous(limits = c(0, 1)) + 
+  # breaks every 10 rounds to mark the start of a new generation
+  scale_x_continuous(breaks = seq(0, 100, 10)) +  
   theme_minimal()
 
 
