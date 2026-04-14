@@ -579,79 +579,58 @@ normalize_01 <- function(x) {
   return((x - min(x)) / (max(x) - min(x)))
 }
 
+# Measures proximity of Y to its size prototype
+signal_evidence <- function(produced_y, target, k = 4) {
+  dist <- abs(produced_y - target)
+  
+  if (dist >= 0.2 & dist <= 0.8) {
+    evidence <- 0
+  } else {
+    edge_dist <- ifelse(dist < 0.2, dist - 0.8, 0.2 - dist)
+    
+    magnitude <- exp(-k * edge_dist)
+    #calculate bounds dynamically based on k
+    min_magnitude <- exp(-k * -0.6)
+    max_magnitude <- exp(-k * -0.8)
+    magnitude_norm <- (magnitude - min_magnitude) / (max_magnitude - min_magnitude)
+    
+    evidence <- ifelse(dist > 0.8, -magnitude_norm, magnitude_norm)
+  }
+  
+  return(evidence)
+}
+
 # Calculate iconicity based on the current implementation of the model function
 d.iconicity <- d.simulation %>%
-  group_by(type, simulation, lexeme, generation) %>%
+  mutate(total_round = (generation - 1) * 10 + round) %>%
+  group_by(simulation, generation, total_round, type) %>%
   summarise(
     evidence = mean(evidence),
-    y_oldLearnedA = mean(old_stored_y_A),
-    y_oldLearnedB = mean(old_stored_y_B),
-    y_newLearnedA   = mean(new_stored_y_A),
-    y_newLearnedB = mean(new_stored_y_B),
-    y_produced  = mean(produced_y),
-    x_produced  = mean(produced_x),   # kept for completeness
-    .groups = "drop") %>%
-  # reshape for learned vs produced comparison
-  pivot_longer(
-    cols = c(y_oldLearnedA, y_oldLearnedB, y_newLearnedA, y_newLearnedB, y_produced),
-    names_to = c("signal", "process"),
-    values_to = "value",
-    names_sep = "_") %>%
-  #only evaluate iconicity along y (semantic dimension)
-  mutate(
-    target_y = ifelse(type == "small", 0, 1),
-    dist = abs(value - target_y),
-    #TR: new iconicity measure according to changes
-    #if in neutral space, zero iconicity, if in iconicity band,
-    iconicity = ifelse(dist >= 0.2 & dist <= 0.8, 0, exp(-5 * dist)),
-    iconicity_norm = normalize_01(iconicity)) %>%
-  # collapse across referent types to get overall iconicity
-  group_by(simulation, generation, process) |>
-  summarise(iconicity = mean(iconicity), .groups = "drop")
+    .groups = "drop")
 
-#iconicity trajectories
-d.learned.iconicity <- d.iconicity %>%
-  filter(process %in% c("newLearnedA", "newLearnedB")) %>%
-  group_by(generation, simulation, process) %>% 
-  summarise(iconicity = mean(iconicity), .groups = "drop")
+# Aggregated
+d.iconicity.mean <- d.iconicity |> 
+  group_by(total_round) %>%
+  summarise(evidence = mean(evidence))
 
-d.produced.iconicity <- d.iconicity %>%
-  filter(process == "produced") %>%
-  group_by(generation, simulation, process) %>% 
-  summarise(iconicity = mean(iconicity), .groups = "drop")
-
-# Aggregated over bins; shared iconicity across learners?
-d.learned.iconicity.mean <- d.learned.iconicity %>%
-  filter(process %in% c("newLearnedA", "newLearnedB")) %>% 
-  group_by(generation) %>%
-  summarise(iconicity = mean(iconicity), .groups = "drop")
-
-# Aggregated over bins
-d.produced.iconicity.mean <- d.produced.iconicity %>%
-  filter(process == "produced") %>% 
-  group_by(generation) %>%
-  summarise(iconicity = mean(iconicity), .groups = "drop")
-
-#d.learned.iconicity |> 
-d.produced.iconicity |> 
-  ggplot(aes(x = generation, y = iconicity, group = simulation,
-             color = iconicity)) +
+d.iconicity |> 
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
   geom_path(size = 0.5, alpha = 0.05,
             color = "black") +
-  #geom_path(data = d.learned.iconicity.mean, 
-  geom_path(data = d.produced.iconicity.mean, 
+  geom_path(data = d.iconicity.mean, 
             aes(group = 1), size = 2,
             color = "black") +
-  #geom_path(data = d.learned.iconicity.mean,
-  geom_path(data =  d.produced.iconicity.mean, 
+  geom_path(data =  d.iconicity.mean, 
             aes(group = 1), size = 1) +
-  scale_color_viridis_c(begin = 0,
-                        end = 1) +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c() +
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(limits = c(1,10), breaks = seq(1:10),
-                     labels = paste0(seq(1:10))) +
-  labs(title = "Iconicity over generations (learned tokens)",
-       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  labs(title = "Iconicity over generations",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal()
 
 
@@ -660,17 +639,20 @@ d.simulation_success <- d.simulation %>%
   select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
   pivot_longer(
     cols = c(new_guess_A, new_guess_B),
-    names_to = c("process", "guess", "agent"),
+    names_to = c("memory", "process", "agent"),
     values_to = "associative_strength",
     names_sep = "_") %>%
-  select(-guess) %>%
+  select(-process) %>%
   # filter down to rows for which the guess pertains to the listener
   filter((listener == "A" & agent == "A") | (listener == "B" & agent == "B")) %>%
   #cumulative rounds
   mutate(total_round = (generation - 1) * 10 + round) %>%
   group_by(simulation, generation, total_round) %>%
-  summarise(success = mean(success),
-            associative_strength = mean(associative_strength))
+  summarise(
+    prob = mean(prob, na.rm = TRUE),
+    success = mean(success, na.rm = TRUE),
+    associative_strength = mean(associative_strength, na.rm = TRUE),
+    .groups = "drop")
 
 d.simulation_success  %>%
   ggplot(
@@ -683,15 +665,56 @@ d.simulation_success  %>%
               summarise(associative_strength = mean(associative_strength), .groups = "drop"),
             aes(x = total_round, y = associative_strength),
             inherit.aes = FALSE,
+            color = "black", 
+            linewidth = 1) +
+  # mean prob across all simulations
+  geom_line(data = d.simulation_success |>
+              group_by(total_round) |>
+              summarise(prob = mean(prob), .groups = "drop"),
+            aes(x = total_round, y = prob),
+            inherit.aes = FALSE,
             color = "blue", 
             linewidth = 1) +
-  labs(title = "Learning Progress across Generations", 
-       subtitle = "10 Generations, 10 Rounds each (Total 100 steps)",
-       y = "Probability of Guessing", 
-       x = "Total Rounds (Cumulative)") +
+  labs(title = "Learning progress across generations",
+       y = "Associative strength", 
+       x = "Total rounds (cumulative)") +
   scale_y_continuous(limits = c(0, 1)) + 
   # breaks every 10 rounds to mark the start of a new generation
   scale_x_continuous(breaks = seq(0, 100, 10)) +  
   theme_minimal()
 
+# Look at the signal space
+d_signal <- d.simulation %>%
+  mutate(total_round = (generation - 1) * 10 + round) %>%
+  group_by(total_round, type, generation) |> 
+  summarise(produced_y = mean(produced_y, na.rm = T),
+            .groups = "drop") 
 
+d_signal_sim <- d.simulation %>%
+  mutate(total_round = (generation - 1) * 10 + round) %>%
+  group_by(total_round, type, generation, simulation) |> 
+  summarise(produced_y = mean(produced_y, na.rm = T),
+            .groups = "drop") 
+
+ggplot(d_signal,
+       aes(x = total_round,
+           y = produced_y,
+           colour = type)) +
+  geom_path(data = d_signal_sim,
+            aes(group = type),
+            size = 0.5,
+            alpha = 0.2) +
+  geom_path(aes(group = type),
+            size = 2) +
+  geom_hline(yintercept = c(0.2,0.8), lty = "dashed") +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "black", 
+             lty = "dotted") +
+  labs(title = "Evolution of produced signal space",
+       x = "Total rounds (cumulative)",
+       bins = "type", y = "y") +
+  scale_y_continuous(limits = c(0,1), breaks = c(0,0.2,0.5,0.8,1)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  scale_color_viridis_d(begin = 0.1, end = 0.9) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
