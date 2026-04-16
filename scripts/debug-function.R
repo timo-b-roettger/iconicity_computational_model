@@ -307,7 +307,7 @@ d.empty <- data.frame(
   old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
   old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
 
-d.simulation <- d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10)
+d.simulation <- d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.23, iconicity_weight = 0.04, learning_strength = 0.015)
 
 # Check whether the signal updates only on successes
 test_signal_update <- function(df) {
@@ -626,6 +626,7 @@ d.iconicity |>
   geom_vline(xintercept = seq(0, 100, by = 10), 
              color = "grey", 
              lty = "dotted") +
+  #scale_color_viridis_c(limits = c(-1, 1)) +
   scale_color_viridis_c() +
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
   scale_x_continuous(breaks = seq(0, 100, 10)) +
@@ -718,3 +719,94 @@ ggplot(d_signal,
   scale_color_viridis_d(begin = 0.1, end = 0.9) +
   theme_minimal() +
   theme(legend.position = "bottom")
+
+
+## GRID search
+compute_iconicity <- function(history, cutoff = 0.8) {
+  
+  d.iconicity <- history %>%
+    mutate(total_round = (generation - 1) * 10 + round) %>%
+    group_by(simulation, total_round) %>%
+    summarise(
+      evidence = mean(evidence),
+      .groups = "drop"
+    )
+  
+  # define late stage
+  max_round <- max(d.iconicity$total_round)
+  threshold <- max_round * cutoff
+  
+  # average evidence in late stage
+  d.iconicity %>%
+    filter(total_round >= threshold) %>%
+    summarise(mean_iconicity = mean(evidence, na.rm = TRUE)) %>%
+    pull(mean_iconicity)
+}
+
+# Generate a parameter grid to explore
+d.param_grid <- expand.grid(
+  iconicity_weight = seq(0, 0.2, length.out = 15),
+  learning_strength = seq(0, 0.1, length.out = 15))
+
+# Prepare results container
+d.grid_results <- d.param_grid %>%
+  mutate(iconicity = NA_real_,
+         history = vector("list", n()))
+
+for (i in seq_len(nrow(d.param_grid))) {
+  
+  params <- d.param_grid[i, ]
+  
+  # empty structure for simulation log
+  empty_df <- data.frame(
+    sim = integer(), gen = integer(), round = integer(), trial = integer(), 
+    referent = integer(), speaker = character(), listener = character(), type = character(), lexeme = character(),
+    produced_x = numeric(), produced_y = numeric(), prob = integer(), success = integer(), evidence = integer(),
+    old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
+    old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
+  
+  # run simulation
+  history <- run_interaction_sim(
+    data = empty_df,
+    n_sim = 10, 
+    n_referents = 4,
+    n_generations = 10,
+    n_rounds = 10,
+    drift_sd_x = 0.01,   
+    drift_sd_y = 0.23,
+    learning_strength = params$learning_strength,
+    iconicity_weight = params$iconicity_weight,
+    success_scale = 7.5, 
+    failure_scale = 1,
+    lapse = 0.05)
+  
+  # store full dataframe
+  d.grid_results$history[[i]] <- history
+  
+  # compute iconicity score
+  d.grid_results$iconicity[i] <- compute_iconicity(history)
+  
+  message("Completed parameter set ", i, " of ", nrow(d.param_grid))
+}
+
+d.full.history <- d.grid_results %>%
+  unnest(history)
+
+d.grid_results %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+  ggplot(
+    aes(
+      x = factor(learning_strength),
+      y = factor(iconicity_weight),
+      fill = iconicity)) +
+  geom_tile() +
+  geom_point(
+    data = . %>%
+      filter(iconicity == max(iconicity)),
+    shape = 4) +
+  scale_fill_viridis_c() +
+  #facet_grid(`articulatory bias` ~ `corrective rate`, labeller = label_both) +
+  theme_minimal() +
+  guides(color = "none") +
+  labs(x = "Learning strength", y = "Iconicity weighting", fill = "Iconicity")
+
