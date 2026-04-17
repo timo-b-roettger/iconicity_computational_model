@@ -602,16 +602,26 @@ signal_evidence <- function(produced_y, target, k = 4) {
 
 # Calculate iconicity based on the current implementation of the model function
 d.iconicity <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 10 + round) %>%
-  group_by(simulation, generation, total_round, type) %>%
+  mutate(
+    total_round = (generation - 1) * 10 + round,
+    strength = abs(evidence)) %>%
+  group_by(simulation, generation, total_round, type, lexeme) %>%
   summarise(
     evidence = mean(evidence),
+    strength = mean(strength),
+    .groups = "drop") %>%
+  group_by(simulation, generation, total_round) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
     .groups = "drop")
 
 # Aggregated
 d.iconicity.mean <- d.iconicity |> 
   group_by(total_round) %>%
-  summarise(evidence = mean(evidence))
+  summarise(evidence = mean(evidence),
+            strength = mean(strength),
+            .groups = "drop")
 
 d.iconicity |> 
   ggplot(aes(x = total_round, y = evidence, group = simulation,
@@ -634,6 +644,21 @@ d.iconicity |>
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal()
 
+ggplot(d.iconicity.mean, aes(x = total_round)) +
+  geom_line(aes(y = direction), size = 1.2, color = "black") +
+  geom_line(aes(y = strength), size = 1.2, linetype = "dashed") +
+  labs(
+    title = "Iconicity over generations",
+    y = "Direction (solid) / Strength (dashed)",
+    x = "Generation"
+  ) +
+  theme_minimal()
+
+d.iconicity %>%
+  ggplot(aes(x = total_round, y = evidence, group = simulation)) +
+  geom_line(alpha = 0.05) +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", size = 1.5) +
+  theme_minimal()
 
 # Check learning
 d.simulation_success <- d.simulation %>%
@@ -746,7 +771,8 @@ compute_iconicity <- function(history, cutoff = 0.8) {
 # Generate a parameter grid to explore
 d.param_grid <- expand.grid(
   iconicity_weight = seq(0, 0.2, length.out = 15),
-  learning_strength = seq(0, 0.1, length.out = 15))
+  learning_strength = seq(0, 0.1, length.out = 15),
+  drift_sd_y = seq(0.01, 0.6, length.out = 15))
 
 # Prepare results container
 d.grid_results <- d.param_grid %>%
@@ -773,7 +799,7 @@ for (i in seq_len(nrow(d.param_grid))) {
     n_generations = 10,
     n_rounds = 10,
     drift_sd_x = 0.01,   
-    drift_sd_y = 0.23,
+    drift_sd_y = params$drift_sd_y,
     learning_strength = params$learning_strength,
     iconicity_weight = params$iconicity_weight,
     success_scale = 7.5, 
@@ -792,8 +818,11 @@ for (i in seq_len(nrow(d.param_grid))) {
 d.full.history <- d.grid_results %>%
   unnest(history)
 
-d.grid_results %>%
-  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+d.grid_results %<>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3)))
+
+p.grid.sd.set <- d.grid_results %>%
+  filter(drift_sd_y == 0.221) %>%
   ggplot(
     aes(
       x = factor(learning_strength),
@@ -809,4 +838,20 @@ d.grid_results %>%
   theme_minimal() +
   guides(color = "none") +
   labs(x = "Learning strength", y = "Iconicity weighting", fill = "Iconicity")
+
+p.grid.learning.set <- p.grid.sd.set %+%
+  (d.grid_results %>%
+     filter(learning_strength == 0.014)) +
+  aes(x = factor(drift_sd_y)) +
+  labs(x = "SD along y")
+
+p.grid.iconicity.set <- p.grid.sd.set %+%
+  (d.grid_results %>%
+     filter(iconicity_weight == 0.043)) +
+  aes(y = factor(drift_sd_y)) +
+  labs(y = "SD along y")
+
+p.grid.sd.set
+p.grid.learning.set
+p.grid.iconicity.set
 
