@@ -419,8 +419,8 @@ d.iconicity <- d.simulation %>%
     ) %>%
   # collapse across referent types to get overall iconicity
   group_by(parameter_space, bins, sim, process, lexeme) |>
-  #summarise(iconicity = mean(iconicity), .groups = "drop")
-  summarise(iconicity = mean(evidence), .groups = "drop")
+  summarise(iconicity = mean(iconicity), .groups = "drop")
+  #summarise(iconicity = mean(evidence), .groups = "drop")
 
 ```
 
