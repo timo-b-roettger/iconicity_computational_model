@@ -770,8 +770,8 @@ compute_iconicity <- function(history, cutoff = 0.8) {
 
 # Generate a parameter grid to explore
 d.param_grid <- expand.grid(
-  iconicity_weight = seq(0, 0.2, length.out = 15),
-  learning_strength = seq(0, 0.1, length.out = 15),
+  iconicity_weight = seq(0, 0.3, length.out = 15),
+  learning_strength = seq(0, 0.2, length.out = 15),
   drift_sd_y = seq(0.01, 0.6, length.out = 15))
 
 # Prepare results container
@@ -815,6 +815,8 @@ for (i in seq_len(nrow(d.param_grid))) {
   message("Completed parameter set ", i, " of ", nrow(d.param_grid))
 }
 
+saveRDS(d.grid_results, file = "grid-search-check.rds", compress = T)
+
 d.full.history <- d.grid_results %>%
   unnest(history)
 
@@ -822,7 +824,7 @@ d.grid_results %<>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3)))
 
 p.grid.sd.set <- d.grid_results %>%
-  filter(drift_sd_y == 0.221) %>%
+  filter(drift_sd_y == 0.01) %>%
   ggplot(
     aes(
       x = factor(learning_strength),
@@ -841,17 +843,61 @@ p.grid.sd.set <- d.grid_results %>%
 
 p.grid.learning.set <- p.grid.sd.set %+%
   (d.grid_results %>%
-     filter(learning_strength == 0.014)) +
+     filter(learning_strength == 0)) +
   aes(x = factor(drift_sd_y)) +
   labs(x = "SD along y")
 
 p.grid.iconicity.set <- p.grid.sd.set %+%
   (d.grid_results %>%
-     filter(iconicity_weight == 0.043)) +
+     filter(iconicity_weight == 0)) +
   aes(y = factor(drift_sd_y)) +
   labs(y = "SD along y")
 
 p.grid.sd.set
 p.grid.learning.set
 p.grid.iconicity.set
+
+## Also look at the probs
+d.grid.results.learning <- d.full.history %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+  group_by(simulation, generation, iconicity_weight, learning_strength, drift_sd_y) %>%
+  summarise(
+    prob = mean(prob),
+    .groups = "drop")
+
+p.grid.sd.set.learning <- d.grid.results.learning %>%
+  filter(drift_sd_y == 0.221) %>%
+  ggplot(
+    aes(
+      x = factor(learning_strength),
+      y = factor(iconicity_weight),
+      fill = prob)) +
+  geom_tile() +
+  geom_point(
+    data = . %>%
+      filter(prob == max(prob)),
+    shape = 4) +
+  scale_fill_viridis_c() +
+  facet_wrap(~generation) +
+  theme_minimal() +
+  guides(color = "none") +
+  labs(x = "Learning strength", y = "Iconicity weighting", fill = "Learning")
+
+p.grid.learning.set.learning <- p.grid.sd.set.learning %+%
+  (d.grid.results.learning %>%
+     filter(learning_strength == 0.014)) +
+  aes(x = factor(drift_sd_y)) +
+  labs(x = "SD along y")
+
+p.grid.iconicity.set.learning <- p.grid.sd.set.learning %+%
+  (d.grid.results.learning %>%
+     filter(iconicity_weight == 0.043)) +
+  aes(y = factor(drift_sd_y)) +
+  labs(y = "SD along y")
+
+p.grid.sd.set.learning
+p.grid.learning.set.learning
+p.grid.iconicity.set.learning
+
+
 
