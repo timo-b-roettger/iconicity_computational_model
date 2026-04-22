@@ -243,7 +243,7 @@ run_interaction_sim <- function(
             referents_info$lex_prototypes[ref_id],
             referents_info$size_prototypes[ref_id],
             speaker_guess[ref_id],
-            k = 0.5)
+            k = 1.5)
           produced_x <- signal[1]
           produced_y <- signal[2]
           
@@ -307,7 +307,7 @@ d.empty <- data.frame(
   old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
   old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
 
-d.simulation <- d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.23, iconicity_weight = 0.04, learning_strength = 0.015)
+d.simulation <- d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.5, iconicity_weight = 0.3, learning_strength = 0.015)
 
 # Check whether the signal updates only on successes
 test_signal_update <- function(df) {
@@ -384,7 +384,7 @@ run_all_tests <- function(df) {
 
 run_all_tests(d.simulation)
 
-# 4. CHECK SCALING OF SD FUNCTION ----------------------------------------
+# 4. CHECK SCALING ----------------------------------------
 # The sd of y at producing a signal is dependent on previous associative strength and previous signal
 # Check the scaling of this sd; what is the probability of the signal walking out of the 'pocket' if the previous guess is low?
 # That is, if your previous guess was a fail.
@@ -463,6 +463,126 @@ p.sd.low <- p.sd.high %+%
 
 p.sd.high / p.sd.low
 
+#estimate probability of walking into a pocket
+pocket_prob <- function(drift_sd_y,
+                        n = 1e5,
+                        stored_y = 0.5,
+                        speaker_guess = 0.5,
+                        k = 0.5) {
+  
+  # Compute effective standard deviation
+  sd_effective <- drift_sd_y * (1 + k * (0.5 - speaker_guess))
+  
+  # Draw samples from normal distribution
+  y <- rnorm(n, mean = stored_y, sd = sd_effective)
+  
+  # Clamp to [0, 1]
+  y <- pmax(0, pmin(1, y))
+  
+  # Return probability of walking into a pocket
+  # (below 0.2 or above 0.8)
+  mean(y < 0.2 | y > 0.8)
+}
+
+# find drift_sd_y that yields a target probability of walking into a pocket
+find_drift_sd_y_sim <- function(target_prob,
+                                speaker_guess = 0.5,
+                                k = 0.5,
+                                lower = 0.001,
+                                upper = 1,
+                                tol = 1e-4) {
+  
+  f <- function(drift_sd_y) {
+    pocket_prob(
+      drift_sd_y = drift_sd_y,
+      speaker_guess = speaker_guess,
+      k = k
+    ) - target_prob
+  }
+  
+  # Solve for drift_sd_y where simulated prob == target
+  uniroot(f, lower = lower, upper = upper, tol = tol)$root
+}
+
+
+#speaker_guess = 0.5 (no scaling effect from k)
+find_drift_sd_y_sim(0.25, speaker_guess = 0.5, k = 1.5)
+
+#lower confidence (more noise)
+find_drift_sd_y_sim(0.01, speaker_guess = 0.3, k = 1.5)
+
+#high confidence (less noise)
+find_drift_sd_y_sim(0.10, speaker_guess = 0.8, k = 1.5)
+
+
+# Check both scaling probs for walking in and out of a pocket
+# --- ENTRY: from middle (0.5) into pockets ---
+p_enter <- function(sd_base,
+                    n = 5e4,
+                    speaker_guess = 0.5,
+                    k = 1.5) {
+  
+  sd_eff <- sd_base * (1 + k * (0.5 - speaker_guess))
+  
+  y <- clamp01(rnorm(n, mean = 0.5, sd = sd_eff))
+  
+  mean(y < 0.2 | y > 0.8)
+}
+
+
+# --- EXIT: from pockets back toward center ---
+p_exit <- function(sd_base,
+                   n = 5e4,
+                   speaker_guess = 0.5,
+                   k = 1.5) {
+  
+  sd_eff <- sd_base * (1 + k * (0.5 - speaker_guess))
+  
+  # simulate both pockets
+  y_high <- clamp01(rnorm(n, mean = 0.8, sd = sd_eff))
+  y_low  <- clamp01(rnorm(n, mean = 0.2, sd = sd_eff))
+  
+  # probability of leaving pocket
+  p_high <- mean(y_high <= 0.8)
+  p_low  <- mean(y_low  >= 0.2)
+  
+  mean(c(p_high, p_low))
+}
+
+
+# --- Joint loss function ---
+loss_fn <- function(sd_base,
+                    target_enter = 0.10,
+                    target_exit  = 0.10,
+                    w_enter = 1,
+                    w_exit  = 1) {
+  
+  pe <- p_enter(sd_base)
+  px <- p_exit(sd_base)
+  
+  # squared error loss
+  w_enter * (pe - target_enter)^2 +
+    w_exit  * (px - target_exit)^2
+}
+
+
+# --- Find best compromise sd ---
+find_optimal_sd <- function(...) {
+  optimize(loss_fn, interval = c(0.01, 1), ...)$minimum
+}
+
+sd_opt <- find_optimal_sd(
+  target_enter = 0.10,
+  target_exit  = 0.10
+)
+
+sd_opt
+
+
+# --- Check what you actually get ---
+p_enter(sd_opt)
+p_exit(sd_opt)
+
 
 # CHECK SCALING OF LEARNING STRENGTH
 # change function of learning scale so that it scales directly to update in logodds
@@ -512,6 +632,39 @@ simulate_learning <- function(trials,
 }
 # For when there is 40 successful trials in a row
 simulate_learning(rep(1, 40))
+
+# find learning strenght for reaching target 0.95 for any number of rounds with only successes
+find_learning_strength_closed <- function(
+    target = 0.95,
+    n_rounds,
+    trials_per_round = 4,
+    start,
+    success_scale = 7.5
+) {
+  
+  n_trials <- n_rounds * trials_per_round
+  
+  # Work in logit space
+  logit <- function(p) qlogis(clamp02(p))
+  
+  # Average starting logit
+  start_logit <- mean(logit(start))
+  target_logit <- logit(target)
+  
+  # Closed-form solution
+  (target_logit - start_logit) / (n_trials * success_scale)
+}
+
+start_vals <- rbeta(8, 3, 9)
+
+ls_closed <- find_learning_strength_closed(
+  target = 0.95,
+  n_rounds = 3,
+  start = start_vals)
+
+ls_closed
+
+
 
 # CHECK iconicity scaling
 simulate_vector_learning <- function(trials, 
@@ -644,22 +797,6 @@ d.iconicity |>
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal()
 
-ggplot(d.iconicity.mean, aes(x = total_round)) +
-  geom_line(aes(y = direction), size = 1.2, color = "black") +
-  geom_line(aes(y = strength), size = 1.2, linetype = "dashed") +
-  labs(
-    title = "Iconicity over generations",
-    y = "Direction (solid) / Strength (dashed)",
-    x = "Generation"
-  ) +
-  theme_minimal()
-
-d.iconicity %>%
-  ggplot(aes(x = total_round, y = evidence, group = simulation)) +
-  geom_line(alpha = 0.05) +
-  stat_summary(aes(group = 1), fun = mean, geom = "line", size = 1.5) +
-  theme_minimal()
-
 # Check learning
 d.simulation_success <- d.simulation %>%
   select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
@@ -770,9 +907,11 @@ compute_iconicity <- function(history, cutoff = 0.8) {
 
 # Generate a parameter grid to explore
 d.param_grid <- expand.grid(
-  iconicity_weight = seq(0, 0.3, length.out = 15),
-  learning_strength = seq(0, 0.2, length.out = 15),
-  drift_sd_y = seq(0.01, 0.6, length.out = 15))
+  iconicity_weight = seq(0, 0.5, length.out = 8),
+  learning_strength = seq(0, 0.05, length.out = 8), # if reaching ceiling within 3 rounds is the target, then this ceiling should be 0.045
+  drift_sd_y = seq(0.09, 0.5, length.out = 8)) # lower bound = 1% chance of wandering into a pocket when signal is 0.3; 
+                                              # upper bound = 25% chance of wandering into a pocket when your guess is 0.8; 
+                                              # 0.45 is also the arrived at sd for a 50/50 chance of walking in and out of a pocket when guess is 0.5
 
 # Prepare results container
 d.grid_results <- d.param_grid %>%
@@ -794,7 +933,7 @@ for (i in seq_len(nrow(d.param_grid))) {
   # run simulation
   history <- run_interaction_sim(
     data = empty_df,
-    n_sim = 10, 
+    n_sim = 100, 
     n_referents = 4,
     n_generations = 10,
     n_rounds = 10,
@@ -815,7 +954,7 @@ for (i in seq_len(nrow(d.param_grid))) {
   message("Completed parameter set ", i, " of ", nrow(d.param_grid))
 }
 
-saveRDS(d.grid_results, file = "grid-search-check.rds", compress = T)
+saveRDS(d.grid_results, file = "grid-search-check-moreSims.rds", compress = T)
 
 d.full.history <- d.grid_results %>%
   unnest(history)
@@ -824,7 +963,7 @@ d.grid_results %<>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3)))
 
 p.grid.sd.set <- d.grid_results %>%
-  filter(drift_sd_y == 0.01) %>%
+  filter(drift_sd_y == 0.221) %>%
   ggplot(
     aes(
       x = factor(learning_strength),
@@ -843,13 +982,13 @@ p.grid.sd.set <- d.grid_results %>%
 
 p.grid.learning.set <- p.grid.sd.set %+%
   (d.grid_results %>%
-     filter(learning_strength == 0)) +
+     filter(learning_strength == 0.014)) +
   aes(x = factor(drift_sd_y)) +
   labs(x = "SD along y")
 
 p.grid.iconicity.set <- p.grid.sd.set %+%
   (d.grid_results %>%
-     filter(iconicity_weight == 0)) +
+     filter(iconicity_weight == 0.043)) +
   aes(y = factor(drift_sd_y)) +
   labs(y = "SD along y")
 
@@ -877,7 +1016,7 @@ p.grid.sd.set.learning <- d.grid.results.learning %>%
     data = . %>%
       filter(prob == max(prob)),
     shape = 4) +
-  scale_fill_viridis_c() +
+  scale_fill_viridis_c(limits = c(0,1)) +
   facet_wrap(~generation) +
   theme_minimal() +
   guides(color = "none") +
