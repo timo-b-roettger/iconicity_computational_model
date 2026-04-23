@@ -307,7 +307,7 @@ d.empty <- data.frame(
   old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
   old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
 
-d.simulation <- d.empty %>% run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, drift_sd_y = 0.5, iconicity_weight = 0.3, learning_strength = 0.015)
+d.simulation <- d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.5, iconicity_weight = 0.3, learning_strength = 0.015)
 
 # Check whether the signal updates only on successes
 test_signal_update <- function(df) {
@@ -1006,7 +1006,7 @@ d.grid_results <- d.param_grid %>%
 # 
 # saveRDS(d.grid_results, file = "grid-search-check-moreSims.rds", compress = T)
 
-d.grid_results <- readRDS(d.grid_results, file = "grid-search-check-moreSims.rds", compress = T)
+d.grid_results <- readRDS(file = "grid-search-check-moreSims.rds")
 
 d.full.history <- d.grid_results %>%
   unnest(history)
@@ -1051,7 +1051,7 @@ p.grid.iconicity.set
 # Generate trajectory plots for the four corners of each grid
 d.grid.subset <- d.full.history %>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
-  filter(iconicity_weight %in% c(0, 0.071, 0.357, 0.5), learning_strength %in% c(0, 0.014, 0.05), drift_sd_y %in% c(0.09, 0.266, 0.5)) %>%
+  filter(iconicity_weight %in% c(0, 0.071, 0.286, 0.357, 0.5), learning_strength %in% c(0, 0.007, 0.014, 0.05), drift_sd_y %in% c(0.09, 0.266, 0.5)) %>%
   # Add unique identifier for plotting
   mutate(parameter_combination = case_when(drift_sd_y == 0.266 & iconicity_weight == 0 & learning_strength == 0 ~ "fixed_sd_BL",
                                            drift_sd_y == 0.266 & iconicity_weight == 0 & learning_strength == 0.05 ~ "fixed_sd_BR",
@@ -1069,7 +1069,10 @@ d.grid.subset <- d.full.history %>%
                                            iconicity_weight == 0.5 & drift_sd_y == 0.09 & learning_strength == 0.05 ~ "high_ic_BR",
                                            iconicity_weight == 0.5 & drift_sd_y == 0.5 & learning_strength == 0 ~ "high_ic_TL",
                                            iconicity_weight == 0.5 & drift_sd_y == 0.5 & learning_strength == 0.05 ~ "high_ic_TR",
-                                           iconicity_weight == 0.357 & drift_sd_y == 0.5 & learning_strength == 0.014 ~ "high_ic")) %>%
+                                           iconicity_weight == 0.286 & drift_sd_y == 0.5 & learning_strength == 0.014 ~ "high_ic",
+                                           drift_sd_y == 0.266 & iconicity_weight == 0.5 & learning_strength == 0.007 ~ "winner_sd_set",
+                                           drift_sd_y == 0.266 & iconicity_weight == 0.5 & learning_strength == 0.014 ~ "winner_ls_set",
+                                           drift_sd_y == 0.09 & iconicity_weight == 0.071 & learning_strength == 0.007 ~ "winner_ic_set")) %>%
   filter(!is.na(parameter_combination))
 
 
@@ -1176,6 +1179,107 @@ p.grid.fixed.ls <- d.grid.iconicity |>
   labs(title = "Iconicity over generations for when learning strength = 0.014",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal()
+
+
+## WINNERS in grid
+p.grid.fixed.ic.w <- d.grid.iconicity |> 
+  filter(parameter_combination == "winner_ic_set") %>%
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_path(data = d.grid.iconicity.mean |> 
+              filter(parameter_combination == "winner_ic_set"), 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data =  d.grid.iconicity.mean |> 
+              filter(parameter_combination == "winner_ic_set"), 
+            aes(group = 1), size = 1) +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c() +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  facet_wrap(~parameter_combination, labeller = labeller(parameter_combination = c("winner_ic_set" = "sd = 0.09, learning strength = 0.007"))) +
+  labs(title = "Iconicity over generations for when iconicity weight = 0.071",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal()
+
+p.grid.fixed.ls.w <- d.grid.iconicity |> 
+  filter(parameter_combination == "winner_ls_set") %>%
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_path(data = d.grid.iconicity.mean |> 
+              filter(parameter_combination == "winner_ls_set"), 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data =  d.grid.iconicity.mean |> 
+              filter(parameter_combination == "winner_ls_set"), 
+            aes(group = 1), size = 1) +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c() +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  facet_wrap(~parameter_combination, labeller = labeller(parameter_combination = c("winner_ls_set" = "sd = 0.266, iconicity weight = 0.5"))) +
+  labs(title = "Iconicity over generations for when learning strength = 0.014",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal()
+
+p.grid.fixed.sd.w <- d.grid.iconicity |> 
+  filter(parameter_combination == "winner_sd_set") %>%
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_path(data = d.grid.iconicity.mean |> 
+              filter(parameter_combination == "winner_sd_set"), 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data =  d.grid.iconicity.mean |> 
+              filter(parameter_combination == "winner_sd_set"), 
+            aes(group = 1), size = 1) +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c() +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  facet_wrap(~parameter_combination, labeller = labeller(parameter_combination = c("winner_sd_set" = "learning strength = 0.007, iconicity weight = 0.5"))) +
+  labs(title = "Iconicity over generations for when sd along y = 0.266",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal()
+
+# generate parallel plot to original function
+p.grid.sim <- d.grid.iconicity |> 
+  filter(parameter_combination == "high_ic") %>%
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_path(data = d.grid.iconicity.mean |> 
+              filter(parameter_combination == "high_ic"), 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data =  d.grid.iconicity.mean |> 
+              filter(parameter_combination == "high_ic"), 
+            aes(group = 1), size = 1) +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c() +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  facet_wrap(~parameter_combination, labeller = labeller(parameter_combination = c("high_ic" = "learning strength = 0.014, sd = 0.5"))) +
+  labs(title = "Iconicity over generations for when iconicity weight = 0.286",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal()
+
+
 
 
 ## Also look at the probs
