@@ -307,7 +307,7 @@ d.empty <- data.frame(
   old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
   old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
 
-d.simulation <- d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.5, iconicity_weight = 0.3, learning_strength = 0.015)
+d.simulation <- d.empty %>% run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, drift_sd_y = 0.5, iconicity_weight = 0.3, learning_strength = 0.015)
 
 # Check whether the signal updates only on successes
 test_signal_update <- function(df) {
@@ -430,7 +430,7 @@ simulate_production <- function(n,
 
 test.sd <- simulate_production(
   n = 100,
-  sd_base = c(.1, .23, .3),
+  sd_base = c(.1, .266, .3),
   k = 1.5,
   n_means = 40)
 
@@ -463,12 +463,56 @@ p.sd.low <- p.sd.high %+%
 
 p.sd.high / p.sd.low
 
+
+prob_pocket_landing <- function(n = 1000, 
+                                sd_base, 
+                                initial_y = 0.5, 
+                                k = 1.5, 
+                                associative_strength = 0.3) {
+  
+  # Calculate effective SD based on your noise-trap logic
+  # When assoc < 0.5, sd_eff increases
+  sd_eff <- sd_base * (1 + k * (0.5 - associative_strength))
+  
+  # Simulate n signals
+  # Using a large n (e.g., 10,000) provides a smoother probability estimate
+  signals <- rnorm(n, mean = initial_y, sd = sd_eff)
+  
+  # Clamp signals if your model requires it (though for probability 
+  # of hitting tails, the raw distribution is often more informative)
+  # signals <- pmax(0, pmin(1, signals)) 
+  
+  # Determine if each signal fell into a "pocket"
+  in_pocket <- (signals < 0.2 | signals > 0.8)
+  
+  # Calculate probability
+  prob <- mean(in_pocket)
+  
+  return(list(
+    prob = prob,
+    sd_eff = sd_eff,
+    initial_y = initial_y,
+    assoc = associative_strength
+  ))
+}
+
+result <- prob_pocket_landing(
+  n = 10000,
+  sd_base = 0.266,
+  initial_y = 0.5,
+  associative_strength = 0.3,
+  k = 1.5
+)
+
+print(result)
+
+
 #estimate probability of walking into a pocket
 pocket_prob <- function(drift_sd_y,
                         n = 1e5,
                         stored_y = 0.5,
                         speaker_guess = 0.5,
-                        k = 0.5) {
+                        k = 1.5) {
   
   # Compute effective standard deviation
   sd_effective <- drift_sd_y * (1 + k * (0.5 - speaker_guess))
@@ -487,7 +531,7 @@ pocket_prob <- function(drift_sd_y,
 # find drift_sd_y that yields a target probability of walking into a pocket
 find_drift_sd_y_sim <- function(target_prob,
                                 speaker_guess = 0.5,
-                                k = 0.5,
+                                k = 1.5,
                                 lower = 0.001,
                                 upper = 1,
                                 tol = 1e-4) {
@@ -506,10 +550,10 @@ find_drift_sd_y_sim <- function(target_prob,
 
 
 #speaker_guess = 0.5 (no scaling effect from k)
-find_drift_sd_y_sim(0.25, speaker_guess = 0.5, k = 1.5)
+find_drift_sd_y_sim(0.2, speaker_guess = 0.5, k = 1.5)
 
 #lower confidence (more noise)
-find_drift_sd_y_sim(0.01, speaker_guess = 0.3, k = 1.5)
+find_drift_sd_y_sim(0.25, speaker_guess = 0.3, k = 1.5)
 
 #high confidence (less noise)
 find_drift_sd_y_sim(0.10, speaker_guess = 0.8, k = 1.5)
@@ -905,11 +949,17 @@ compute_iconicity <- function(history, cutoff = 0.8) {
     pull(mean_iconicity)
 }
 
+
+logits <- qlogis(clamp02(0.5 + (0.071 * 1)))
+# Return final probability
+probs <- plogis(logits)
+(probs - 0.5) / 0.5 * 100
+
 # Generate a parameter grid to explore
 d.param_grid <- expand.grid(
-  iconicity_weight = seq(0, 0.5, length.out = 8),
-  learning_strength = seq(0, 0.05, length.out = 8), # if reaching ceiling within 3 rounds is the target, then this ceiling should be 0.045
-  drift_sd_y = seq(0.09, 0.5, length.out = 8)) # lower bound = 1% chance of wandering into a pocket when signal is 0.3; 
+  iconicity_weight = seq(0, 0.5, length.out = 8), # 0.071 corresponds to 14.2% absolute increase for a probability of 0.5 (for the perfectly iconic signal)
+  learning_strength = seq(0, 0.05, length.out = 8), # if reaching ceiling within 3 rounds is the target, starting from a prob of ~0.3 then this ceiling should be 0.05
+  drift_sd_y = seq(0.09, 0.5, length.out = 8)) # lower bound = 1% chance of wandering into a pocket when signal is 0.5 and associative strength is 0.3; 
                                               # upper bound = 25% chance of wandering into a pocket when your guess is 0.8; 
                                               # 0.45 is also the arrived at sd for a 50/50 chance of walking in and out of a pocket when guess is 0.5
 
@@ -918,43 +968,45 @@ d.grid_results <- d.param_grid %>%
   mutate(iconicity = NA_real_,
          history = vector("list", n()))
 
-for (i in seq_len(nrow(d.param_grid))) {
-  
-  params <- d.param_grid[i, ]
-  
-  # empty structure for simulation log
-  empty_df <- data.frame(
-    sim = integer(), gen = integer(), round = integer(), trial = integer(), 
-    referent = integer(), speaker = character(), listener = character(), type = character(), lexeme = character(),
-    produced_x = numeric(), produced_y = numeric(), prob = integer(), success = integer(), evidence = integer(),
-    old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
-    old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
-  
-  # run simulation
-  history <- run_interaction_sim(
-    data = empty_df,
-    n_sim = 100, 
-    n_referents = 4,
-    n_generations = 10,
-    n_rounds = 10,
-    drift_sd_x = 0.01,   
-    drift_sd_y = params$drift_sd_y,
-    learning_strength = params$learning_strength,
-    iconicity_weight = params$iconicity_weight,
-    success_scale = 7.5, 
-    failure_scale = 1,
-    lapse = 0.05)
-  
-  # store full dataframe
-  d.grid_results$history[[i]] <- history
-  
-  # compute iconicity score
-  d.grid_results$iconicity[i] <- compute_iconicity(history)
-  
-  message("Completed parameter set ", i, " of ", nrow(d.param_grid))
-}
+# for (i in seq_len(nrow(d.param_grid))) {
+#   
+#   params <- d.param_grid[i, ]
+#   
+#   # empty structure for simulation log
+#   empty_df <- data.frame(
+#     sim = integer(), gen = integer(), round = integer(), trial = integer(), 
+#     referent = integer(), speaker = character(), listener = character(), type = character(), lexeme = character(),
+#     produced_x = numeric(), produced_y = numeric(), prob = integer(), success = integer(), evidence = integer(),
+#     old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
+#     old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
+#   
+#   # run simulation
+#   history <- run_interaction_sim(
+#     data = empty_df,
+#     n_sim = 100, 
+#     n_referents = 4,
+#     n_generations = 10,
+#     n_rounds = 10,
+#     drift_sd_x = 0.01,   
+#     drift_sd_y = params$drift_sd_y,
+#     learning_strength = params$learning_strength,
+#     iconicity_weight = params$iconicity_weight,
+#     success_scale = 7.5, 
+#     failure_scale = 1,
+#     lapse = 0.05)
+#   
+#   # store full dataframe
+#   d.grid_results$history[[i]] <- history
+#   
+#   # compute iconicity score
+#   d.grid_results$iconicity[i] <- compute_iconicity(history)
+#   
+#   message("Completed parameter set ", i, " of ", nrow(d.param_grid))
+# }
+# 
+# saveRDS(d.grid_results, file = "grid-search-check-moreSims.rds", compress = T)
 
-saveRDS(d.grid_results, file = "grid-search-check-moreSims.rds", compress = T)
+d.grid_results <- readRDS(d.grid_results, file = "grid-search-check-moreSims.rds", compress = T)
 
 d.full.history <- d.grid_results %>%
   unnest(history)
@@ -963,7 +1015,7 @@ d.grid_results %<>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3)))
 
 p.grid.sd.set <- d.grid_results %>%
-  filter(drift_sd_y == 0.221) %>%
+  filter(drift_sd_y == 0.266) %>%
   ggplot(
     aes(
       x = factor(learning_strength),
@@ -975,7 +1027,6 @@ p.grid.sd.set <- d.grid_results %>%
       filter(iconicity == max(iconicity)),
     shape = 4) +
   scale_fill_viridis_c() +
-  #facet_grid(`articulatory bias` ~ `corrective rate`, labeller = label_both) +
   theme_minimal() +
   guides(color = "none") +
   labs(x = "Learning strength", y = "Iconicity weighting", fill = "Iconicity")
@@ -988,13 +1039,144 @@ p.grid.learning.set <- p.grid.sd.set %+%
 
 p.grid.iconicity.set <- p.grid.sd.set %+%
   (d.grid_results %>%
-     filter(iconicity_weight == 0.043)) +
+     filter(iconicity_weight == 0.071)) +
   aes(y = factor(drift_sd_y)) +
   labs(y = "SD along y")
 
 p.grid.sd.set
 p.grid.learning.set
 p.grid.iconicity.set
+
+
+# Generate trajectory plots for the four corners of each grid
+d.grid.subset <- d.full.history %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+  filter(iconicity_weight %in% c(0, 0.071, 0.357, 0.5), learning_strength %in% c(0, 0.014, 0.05), drift_sd_y %in% c(0.09, 0.266, 0.5)) %>%
+  # Add unique identifier for plotting
+  mutate(parameter_combination = case_when(drift_sd_y == 0.266 & iconicity_weight == 0 & learning_strength == 0 ~ "fixed_sd_BL",
+                                           drift_sd_y == 0.266 & iconicity_weight == 0 & learning_strength == 0.05 ~ "fixed_sd_BR",
+                                           drift_sd_y == 0.266 & iconicity_weight == 0.5 & learning_strength == 0 ~ "fixed_sd_TL",
+                                           drift_sd_y == 0.266 & iconicity_weight == 0.5 & learning_strength == 0.05 ~ "fixed_sd_TR",
+                                           learning_strength == 0.014 & iconicity_weight == 0 & drift_sd_y == 0.09 ~ "fixed_ls_BL",
+                                           learning_strength == 0.014 & iconicity_weight == 0 & drift_sd_y == 0.5 ~ "fixed_ls_BR",
+                                           learning_strength == 0.014 & iconicity_weight == 0.5 & drift_sd_y == 0.09 ~ "fixed_ls_TL",
+                                           learning_strength == 0.014 & iconicity_weight == 0.5 & drift_sd_y == 0.5 ~ "fixed_ls_TR",
+                                           iconicity_weight == 0.071 & drift_sd_y == 0.09 & learning_strength == 0 ~ "fixed_ic_BL",
+                                           iconicity_weight == 0.071 & drift_sd_y == 0.09 & learning_strength == 0.05 ~ "fixed_ic_BR",
+                                           iconicity_weight == 0.071 & drift_sd_y == 0.5 & learning_strength == 0 ~ "fixed_ic_TL",
+                                           iconicity_weight == 0.071 & drift_sd_y == 0.5 & learning_strength == 0.05 ~ "fixed_ic_TR",
+                                           iconicity_weight == 0.5 & drift_sd_y == 0.09 & learning_strength == 0 ~ "high_ic_BL",
+                                           iconicity_weight == 0.5 & drift_sd_y == 0.09 & learning_strength == 0.05 ~ "high_ic_BR",
+                                           iconicity_weight == 0.5 & drift_sd_y == 0.5 & learning_strength == 0 ~ "high_ic_TL",
+                                           iconicity_weight == 0.5 & drift_sd_y == 0.5 & learning_strength == 0.05 ~ "high_ic_TR",
+                                           iconicity_weight == 0.357 & drift_sd_y == 0.5 & learning_strength == 0.014 ~ "high_ic")) %>%
+  filter(!is.na(parameter_combination))
+
+
+d.grid.iconicity <- d.grid.subset %>%
+  group_by(parameter_combination) %>%
+  mutate(
+    total_round = (generation - 1) * 10 + round,
+    strength = abs(evidence)) %>%
+  group_by(parameter_combination, simulation, generation, total_round, type, lexeme) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
+    .groups = "drop") %>%
+  group_by(parameter_combination, simulation, generation, total_round) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
+    .groups = "drop")
+
+# Aggregated
+d.grid.iconicity.mean <- d.grid.iconicity |> 
+  group_by(parameter_combination, total_round) %>%
+  summarise(evidence = mean(evidence),
+            strength = mean(strength),
+            .groups = "drop")
+
+p.grid.fixed.ic <- d.grid.iconicity |> 
+  filter(parameter_combination %in% c("fixed_ic_BL", "fixed_ic_BR", "fixed_ic_TL", "fixed_ic_TR")) %>%
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_path(data = d.grid.iconicity.mean |> 
+              filter(parameter_combination %in% c("fixed_ic_BL", "fixed_ic_BR", "fixed_ic_TL", "fixed_ic_TR")), 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data =  d.grid.iconicity.mean |> 
+              filter(parameter_combination %in% c("fixed_ic_BL", "fixed_ic_BR", "fixed_ic_TL", "fixed_ic_TR")), 
+            aes(group = 1), size = 1) +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c() +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  facet_wrap(~parameter_combination, ncol = 2, labeller = labeller(parameter_combination = c("fixed_ic_BL" = "sd = 0.09, learning strength = 0",
+                                                                                             "fixed_ic_BR" = "sd = 0.09, learning strength = 0.05",
+                                                                                             "fixed_ic_TL" = "sd = 0.5, learning strength = 0",
+                                                                                             "fixed_ic_TR" = "sd = 0.5, learning strength = 0.05"))) +
+  labs(title = "Iconicity over generations for when iconicity weight = 0.071",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal()
+
+p.grid.fixed.sd <- d.grid.iconicity |> 
+  filter(parameter_combination %in% c("fixed_sd_BL", "fixed_sd_BR", "fixed_sd_TL", "fixed_sd_TR")) %>%
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_path(data = d.grid.iconicity.mean |> 
+              filter(parameter_combination %in% c("fixed_sd_BL", "fixed_sd_BR", "fixed_sd_TL", "fixed_sd_TR")), 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data =  d.grid.iconicity.mean |> 
+              filter(parameter_combination %in% c("fixed_sd_BL", "fixed_sd_BR", "fixed_sd_TL", "fixed_sd_TR")), 
+            aes(group = 1), size = 1) +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c() +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  facet_wrap(~parameter_combination, ncol = 2, labeller = labeller(parameter_combination = c("fixed_sd_BL" = "iconicity weight = 0, learning strength = 0",
+                                                                                             "fixed_sd_BR" = "iconicity weight = 0, learning strength = 0.05",
+                                                                                             "fixed_sd_TL" = "iconicity weight = 0.5, learning strength = 0",
+                                                                                             "fixed_sd_TR" = "iconicity weight = 0.5, learning strength = 0.05"))) +
+  labs(title = "Iconicity over generations for when sd along y = 0.266",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal()
+
+p.grid.fixed.ls <- d.grid.iconicity |> 
+     filter(parameter_combination %in% c("fixed_ls_BL", "fixed_ls_BR", "fixed_ls_TL", "fixed_ls_TR")) %>%
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_path(data = d.grid.iconicity.mean |> 
+              filter(parameter_combination %in% c("fixed_ls_BL", "fixed_ls_BR", "fixed_ls_TL", "fixed_ls_TR")), 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data =  d.grid.iconicity.mean |> 
+              filter(parameter_combination %in% c("fixed_ls_BL", "fixed_ls_BR", "fixed_ls_TL", "fixed_ls_TR")), 
+            aes(group = 1), size = 1) +
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c() +
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  facet_wrap(~parameter_combination, ncol = 2, labeller = labeller(parameter_combination = c("fixed_ls_BL" = "iconicity weight = 0, sd = 0.09",
+                                                                                             "fixed_ls_BR" = "iconicity weight = 0, sd = 0.5",
+                                                                                             "fixed_ls_TL" = "iconicity weight = 0.5, sd = 0.09",
+                                                                                             "fixed_ls_TR" = "iconicity weight = 0.5, sd = 0.5"))) +
+  labs(title = "Iconicity over generations for when learning strength = 0.014",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal()
+
 
 ## Also look at the probs
 d.grid.results.learning <- d.full.history %>%
