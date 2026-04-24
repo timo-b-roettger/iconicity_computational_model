@@ -136,10 +136,10 @@ run_interaction_sim <- function(
   
   # At signal production, amount of noise is dependent on guess rate
   # k controls how strongly sd react to speaker_guess; mindful that if p = 1 and k >2, it will return negative sd's
-  produce_signal <- function(stored_y, lex_prototypes, size_prototypes, speaker_guess, k) {
+  produce_signal <- function(stored_y, lex_prototypes, size_prototypes, speaker_guess, k_production) {
     x <- rnorm(1, mean = lex_prototypes, sd = drift_sd_x)
     y <- rnorm(1, mean = stored_y,
-               sd = drift_sd_y * (1 + k * (0.5 - speaker_guess))) ## when prob = .5, sd = drift_sd_y, prob < .5, sd increase and vv
+               sd = drift_sd_y * (1 + k_production * (0.5 - speaker_guess))) ## when prob = .5, sd = drift_sd_y, prob < .5, sd increase and vv
     c(x, clamp01(y)) ## I think X also needs to be clamped, as it otherwise also produces negative values with noise?
   }
   
@@ -150,7 +150,7 @@ run_interaction_sim <- function(
   
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
-   signal_evidence <- function(produced_y, target, k = 4) {
+   signal_evidence <- function(produced_y, target, k_perception = 2) {
     dist <- abs(produced_y - target)
     
     if (dist >= 0.2 & dist <= 0.8) {
@@ -158,10 +158,10 @@ run_interaction_sim <- function(
     } else {
       edge_dist <- ifelse(dist < 0.2, dist - 0.8, 0.2 - dist)
       
-      magnitude <- exp(-k * edge_dist)
+      magnitude <- exp(-k_perception * edge_dist)
       #calculate bounds dynamically based on k
-      min_magnitude <- exp(-k * -0.6)
-      max_magnitude <- exp(-k * -0.8)
+      min_magnitude <- exp(-k_perception * -0.6)
+      max_magnitude <- exp(-k_perception * -0.8)
       magnitude_norm <- (magnitude - min_magnitude) / (max_magnitude - min_magnitude)
       
       evidence <- ifelse(dist > 0.8, -magnitude_norm, magnitude_norm)
@@ -212,19 +212,19 @@ run_interaction_sim <- function(
       for (round in 1:n_rounds) {
         # Shuffle referents so the order is different each round
         referent_order <- sample(1:n_referents)
+        roles <- sample(rep(c("A", "B"), length.out = n_referents))
         
         for (trial in 1:n_referents) {
           
           ref_id <- referent_order[trial]
           # speakers/listeners are taking turns
-          if ((trial + round) %% 2 == 1) {
-            speaker <- "A"
-            listener <- "B"
+          speaker <- roles[trial]
+          listener <- ifelse(speaker == "A", "B", "A")
+          
+          if (speaker == "A") {
             speaker_guess <- agentA_guess
             listener_guess <- agentB_guess
           } else {
-            speaker <- "B"
-            listener <- "A"
             speaker_guess <- agentB_guess
             listener_guess <- agentA_guess
           }
@@ -243,7 +243,7 @@ run_interaction_sim <- function(
             referents_info$lex_prototypes[ref_id],
             referents_info$size_prototypes[ref_id],
             speaker_guess[ref_id],
-            k = 1.5)
+            k_production = 1.5)
           produced_x <- signal[1]
           produced_y <- signal[2]
           
@@ -307,7 +307,7 @@ d.empty <- data.frame(
   old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
   old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
 
-d.simulation <- d.empty %>% run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.5, iconicity_weight = 0.3, learning_strength = 0.015)
+d.simulation.test <- d.empty %>% run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, drift_sd_y = 0.266, iconicity_weight = 0.04, learning_strength = 0.015)
 
 # Check whether the signal updates only on successes
 test_signal_update <- function(df) {
@@ -390,7 +390,7 @@ run_all_tests(d.simulation)
 # That is, if your previous guess was a fail.
 simulate_production <- function(n,
                      sd_base,
-                     k = 1.5,
+                     k_production = 1.5,
                      n_means = 20,
                      mean_fun = NULL,
                      associative_strength = seq(0, 1, length.out = 20)) {
@@ -777,7 +777,7 @@ normalize_01 <- function(x) {
 }
 
 # Measures proximity of Y to its size prototype
-signal_evidence <- function(produced_y, target, k = 4) {
+signal_evidence <- function(produced_y, target, k = 2) {
   dist <- abs(produced_y - target)
   
   if (dist >= 0.2 & dist <= 0.8) {
@@ -820,25 +820,29 @@ d.iconicity.mean <- d.iconicity |>
             strength = mean(strength),
             .groups = "drop")
 
-d.iconicity |> 
-  ggplot(aes(x = total_round, y = evidence, group = simulation,
+d.test2 <- d.simulation.test %>% filter(generation == 1) %>% group_by(simulation, round, type, lexeme) %>% 
+  summarise(evidence = mean(evidence)) %>% group_by(simulation, round) %>% summarise(evidence = mean(evidence))
+d.test2.mean <- d.test2 %>% group_by(round) %>% summarise(evidence = mean(evidence))
+
+d.test2 |> 
+  ggplot(aes(x = round, y = evidence, group = simulation,
              color = evidence)) +
   geom_path(size = 0.5, alpha = 0.05,
             color = "black") +
-  geom_path(data = d.iconicity.mean, 
+  geom_path(data = d.test2.mean, 
             aes(group = 1), size = 2,
             color = "black") +
-  geom_path(data =  d.iconicity.mean, 
+  geom_path(data =  d.test2.mean, 
             aes(group = 1), size = 1) +
-  geom_vline(xintercept = seq(0, 100, by = 10), 
+  geom_vline(xintercept = seq(0, 10, by = 1), 
              color = "grey", 
              lty = "dotted") +
   #scale_color_viridis_c(limits = c(-1, 1)) +
   scale_color_viridis_c() +
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 100, 10)) +
-  labs(title = "Iconicity over generations",
-       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  scale_x_continuous(breaks = seq(0, 10, 1)) +
+  #labs(title = "Iconicity over generations",
+  #     y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal()
 
 # Check learning
