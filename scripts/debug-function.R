@@ -309,6 +309,7 @@ d.empty <- data.frame(
 
 d.simulation.test <- d.empty %>% run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, drift_sd_y = 0.266, iconicity_weight = 0.04, learning_strength = 0.015)
 
+# 4. TEST LOOP ----------------------------------------
 # Check whether the signal updates only on successes
 test_signal_update <- function(df) {
   df %>%
@@ -384,7 +385,7 @@ run_all_tests <- function(df) {
 
 run_all_tests(d.simulation)
 
-# 4. CHECK SCALING ----------------------------------------
+# 5. CHECK SCALING ----------------------------------------
 # The sd of y at producing a signal is dependent on previous associative strength and previous signal
 # Check the scaling of this sd; what is the probability of the signal walking out of the 'pocket' if the previous guess is low?
 # That is, if your previous guess was a fail.
@@ -463,7 +464,7 @@ p.sd.low <- p.sd.high %+%
 
 p.sd.high / p.sd.low
 
-
+# CHECK probability of landing in a pocket as dependent of sd and associative strength
 prob_pocket_landing <- function(n = 1000, 
                                 sd_base, 
                                 initial_y = 0.5, 
@@ -622,8 +623,6 @@ sd_opt <- find_optimal_sd(
 
 sd_opt
 
-
-# --- Check what you actually get ---
 p_enter(sd_opt)
 p_exit(sd_opt)
 
@@ -771,286 +770,22 @@ data.frame(
   Difference = round(iconic_results - neutral_results, 3)
 )
 
-# 5. APPLY ADJUSTED FUNCTION ----------------------------------------
-normalize_01 <- function(x) {
-  return((x - min(x)) / (max(x) - min(x)))
-}
-
-# Measures proximity of Y to its size prototype
-signal_evidence <- function(produced_y, target, k = 2) {
-  dist <- abs(produced_y - target)
-  
-  if (dist >= 0.2 & dist <= 0.8) {
-    evidence <- 0
-  } else {
-    edge_dist <- ifelse(dist < 0.2, dist - 0.8, 0.2 - dist)
-    
-    magnitude <- exp(-k * edge_dist)
-    #calculate bounds dynamically based on k
-    min_magnitude <- exp(-k * -0.6)
-    max_magnitude <- exp(-k * -0.8)
-    magnitude_norm <- (magnitude - min_magnitude) / (max_magnitude - min_magnitude)
-    
-    evidence <- ifelse(dist > 0.8, -magnitude_norm, magnitude_norm)
-  }
-  
-  return(evidence)
-}
-
-# Calculate iconicity based on the current implementation of the model function
-d.iconicity <- d.simulation %>%
-  mutate(
-    total_round = (generation - 1) * 10 + round,
-    strength = abs(evidence)) %>%
-  group_by(simulation, generation, total_round, type, lexeme) %>%
-  summarise(
-    evidence = mean(evidence),
-    strength = mean(strength),
-    .groups = "drop") %>%
-  group_by(simulation, generation, total_round) %>%
-  summarise(
-    evidence = mean(evidence),
-    strength = mean(strength),
-    .groups = "drop")
-
-# Aggregated
-d.iconicity.mean <- d.iconicity |> 
-  group_by(total_round) %>%
-  summarise(evidence = mean(evidence),
-            strength = mean(strength),
-            .groups = "drop")
-
-d.test2 <- d.simulation.test %>% filter(generation == 1) %>% group_by(simulation, round, type, lexeme) %>% 
-  summarise(evidence = mean(evidence)) %>% group_by(simulation, round) %>% summarise(evidence = mean(evidence))
-d.test2.mean <- d.test2 %>% group_by(round) %>% summarise(evidence = mean(evidence))
-
-d.test2 |> 
-  ggplot(aes(x = round, y = evidence, group = simulation,
-             color = evidence)) +
-  geom_path(size = 0.5, alpha = 0.05,
-            color = "black") +
-  geom_path(data = d.test2.mean, 
-            aes(group = 1), size = 2,
-            color = "black") +
-  geom_path(data =  d.test2.mean, 
-            aes(group = 1), size = 1) +
-  geom_vline(xintercept = seq(0, 10, by = 1), 
-             color = "grey", 
-             lty = "dotted") +
-  #scale_color_viridis_c(limits = c(-1, 1)) +
-  scale_color_viridis_c() +
-  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 10, 1)) +
-  #labs(title = "Iconicity over generations",
-  #     y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
-  theme_minimal()
-
-# Check learning
-d.simulation_success <- d.simulation %>%
-  select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
-  pivot_longer(
-    cols = c(new_guess_A, new_guess_B),
-    names_to = c("memory", "process", "agent"),
-    values_to = "associative_strength",
-    names_sep = "_") %>%
-  select(-process) %>%
-  # filter down to rows for which the guess pertains to the listener
-  filter((listener == "A" & agent == "A") | (listener == "B" & agent == "B")) %>%
-  #cumulative rounds
-  mutate(total_round = (generation - 1) * 10 + round) %>%
-  group_by(simulation, generation, total_round) %>%
-  summarise(
-    prob = mean(prob, na.rm = TRUE),
-    success = mean(success, na.rm = TRUE),
-    associative_strength = mean(associative_strength, na.rm = TRUE),
-    .groups = "drop")
-
-d.simulation_success  %>%
-  ggplot(
-    aes(x = total_round, y = associative_strength, group = interaction(simulation, generation))) +
-  # Individual simulation paths
-  geom_path(linewidth = 0.5, alpha = 0.1, color = "black") +
-  # mean across all simulations
-  geom_line(data = d.simulation_success |>
-              group_by(total_round) |>
-              summarise(associative_strength = mean(associative_strength), .groups = "drop"),
-            aes(x = total_round, y = associative_strength),
-            inherit.aes = FALSE,
-            color = "black", 
-            linewidth = 1) +
-  # mean prob across all simulations
-  geom_line(data = d.simulation_success |>
-              group_by(total_round) |>
-              summarise(prob = mean(prob), .groups = "drop"),
-            aes(x = total_round, y = prob),
-            inherit.aes = FALSE,
-            color = "blue", 
-            linewidth = 1) +
-  labs(title = "Learning progress across generations",
-       y = "Associative strength", 
-       x = "Total rounds (cumulative)") +
-  scale_y_continuous(limits = c(0, 1)) + 
-  # breaks every 10 rounds to mark the start of a new generation
-  scale_x_continuous(breaks = seq(0, 100, 10)) +  
-  theme_minimal()
-
-# Look at the signal space
-d_signal <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 10 + round) %>%
-  group_by(total_round, type, generation) |> 
-  summarise(produced_y = mean(produced_y, na.rm = T),
-            .groups = "drop") 
-
-d_signal_sim <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 10 + round) %>%
-  group_by(total_round, type, generation, simulation) |> 
-  summarise(produced_y = mean(produced_y, na.rm = T),
-            .groups = "drop") 
-
-ggplot(d_signal,
-       aes(x = total_round,
-           y = produced_y,
-           colour = type)) +
-  geom_path(data = d_signal_sim,
-            aes(group = type),
-            size = 0.5,
-            alpha = 0.2) +
-  geom_path(aes(group = type),
-            size = 2) +
-  geom_hline(yintercept = c(0.2,0.8), lty = "dashed") +
-  geom_vline(xintercept = seq(0, 100, by = 10), 
-             color = "black", 
-             lty = "dotted") +
-  labs(title = "Evolution of produced signal space",
-       x = "Total rounds (cumulative)",
-       bins = "type", y = "y") +
-  scale_y_continuous(limits = c(0,1), breaks = c(0,0.2,0.5,0.8,1)) +
-  scale_x_continuous(breaks = seq(0, 100, 10)) +
-  scale_color_viridis_d(begin = 0.1, end = 0.9) +
-  theme_minimal() +
-  theme(legend.position = "bottom")
-
-
-## GRID search
-compute_iconicity <- function(history, cutoff = 0.8) {
-  
-  d.iconicity <- history %>%
-    mutate(total_round = (generation - 1) * 10 + round) %>%
-    group_by(simulation, total_round) %>%
-    summarise(
-      evidence = mean(evidence),
-      .groups = "drop"
-    )
-  
-  # define late stage
-  max_round <- max(d.iconicity$total_round)
-  threshold <- max_round * cutoff
-  
-  # average evidence in late stage
-  d.iconicity %>%
-    filter(total_round >= threshold) %>%
-    summarise(mean_iconicity = mean(evidence, na.rm = TRUE)) %>%
-    pull(mean_iconicity)
-}
-
+# 6. GRID SEARCH PLOTS----------------------------------------
 
 logits <- qlogis(clamp02(0.5 + (0.071 * 1)))
 # Return final probability
 probs <- plogis(logits)
 (probs - 0.5) / 0.5 * 100
 
-# Generate a parameter grid to explore
-d.param_grid <- expand.grid(
-  iconicity_weight = seq(0, 0.5, length.out = 8), # 0.071 corresponds to 14.2% absolute increase for a probability of 0.5 (for the perfectly iconic signal)
-  learning_strength = seq(0, 0.05, length.out = 8), # if reaching ceiling within 3 rounds is the target, starting from a prob of ~0.3 then this ceiling should be 0.05
-  drift_sd_y = seq(0.09, 0.5, length.out = 8)) # lower bound = 1% chance of wandering into a pocket when signal is 0.5 and associative strength is 0.3; 
-                                              # upper bound = 25% chance of wandering into a pocket when your guess is 0.8; 
-                                              # 0.45 is also the arrived at sd for a 50/50 chance of walking in and out of a pocket when guess is 0.5
 
-# Prepare results container
-d.grid_results <- d.param_grid %>%
-  mutate(iconicity = NA_real_,
-         history = vector("list", n()))
-
-# for (i in seq_len(nrow(d.param_grid))) {
-#   
-#   params <- d.param_grid[i, ]
-#   
-#   # empty structure for simulation log
-#   empty_df <- data.frame(
-#     sim = integer(), gen = integer(), round = integer(), trial = integer(), 
-#     referent = integer(), speaker = character(), listener = character(), type = character(), lexeme = character(),
-#     produced_x = numeric(), produced_y = numeric(), prob = integer(), success = integer(), evidence = integer(),
-#     old_guess_A = integer(), new_guess_A = integer(), old_guess_B = integer(), new_guess_B = integer(),
-#     old_stored_y = integer(), new_stored_y = integer(), stringsAsFactors = FALSE)
-#   
-#   # run simulation
-#   history <- run_interaction_sim(
-#     data = empty_df,
-#     n_sim = 100, 
-#     n_referents = 4,
-#     n_generations = 10,
-#     n_rounds = 10,
-#     drift_sd_x = 0.01,   
-#     drift_sd_y = params$drift_sd_y,
-#     learning_strength = params$learning_strength,
-#     iconicity_weight = params$iconicity_weight,
-#     success_scale = 7.5, 
-#     failure_scale = 1,
-#     lapse = 0.05)
-#   
-#   # store full dataframe
-#   d.grid_results$history[[i]] <- history
-#   
-#   # compute iconicity score
-#   d.grid_results$iconicity[i] <- compute_iconicity(history)
-#   
-#   message("Completed parameter set ", i, " of ", nrow(d.param_grid))
-# }
-# 
-# saveRDS(d.grid_results, file = "grid-search-check-moreSims.rds", compress = T)
-
-d.grid_results <- readRDS(file = "grid-search-check-moreSims.rds")
+# Read in grid search results for plotting
+d.grid_results <- readRDS(file = "grid-search.rds")
 
 d.full.history <- d.grid_results %>%
   unnest(history)
 
 d.grid_results %<>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3)))
-
-p.grid.sd.set <- d.grid_results %>%
-  filter(drift_sd_y == 0.266) %>%
-  ggplot(
-    aes(
-      x = factor(learning_strength),
-      y = factor(iconicity_weight),
-      fill = iconicity)) +
-  geom_tile() +
-  geom_point(
-    data = . %>%
-      filter(iconicity == max(iconicity)),
-    shape = 4) +
-  scale_fill_viridis_c() +
-  theme_minimal() +
-  guides(color = "none") +
-  labs(x = "Learning strength", y = "Iconicity weighting", fill = "Iconicity")
-
-p.grid.learning.set <- p.grid.sd.set %+%
-  (d.grid_results %>%
-     filter(learning_strength == 0.014)) +
-  aes(x = factor(drift_sd_y)) +
-  labs(x = "SD along y")
-
-p.grid.iconicity.set <- p.grid.sd.set %+%
-  (d.grid_results %>%
-     filter(iconicity_weight == 0.071)) +
-  aes(y = factor(drift_sd_y)) +
-  labs(y = "SD along y")
-
-p.grid.sd.set
-p.grid.learning.set
-p.grid.iconicity.set
-
 
 # Generate trajectory plots for the four corners of each grid
 d.grid.subset <- d.full.history %>%
