@@ -13,6 +13,7 @@ library(knitr)
 # Set knit defaults for code chunks
 opts_chunk$set(
   dev = 'png', # default format of figures
+  dpi = 300,
   comment="",
   echo=FALSE, warning=TRUE, message=FALSE,
   cache=FALSE)
@@ -152,14 +153,12 @@ Signals are restricted within the set limits ([0,1] in each dimension), so if mo
 At generational overturn, the initial learning state of the agents at the first trial is on average a probability of $~.33$. This probability is established by drawing random values from a Beta distribution with a $\alpha = 2$ and $\beta = 4$. As the interaction proceeds, the associative strengths of each agent are carried over across trials.
 
 ```{r echo=TRUE, eval=FALSE}
-produce_signal <- function(stored_y, lexeme, referent_type, speaker_guess) {
-  x <- rnorm(1, mean = lex_prototypes[lexeme], sd = drift_sd_x)
-  bias_strength <- articulatory_production_bias * (1 - speaker_guess)
-  target_y <- size_prototypes[referent_type]
-  y <- rnorm(1, mean = (1 - bias_strength) * stored_y + bias_strength * target_y,
-             sd = drift_sd_y)
-  c(x, clamp01(y))
-}
+produce_signal <- function(stored_y, lex_prototypes, size_prototypes, speaker_guess, k_production) {
+    x <- rnorm(1, mean = lex_prototypes, sd = drift_sd_x)
+    y <- rnorm(1, mean = stored_y,
+               sd = drift_sd_y * (1 + k_production * (0.5 - speaker_guess)))
+    c(x, clamp01(y))
+  }
 ```
 
 ### Recognizing the signal
@@ -241,12 +240,20 @@ ggplot(df, aes(y = signal_y, x = signal_x, fill = evidence)) +
 ```
 
 ```{r echo=TRUE, eval=FALSE}
-signal_evidence <- function(signal_y, referent_type, k=5) {
-  target <- size_prototypes[referent_type]
-  dist <- abs(signal_y - target)
-  evidence <- exp(-k * dist)
-  2 * evidence - 1
-}
+signal_evidence <- function(produced_y, target, k_perception = 2) {
+    dist <- abs(produced_y - target)
+    if (dist >= 0.2 & dist <= 0.8) {
+      evidence <- 0
+    } else {
+      edge_dist <- ifelse(dist < 0.2, dist - 0.8, 0.2 - dist)
+      magnitude <- exp(-k_perception * edge_dist)
+      min_magnitude <- exp(-k_perception * -0.6)
+      max_magnitude <- exp(-k_perception * -0.8)
+      magnitude_norm <- (magnitude - min_magnitude) / (max_magnitude - min_magnitude)
+      evidence <- ifelse(dist > 0.8, -magnitude_norm, magnitude_norm)
+    }
+    return(evidence)
+  }
 ```
 
 Prior associative strength and iconicity-weighted signal evidence are combined additively in log-odds space and converted back into probability space. <!--A decision sensitivity parameter ($\lambda = 10$) controls how strongly differences in combined evidence affect choice, such that higher sensitivity yields more deterministic selection of the strongest candidate, whereas lower values produce more exploratory or noisy choice behavior.
@@ -254,31 +261,20 @@ Prior associative strength and iconicity-weighted signal evidence are combined a
 Guessing involves uncertainty which leads to imperfect learning. This uncertainty reflects both perceptual noise (variability in processing the acoustic signal) and attentional lapses (uninformed responses that ignore the signal). A soft lapse mechanism ($\epsilon = .05$) is applied by mixing the model-derived probability distribution with a small proportion of uniform responding. This lapse parameter models the fact that agents are not perfectly attentive or rational on every trial, and prevents probabilities from collapsing to 0 or 1.-->
 
 ```{r echo=TRUE, eval=FALSE}
-listener_guess_probability <- function(agent_guess_vec, signal_x, signal_y, referents_info) {
-  n <- nrow(referents_info)
-  Delta_x <- mean(diff(sort(lex_prototypes)))
-  sigma_x <- .5 * Delta_x
-  
-  lex_likelihood <- sapply(1:n, function(k) {
-    mu <- lex_prototypes[ referents_info$lexeme[k] ]
-    exp(- (signal_x - mu)^2 / (2 * sigma_x^2))
-  })
-  lex_likelihood <- lex_likelihood / sum(lex_likelihood)
-  
-  strength <- agent_guess_vec
-  
-  icon_ev <- sapply(1:n, function(k) {
-    signal_evidence(signal_y, referents_info$type[k])
-  })
-  
-  logits <- log(lex_likelihood + 1e-12) + qlogis(strength) + iconicity_weight * icon_ev
-  exp_logits <- exp(lambda_softmax * logits)
-  probs <- exp_logits / sum(exp_logits)
-  probs <- (lapse/n) + (1 - lapse) * probs
-  probs
-}
+listener_guess_probability <- function(listener_guess, produced_y, type, size_prototypes) {
+    icon_ev <- signal_evidence(produced_y, size_prototypes)
+    logits <- qlogis(clamp02(listener_guess + (iconicity_weight * icon_ev)))
+    probs <- plogis(logits)
+    return(list(probs = probs, evidence = icon_ev))
+  }
 
-probs <- listener_guess_probability(listener_guess, x_prod, y_prod, referents_info)
+recognition <- listener_guess_probability(
+  listener_guess[ref_id],
+  produced_y,
+  referents_info$type[ref_id],
+  referents_info$size_prototypes[ref_id])
+
+prob <- recognition$probs
 
 ```
 
@@ -287,16 +283,12 @@ The final outcome of the trial, success or failure, is implemented as random sam
 After calculating success or failure, learning is reinforced for both sender and receiver by implementing the *associative learning bias* mechanism. This is a learning mechanism and not an iconicity mechanism. It is parameterized as applying a baseline *learning strength* ($\Delta$) to the sender's and receiver's associative strengths. Successful trials receive a larger update (scaled by $7.5$), while successful trials receive smaller update (scaled by $1$), reflecting incremental strengthening of form-meaning mappings across interactions, with stronger learning on successful interactions. The learning strength parameter is set to $0.015$ corresponding to 1% absolute increase for an associative strength of 0.5 on failed interactions, and a 9% absolute increase on successful interactions.<!--[see e.g., work on error-driven learning and artificial language learning, where learning slows down as certainty increases making successes less impactful over time while negative feedback signal remains impactful throughout learning, @holroyd-coles2002; @opitz2011].-->
 
 ```{r echo=TRUE, eval=FALSE}
-success <- rbinom(1,1,probs[r])
+success <- rbinom(1 ,1, prob)
 
-update_guess_logodds <- function(p_old, delta) plogis(qlogis(p_old) + delta)
-
-success_scale <- 1.2
-failure_scale <- 0.8
-delta <- learning_strength_logit * ifelse(success==1, success_scale, failure_scale)
-speaker_guess[r] <- update_guess_logodds(speaker_guess[r], delta)
-listener_guess[r] <- update_guess_logodds(listener_guess[r], delta)
-
+update_logit <- function(x, learning_strength, success, success_scale = 7.5, failure_scale = 1) {
+    delta <- learning_strength * ifelse(success == 1, success_scale, failure_scale)
+    plogis(qlogis(clamp02(x)) + delta)
+  }
 ```
 
 ### Updating the signal
@@ -357,7 +349,7 @@ d.empty <- data.frame(
 
 # Run simultation function
 d.simulation <- d.empty %>% 
-  run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.266, iconicity_weight = 0.04, learning_strength = 0.015)
+  run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.266, iconicity_weight = 0.4, learning_strength = 0.015)
 
 # # Generate one data frame with different simulations where params are switched on/off
 # n_sim = 5
@@ -425,7 +417,7 @@ d.iconicity.mean <- d.iconicity |>
 
 ```
 
-```{r iconicity-plot, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:iconicity-plot)", warning=FALSE}
+```{r iconicity-plot, fig.width=base.width*5, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:iconicity-plot)", warning=FALSE}
 # #iconicity trajectories - remove model with only learning since that was added to compare against old model
 # d.learned.iconicity <- d.iconicity %>%
 #   filter(process == "learned", parameter_space != "onlyLearning") %>%
@@ -443,7 +435,7 @@ d.iconicity.mean <- d.iconicity |>
 d.iconicity |> 
 ggplot(aes(x = total_round, y = evidence, group = simulation,
            color = evidence)) +
-  geom_path(size = 0.5, alpha = 0.05,
+  geom_path(size = 0.5, alpha = 0.08,
             color = "black") +
   geom_path(data = d.iconicity.mean, 
             aes(group = 1), size = 2,
@@ -451,14 +443,13 @@ ggplot(aes(x = total_round, y = evidence, group = simulation,
   geom_path(data = d.iconicity.mean, 
             aes(group = 1), size = 1) +  
   # Add lines at generational overturn
-  geom_vline(xintercept = seq(0, 10, by = 1), 
+  geom_vline(xintercept = seq(0, 100, by = 10), 
              color = "grey", 
              lty = "dotted") +
   scale_color_viridis_c(begin = 0,
                         end = 1)+
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 10, 1),
-                     labels = paste0(seq(0,10,1))) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
   theme_minimal() #+
@@ -473,9 +464,9 @@ ggplot(aes(x = total_round, y = evidence, group = simulation,
 
 We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no learning strength is applied, see Figure \@ref(fig:accuracy). This seems to suggest that slower development of iconicity is beneficial for learning?
 
-(ref:accuracy) Success rate across simulation rounds. A binomial GLM with smoothing is fit to the proportion of successful interactions. Shaded bands indicate the model-based standard error. Panels correspond to the different parameter settings.
+(ref:accuracy) Success rate across simulation rounds for the ten generations. Blue lines corresponds to agents' guessing probabilities, black lines to their associative strength in beliefs about the form-meaning mappings.
 
-```{r accuracy, fig.width=base.width*6, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:accuracy)"}
+```{r accuracy, fig.width=base.width*5, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:accuracy)"}
 # Plot success rate over time across simulation
 d.simulation_success <- d.simulation %>%
   select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
@@ -496,20 +487,20 @@ d.simulation_success <- d.simulation %>%
     associative_strength = mean(associative_strength, na.rm = TRUE),
     .groups = "drop")
 
-# trying to pull value at which certain accuracy is reached
-d.simulation_success |>
-  group_by(total_round, generation) |>
-  summarise(associative_strength = mean(associative_strength)) |>
-  filter(associative_strength > 0.75) |>
-  group_by(generation) |>
-  summarise(min = min(total_round))
+# # trying to pull value at which certain accuracy is reached
+# d.simulation_success |>
+#   group_by(total_round, generation) |>
+#   summarise(associative_strength = mean(associative_strength)) |>
+#   filter(associative_strength > 0.75) |>
+#   group_by(generation) |>
+#   summarise(min = min(total_round))
 
 # plot associative strength
 d.simulation_success  %>%
   ggplot(
     aes(x = total_round, y = associative_strength, group = interaction(simulation, generation))) +
   # Individual simulation paths
-  geom_path(linewidth = 0.5, alpha = 0.05, color = "black") +
+  geom_path(linewidth = 0.5, alpha = 0.08, color = "black") +
   # mean across all simulations
   geom_line(data = d.simulation_success |>
               group_by(total_round) |>
@@ -526,8 +517,8 @@ d.simulation_success  %>%
             inherit.aes = FALSE,
             color = "blue", 
             linewidth = 1) +
-  labs(title = "Learning progress across generations (guessing = blue, associative strength = black)",
-       y = "Associative strength", 
+  labs(title = "Learning progress across generations",
+       y = "Learning", 
        x = "Total rounds (cumulative)") +
   scale_y_continuous(limits = c(0, 1)) + 
   # breaks every 10 rounds to mark the start of a new generation
@@ -536,7 +527,9 @@ d.simulation_success  %>%
 
 ```
 
-```{r eval == FALSE}
+(ref:accuracy-beginning) Success rate at the first round for each generation across simulation rounds. Panels correspond to the ten generations.
+
+```{r accuracy-beginning, fig.width=base.width*5, fig.height=base.height*5, fig.align='center', out.width='100%', fig.cap="(ref:accuracy-beginning)"}
 #attempt to look at the very beginning
 d.simulation_success_beginning <- d.simulation %>%
   select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
@@ -579,6 +572,8 @@ ggplot(d.simulation_success_beginning,
   theme_minimal()
 
 ```
+
+
 
 Figure \@ref(fig:signal-space) visualizes the distribution of produced signals across simulations 1, 5 and 10, for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge strongly, e.g., the model without corrective rate (third row).
 
@@ -726,7 +721,7 @@ d.grid_results %<>%
 
 ```
 
-```{r grid-search, fig.width=base.width*7, fig.height=base.height*5, fig.align='center', out.width='100%', fig.cap="(ref:grid-search)"}
+```{r grid-search, fig.width=base.width*5, fig.height=base.height*5, fig.align='center', out.width='100%', fig.cap="(ref:grid-search)"}
 # Grid plots for when one of the three parameters are set
 p.grid.sd.set <- d.grid_results %>%
   filter(drift_sd_y == 0.266) %>%
@@ -745,19 +740,20 @@ p.grid.sd.set <- d.grid_results %>%
   guides(color = "none") +
   labs(x = "Learning strength", y = "Iconicity weighting", fill = "Iconicity")
 
-p.grid.learning.set <- p.grid.sd.set %+%
+p.grid.learning.set <- p.grid.sd.set +
   (d.grid_results %>%
      filter(learning_strength == 0.014)) +
   aes(x = factor(drift_sd_y)) +
   labs(x = "SD along y")
 
-p.grid.iconicity.set <- p.grid.sd.set %+%
+p.grid.iconicity.set <- p.grid.sd.set +
   (d.grid_results %>%
      filter(iconicity_weight == 0.071)) +
   aes(y = factor(drift_sd_y)) +
   labs(y = "SD along y")
 
-p.grid.sd.set + p.grid.learning.set + p.grid.iconicity.set
+(p.grid.sd.set + guides(fill = "none") + p.grid.learning.set + guides(fill = "none")) /( p.grid.iconicity.set + plot_spacer()) +
+  plot_layout(widths = c(1,1), heights = 1)
 ```
 
 ```{r}
