@@ -150,7 +150,7 @@ run_interaction_sim <- function(
   
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
-   signal_evidence <- function(produced_y, target, k_perception = 2) {
+   signal_evidence <- function(produced_y, target, k_perception = 5) {
     dist <- abs(produced_y - target)
     
     if (dist >= 0.2 & dist <= 0.8) {
@@ -468,12 +468,12 @@ p.sd.high / p.sd.low
 prob_pocket_landing <- function(n = 1000, 
                                 sd_base, 
                                 initial_y = 0.5, 
-                                k = 1.5, 
+                                k_production = 1.5, 
                                 associative_strength = 0.3) {
   
   # Calculate effective SD based on your noise-trap logic
   # When assoc < 0.5, sd_eff increases
-  sd_eff <- sd_base * (1 + k * (0.5 - associative_strength))
+  sd_eff <- sd_base * (1 + k_production * (0.5 - associative_strength))
   
   # Simulate n signals
   # Using a large n (e.g., 10,000) provides a smoother probability estimate
@@ -502,7 +502,7 @@ result <- prob_pocket_landing(
   sd_base = 0.266,
   initial_y = 0.5,
   associative_strength = 0.3,
-  k = 1.5
+  k_production = 1.5
 )
 
 print(result)
@@ -513,10 +513,10 @@ pocket_prob <- function(drift_sd_y,
                         n = 1e5,
                         stored_y = 0.5,
                         speaker_guess = 0.5,
-                        k = 1.5) {
+                        k_production = 1.5) {
   
   # Compute effective standard deviation
-  sd_effective <- drift_sd_y * (1 + k * (0.5 - speaker_guess))
+  sd_effective <- drift_sd_y * (1 + k_production * (0.5 - speaker_guess))
   
   # Draw samples from normal distribution
   y <- rnorm(n, mean = stored_y, sd = sd_effective)
@@ -532,7 +532,7 @@ pocket_prob <- function(drift_sd_y,
 # find drift_sd_y that yields a target probability of walking into a pocket
 find_drift_sd_y_sim <- function(target_prob,
                                 speaker_guess = 0.5,
-                                k = 1.5,
+                                k_production = 1.5,
                                 lower = 0.001,
                                 upper = 1,
                                 tol = 1e-4) {
@@ -541,7 +541,7 @@ find_drift_sd_y_sim <- function(target_prob,
     pocket_prob(
       drift_sd_y = drift_sd_y,
       speaker_guess = speaker_guess,
-      k = k
+      k_production = k_production
     ) - target_prob
   }
   
@@ -551,13 +551,13 @@ find_drift_sd_y_sim <- function(target_prob,
 
 
 #speaker_guess = 0.5 (no scaling effect from k)
-find_drift_sd_y_sim(0.2, speaker_guess = 0.5, k = 1.5)
+find_drift_sd_y_sim(0.2, speaker_guess = 0.5, k_production = 1.5)
 
 #lower confidence (more noise)
-find_drift_sd_y_sim(0.25, speaker_guess = 0.3, k = 1.5)
+find_drift_sd_y_sim(0.25, speaker_guess = 0.3, k_production = 1.5)
 
 #high confidence (less noise)
-find_drift_sd_y_sim(0.10, speaker_guess = 0.8, k = 1.5)
+find_drift_sd_y_sim(0.10, speaker_guess = 0.8, k_production = 1.5)
 
 
 # Check both scaling probs for walking in and out of a pocket
@@ -565,9 +565,9 @@ find_drift_sd_y_sim(0.10, speaker_guess = 0.8, k = 1.5)
 p_enter <- function(sd_base,
                     n = 5e4,
                     speaker_guess = 0.5,
-                    k = 1.5) {
+                    k_production = 1.5) {
   
-  sd_eff <- sd_base * (1 + k * (0.5 - speaker_guess))
+  sd_eff <- sd_base * (1 + k_production * (0.5 - speaker_guess))
   
   y <- clamp01(rnorm(n, mean = 0.5, sd = sd_eff))
   
@@ -579,9 +579,9 @@ p_enter <- function(sd_base,
 p_exit <- function(sd_base,
                    n = 5e4,
                    speaker_guess = 0.5,
-                   k = 1.5) {
+                   k_production = 1.5) {
   
-  sd_eff <- sd_base * (1 + k * (0.5 - speaker_guess))
+  sd_eff <- sd_base * (1 + k_production * (0.5 - speaker_guess))
   
   # simulate both pockets
   y_high <- clamp01(rnorm(n, mean = 0.8, sd = sd_eff))
@@ -702,7 +702,7 @@ start_vals <- rbeta(8, 3, 9)
 
 ls_closed <- find_learning_strength_closed(
   target = 0.95,
-  n_rounds = 3,
+  n_rounds = 10,
   start = start_vals)
 
 ls_closed
@@ -713,14 +713,14 @@ ls_closed
 simulate_vector_learning <- function(trials, 
                                      y_produced = 0.9, 
                                      icon_weight = 0.04, 
-                                     k = 4) {
+                                     k_perception = 5) {
   
   n_steps <- length(trials)
   p <- numeric(n_steps + 1)
   p[1] <- 0.25 # Start probability (1/4 chance)
   
   # Calculate iconicity evidence once
-  icon_ev <- signal_evidence(y_produced, target = 1, k = k)
+  icon_ev <- signal_evidence(y_produced, target = 1, k_perception = k_perception)
   
   # Your specific calibrations (at p=0.5)
   # Success: +0.364 log-odds (~ +9% gain)
@@ -749,16 +749,16 @@ my_trials <- c(0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1,
 iconic_results <- simulate_vector_learning(
   trials = my_trials, 
   y_produced = 0.95, 
-  icon_weight = 0.04, 
-  k = 4
+  icon_weight = 0.4, 
+  k_perception = 5
 )
 
 # Call for a Neutral word with the SAME trial history
 neutral_results <- simulate_vector_learning(
   trials = my_trials, 
   y_produced = 0.5, 
-  icon_weight = 0.04, 
-  k = 4
+  icon_weight = 0.4, 
+  k_perception = 5
 )
 
 # Compare the learning paths
@@ -1063,5 +1063,84 @@ p.grid.sd.set.learning
 p.grid.learning.set.learning
 p.grid.iconicity.set.learning
 
+# 7. PLOTS OF PER REFERENT ICONICITY----------------------------------------
 
+# Calculate iconicity per referent
+d.iconicity.ref <- d.simulation %>%
+  mutate(
+    total_round = (generation - 1) * 10 + round,
+    strength = abs(evidence)) %>%
+  group_by(simulation, generation, total_round, type, lexeme) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
+    .groups = "drop") %>%
+  group_by(simulation, generation, total_round, lexeme) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
+    .groups = "drop")
+
+# Aggregated
+d.iconicity.ref.mean <- d.iconicity.ref |> 
+  group_by(total_round, lexeme) %>%
+  summarise(evidence = mean(evidence),
+            strength = mean(strength),
+            .groups = "drop")
+
+d.iconicity.ref |> 
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.08,
+            color = "black") +
+  geom_path(data = d.iconicity.ref.mean, 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data = d.iconicity.ref.mean, 
+            aes(group = 1), size = 1) +  
+  # Add lines at generational overturn
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c(begin = 0,
+                        end = 1)+
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  labs(title = "Iconicity over generations",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
+  theme_minimal() +
+  facet_wrap(~lexeme, ncol = 2)
+
+# Only look at the first generation at the first round across simulations
+d.test <- d.simulation %>% 
+  filter(generation == 1) %>% 
+  group_by(simulation, round, type, lexeme) %>%
+  summarise(evidence = mean(evidence)) %>% 
+  group_by(simulation, round, lexeme) %>% 
+  summarise(evidence = mean(evidence))
+
+d.test2.mean <- d.test %>% group_by(round, lexeme) %>% summarise(evidence = mean(evidence))
+
+d.test |> 
+  ggplot(aes(x = round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.08,
+            color = "black") +
+  geom_path(data = d.test2.mean, 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data = d.test2.mean, 
+            aes(group = 1), size = 1) +  
+  # Add lines at generational overturn
+  geom_vline(xintercept = seq(0, 10, by = 1), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c(begin = 0,
+                        end = 1)+
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 10, 1)) +
+  labs(title = "Iconicity over generations",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
+  theme_minimal() +
+  facet_wrap(~lexeme, ncol = 2)
 

@@ -329,6 +329,7 @@ d.empty <- data.frame(
   gen = integer(), 
   round = integer(), 
   trial = integer(), 
+  trial_counter = integer(),
   referent = integer(), 
   speaker = character(), 
   listener = character(), 
@@ -339,6 +340,8 @@ d.empty <- data.frame(
   prob = integer(), 
   success = integer(), 
   evidence = integer(),
+  expressive_agent = character(),
+  is_expressive_trial = character(),
   old_guess_A = integer(), 
   new_guess_A = integer(), 
   old_guess_B = integer(), 
@@ -347,7 +350,7 @@ d.empty <- data.frame(
   new_stored_y = integer(), 
   stringsAsFactors = FALSE)
 
-# Run simultation function
+# Run simulation function
 d.simulation <- d.empty %>% 
   run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.266, iconicity_weight = 0.4, learning_strength = 0.015)
 
@@ -415,6 +418,18 @@ d.iconicity.mean <- d.iconicity |>
             strength = mean(strength),
             .groups = "drop")
 
+d.expressive.agents <- d.simulation %>%
+  filter(!expressive_agent == is.na(expressive_agent)) %>%
+  mutate(
+    total_round = (generation - 1) * 10 + round) %>%
+  group_by(simulation, generation, total_round, type, lexeme) %>%
+  summarise(
+    evidence = mean(evidence),
+    .groups = "drop") %>%
+  group_by(simulation, generation, total_round) %>%
+  summarise(
+    evidence = mean(evidence),
+    .groups = "drop")
 ```
 
 ```{r iconicity-plot, fig.width=base.width*5, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:iconicity-plot)", warning=FALSE}
@@ -437,6 +452,12 @@ ggplot(aes(x = total_round, y = evidence, group = simulation,
            color = evidence)) +
   geom_path(size = 0.5, alpha = 0.08,
             color = "black") +
+geom_point(data = d.expressive.agents,
+           aes(x = total_round, y = evidence),
+           color = "grey",
+           size = 1.5,
+           alpha = 0.6,
+           inherit.aes = FALSE) +
   geom_path(data = d.iconicity.mean, 
             aes(group = 1), size = 2,
             color = "black") +
@@ -452,22 +473,20 @@ ggplot(aes(x = total_round, y = evidence, group = simulation,
   scale_x_continuous(breaks = seq(0, 100, 10)) +
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
-  theme_minimal() #+
-  #facet_wrap(~parameter_space, ncol = 3)
+  theme_minimal()
 
 # # Only look at the first generation at the first round across simulations
 # d.test2 <- d.simulation %>% filter(generation == 1) %>% group_by(simulation, round, type, lexeme) %>% 
 #   summarise(evidence = mean(evidence)) %>% group_by(simulation, round) %>% summarise(evidence = mean(evidence))
 # d.test2.mean <- d.test2 %>% group_by(round) %>% summarise(evidence = mean(evidence))
-
 ```
 
 We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no learning strength is applied, see Figure \@ref(fig:accuracy). This seems to suggest that slower development of iconicity is beneficial for learning?
 
-(ref:accuracy) Success rate across simulation rounds for the ten generations. Blue lines corresponds to agents' guessing probabilities, black lines to their associative strength in beliefs about the form-meaning mappings.
+(ref:accuracy) Learning across simulations, black lines correspond to participants' associative strength in beliefs about the form-meaning mappings. The upper panel shows participants' learning progress within each generation, clearly resetting associative strength at generational overturn. Bottom-left panel shows the average learning progress over the 10 rounds, summarised across the 10 generations. Bottom-right panel shows the average learning progress across the 10 generations.
 
 ```{r accuracy, fig.width=base.width*5, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:accuracy)"}
-# Plot success rate over time across simulation
+# Plot success rate over time across simulations
 d.simulation_success <- d.simulation %>%
   select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
   pivot_longer(
@@ -478,52 +497,98 @@ d.simulation_success <- d.simulation %>%
   select(-process) %>%
   # filter down to rows for which the guess pertains to the listener
   filter((listener == "A" & agent == "A") | (listener == "B" & agent == "B")) %>%
-  #cumulative rounds
+  group_by(simulation)
+
+# Plot generational overturn
+p.learning.overturn <- d.simulation_success %>%
+  group_by(simulation, generation, round) %>%
+  summarise(
+    associative_strength = mean(associative_strength, na.rm = TRUE),
+    .groups = "drop") %>%
   mutate(total_round = (generation - 1) * 10 + round) %>%
-  group_by(simulation, generation, total_round) %>%
+  ggplot(aes(x = total_round, y = associative_strength, group = interaction(generation, simulation))) +
+  # individual trajectories
+  geom_path(linewidth = 0.5, alpha = 0.08, color = "black") +
+  # mean trajectory
+  geom_line(
+    data = . %>%
+      group_by(total_round) %>%
+      summarise(associative_strength = mean(associative_strength),
+                .groups = "drop"),
+    aes(x = total_round, y = associative_strength),
+    inherit.aes = FALSE,
+    color = "black",
+    linewidth = 1) +
+  # Add lines at generational overturn
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dashed") +
+  labs(
+    title = "Learning with generational turnover (continuous time)",
+    x = "Total rounds (cumulative)",
+    y = "Learning (associative strength)") +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal()
+
+# plot average associative strength within generations
+p.learning <- d.simulation_success %>%
+  group_by(simulation, generation, round) %>%
   summarise(
     prob = mean(prob, na.rm = TRUE),
     success = mean(success, na.rm = TRUE),
     associative_strength = mean(associative_strength, na.rm = TRUE),
-    .groups = "drop")
-
-# # trying to pull value at which certain accuracy is reached
-# d.simulation_success |>
-#   group_by(total_round, generation) |>
-#   summarise(associative_strength = mean(associative_strength)) |>
-#   filter(associative_strength > 0.75) |>
-#   group_by(generation) |>
-#   summarise(min = min(total_round))
-
-# plot associative strength
-d.simulation_success  %>%
+    .groups = "drop") %>%
   ggplot(
-    aes(x = total_round, y = associative_strength, group = interaction(simulation, generation))) +
+    aes(x = round, y = associative_strength, group = simulation)) +
   # Individual simulation paths
   geom_path(linewidth = 0.5, alpha = 0.08, color = "black") +
   # mean across all simulations
   geom_line(data = d.simulation_success |>
-              group_by(total_round) |>
+              group_by(round) |>
               summarise(associative_strength = mean(associative_strength), .groups = "drop"),
-            aes(x = total_round, y = associative_strength),
+            aes(x = round, y = associative_strength),
             inherit.aes = FALSE,
             color = "black", 
             linewidth = 1) +
-  # mean prob across all simulations
-  geom_line(data = d.simulation_success |>
-              group_by(total_round) |>
-              summarise(prob = mean(prob), .groups = "drop"),
-            aes(x = total_round, y = prob),
-            inherit.aes = FALSE,
-            color = "blue", 
-            linewidth = 1) +
-  labs(title = "Learning progress across generations",
-       y = "Learning", 
-       x = "Total rounds (cumulative)") +
+  labs(title = "Average learning progress over rounds",
+       y = "Learning (associative strength)", 
+       x = "Rounds") +
   scale_y_continuous(limits = c(0, 1)) + 
   # breaks every 10 rounds to mark the start of a new generation
-  scale_x_continuous(breaks = seq(0, 100, 10)) +  
+  scale_x_continuous(breaks = seq(0, 10, 1)) +  
   theme_minimal()
+
+# Plot learning over generations
+p.learning.overGens <- d.simulation_success %>%
+  group_by(simulation, generation) %>%
+  summarise(
+    prob = mean(prob, na.rm = TRUE),
+    success = mean(success, na.rm = TRUE),
+    associative_strength = mean(associative_strength, na.rm = TRUE),
+    .groups = "drop") %>%
+  ggplot(
+    aes(x = generation, y = associative_strength)) +
+  # Individual simulation paths
+  geom_path(linewidth = 0.5, alpha = 0.08, color = "black") +
+  # mean across all simulations
+  geom_line(data = d.simulation_success |>
+              group_by(generation) |>
+              summarise(associative_strength = mean(associative_strength), .groups = "drop"),
+            aes(x = generation, y = associative_strength),
+            inherit.aes = FALSE,
+            color = "black", 
+            linewidth = 1) +
+  labs(title = "Learning progress over generations",
+       y = "Learning (associative strength)", 
+       x = "Generations") +
+  scale_y_continuous(limits = c(0, 1)) + 
+  # breaks every 10 rounds to mark the start of a new generation
+  scale_x_continuous(breaks = seq(0, 10, 1)) +  
+  theme_minimal()
+
+p.learning.overturn /
+  (p.learning + p.learning.overGens)
 
 ```
 
@@ -571,6 +636,13 @@ ggplot(d.simulation_success_beginning,
   scale_x_continuous(breaks = 1:10) + 
   theme_minimal()
 
+# # trying to pull value at which certain accuracy is reached
+# d.simulation_success |>
+#   group_by(total_round, generation) |>
+#   summarise(associative_strength = mean(associative_strength)) |>
+#   filter(associative_strength > 0.75) |>
+#   group_by(generation) |>
+#   summarise(min = min(total_round))
 ```
 
 
@@ -719,6 +791,67 @@ d.full.history <- d.grid_results %>%
 d.grid_results %<>%
   mutate(across(where(is.numeric), ~ round(.x, digits = 3)))
 
+#Check at what parameter values the mechanism functions as an attractor
+d.check <- d.full.history %>%
+  ungroup() %>%
+  mutate(
+    target_hit = case_when(
+      type == "large" & produced_y > 0.8 ~ 1,
+      type == "small" & produced_y < 0.2 ~ 1,
+      TRUE ~ 0)) 
+
+d.attractor <- d.check %>%
+  group_by(iconicity_weight, learning_strength, drift_sd_y,
+           generation) %>%
+  #calculate proportion of trials that generates a pocket
+  summarise(
+    attractor_rate = mean(target_hit, na.rm = TRUE),
+    evidence = mean(evidence),
+    .groups = "drop") %>%
+  # filter out rows where attractor rate is lower than 0.5
+  filter(attractor_rate > 0.5)
+
+# Combinations for which the proportion of trials generating pocket-signals > 0.50 across all 10 generations
+d.attractor.max <- d.attractor %>% 
+  group_by(iconicity_weight, learning_strength, drift_sd_y) %>%
+  tally() %>%
+  filter(n == 10)
+
+#d.attractor.max %>% group_by(learning_strength) %>% tally()
+
+# Check how early entrance into a pocket
+d.events <- d.check %>%
+  arrange(simulation, generation, round, trial) %>%
+  group_by(iconicity_weight, learning_strength, drift_sd_y, simulation) %>%
+  summarise(
+    # Find index of first successful hit
+    first_idx = which(target_hit == 1)[1],
+    # If no hit occurs, values will be NA
+    first_generation = ifelse(!is.na(first_idx),
+                              generation[first_idx], NA_real_),
+    first_round = ifelse(!is.na(first_idx),
+                         round[first_idx], NA_real_),
+    first_trial = ifelse(!is.na(first_idx),
+                         trial[first_idx], NA_real_),
+    .groups = "drop") %>%
+  group_by(iconicity_weight, learning_strength, drift_sd_y) %>%
+  summarise(
+    # Average generation when first emergence happens
+    mean_generation = mean(first_generation, na.rm = TRUE),
+    # Average round when first emergence happens
+    mean_round = mean(first_round, na.rm = TRUE),
+    # Average trial within round when it happens
+    mean_trial = mean(first_trial, na.rm = TRUE),
+    # Success rate = proportion of sims that EVER reached a pocket; not very informative
+    success_rate = mean(!is.na(first_generation)),
+    .groups = "drop") 
+
+# combinations for which pocket entrance always happens at first generation and within the first round
+d.events.first <- d.events %>%
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) %>%
+  filter(mean_generation <= 1.00, mean_round < 1.10)
+
+#d.events.first %>% group_by(drift_sd_y) %>% tally()
 ```
 
 ```{r grid-search, fig.width=base.width*5, fig.height=base.height*5, fig.align='center', out.width='100%', fig.cap="(ref:grid-search)"}

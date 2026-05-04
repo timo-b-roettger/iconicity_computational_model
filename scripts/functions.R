@@ -19,8 +19,7 @@ run_interaction_sim <- function(
     learning_strength = 0.015, # amount of added memory strengthening for referents as dependent on success; corresponding to .01 increase for a probability of 0.5 on failure, and .09 increase on success
     iconicity_weight = 0.04,  # multiplicator for iconicity; corresponding to 1% absolute increase for a probability of 0.5 (for the perfectly iconic signal)
     success_scale = 7.5, # more learning with success; 95% accuracy at the end of 10th round
-    failure_scale = 1, # also increase in learning with failure, but less so; 60% accuracy at the end of 10th round
-    lapse = 0.05 # soft lapse in probability space
+    failure_scale = 1 # also increase in learning with failure, but less so; 60% accuracy at the end of 10th round
 ) {
   
   # HELPER FUNCTIONS CALLED IN SIMULATION LOOP
@@ -42,7 +41,7 @@ run_interaction_sim <- function(
   
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
-  signal_evidence <- function(produced_y, target, k_perception = 2) {
+  signal_evidence <- function(produced_y, target, k_perception = 5) {
     dist <- abs(produced_y - target)
     
     if (dist >= 0.2 & dist <= 0.8) {
@@ -62,7 +61,7 @@ run_interaction_sim <- function(
     return(evidence)
   }
   
-  # LISTENER RECOGNITION PROBABILITY UPDATED ---lapse missing?
+  # LISTENER RECOGNITION PROBABILITY UPDATED
   listener_guess_probability <- function(listener_guess, produced_y, type, size_prototypes) {
     # Iconicity bias
     icon_ev <- signal_evidence(produced_y, size_prototypes)
@@ -96,6 +95,19 @@ run_interaction_sim <- function(
   for (sim in 1:n_sim) {
     
     for (gen in 1:n_generations) {
+
+      # expressive agent assignment--20% chance that there is an expressive agent in this generation
+      expressive_agent <- if (runif(1) < 0.2) sample(c("A", "B"), 1) else NA
+      # Total number of trials in this generation
+      n_trials_gen <- n_rounds * n_referents
+      # Pre-sample which trials will be expressive (20% of all trials)
+      expressive_trials <- if (!is.na(expressive_agent)) {
+        sample(1:n_trials_gen, size = ceiling(0.2 * n_trials_gen))
+      } else {
+        integer(0)
+      }
+      # Counter to track trial index within generation
+      trial_counter <- 0
       
       # Initialize agents; reset representation strength at each generation
       agentA_guess <- rbeta(n_referents, 3, 9)
@@ -107,7 +119,8 @@ run_interaction_sim <- function(
         roles <- sample(rep(c("A", "B"), length.out = n_referents))
         
         for (trial in 1:n_referents) {
-          
+          # Increment global trial counter within generation (for expressive agent trials)
+          trial_counter <- trial_counter + 1
           ref_id <- referent_order[trial]
           # speakers/listeners are taking turns
           speaker <- roles[trial]
@@ -138,6 +151,19 @@ run_interaction_sim <- function(
             k_production = 1.5)
           produced_x <- signal[1]
           produced_y <- signal[2]
+          # Override y production if agent is expressive
+          is_expressive_trial <- FALSE
+          if (!is.na(expressive_agent) &&
+              speaker == expressive_agent &&
+              trial_counter %in% expressive_trials) {
+            is_expressive_trial <- TRUE
+            # Override y depending on referent type
+            if (referents_info$type[ref_id] == "large") {
+              produced_y <- 0.9
+            } else {
+              produced_y <- 0.1
+            }
+          }
           
           # Calculate recognition probability for the listener
           recognition <- listener_guess_probability(
@@ -175,9 +201,9 @@ run_interaction_sim <- function(
           
           # Log everything
           simulation_log[[length(simulation_log) + 1]] <- tibble(
-            simulation = sim, generation = gen, round = round, trial = trial, referent = ref_id, speaker = speaker, listener = listener, 
+            simulation = sim, generation = gen, round = round, trial = trial, trial_counter = trial_counter, referent = ref_id, speaker = speaker, listener = listener, 
             lexeme = referents_info$lexeme[ref_id], type = referents_info$type[ref_id], produced_x = produced_x, produced_y = produced_y,
-            prob = prob, evidence = recognition$evidence, success = success,
+            prob = prob, evidence = recognition$evidence, success = success, expressive_agent = expressive_agent, is_expressive_trial = is_expressive_trial,
             old_guess_A = old_guess_A, new_guess_A = new_guess_A, old_guess_B = old_guess_B, new_guess_B = new_guess_B,
             old_stored_y_A = old_stored_y_A, old_stored_y_B = old_stored_y_B, new_stored_y_A = new_stored_y_A, new_stored_y_B = new_stored_y_B
           )
