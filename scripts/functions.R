@@ -96,19 +96,10 @@ run_interaction_sim <- function(
     
     for (gen in 1:n_generations) {
 
-      # expressive agent assignment--20% chance that there is an expressive agent in this generation
-      expressive_agent <- if (runif(1) < 0.2) sample(c("A", "B"), 1) else NA
-      # Total number of trials in this generation
-      n_trials_gen <- n_rounds * n_referents
-      # Pre-sample which trials will be expressive (20% of all trials)
-      expressive_trials <- if (!is.na(expressive_agent)) {
-        sample(1:n_trials_gen, size = ceiling(0.2 * n_trials_gen))
-      } else {
-        integer(0)
-      }
-      # Counter to track trial index within generation
-      trial_counter <- 0
-      
+      # expressive agent assignment--10% chance that an agent is expressive; ~20% chance of an expressive agent in this generation
+      expressive_A <- runif(1) < 0.10
+      expressive_B <- runif(1) < 0.10
+
       # Initialize agents; reset representation strength at each generation
       agentA_guess <- rbeta(n_referents, 3, 9)
       agentB_guess <- rbeta(n_referents, 3, 9)
@@ -151,13 +142,20 @@ run_interaction_sim <- function(
             k_production = 1.5)
           produced_x <- signal[1]
           produced_y <- signal[2]
-          # Override y production if agent is expressive
+          # Override y production if agent is expressive; on ~20% of all trials for that expressive agent
           is_expressive_trial <- FALSE
-          if (!is.na(expressive_agent) &&
-              speaker == expressive_agent &&
-              trial_counter %in% expressive_trials) {
+          # Agent A expressive production
+          if (speaker == "A" && expressive_A && runif(1) < 0.20) {
             is_expressive_trial <- TRUE
-            # Override y depending on referent type
+            if (referents_info$type[ref_id] == "large") {
+              produced_y <- 0.9
+            } else {
+              produced_y <- 0.1
+            }
+          }
+          # Agent B expressive production
+          if (speaker == "B" && expressive_B && runif(1) < 0.20) {
+            is_expressive_trial <- TRUE
             if (referents_info$type[ref_id] == "large") {
               produced_y <- 0.9
             } else {
@@ -203,7 +201,7 @@ run_interaction_sim <- function(
           simulation_log[[length(simulation_log) + 1]] <- tibble(
             simulation = sim, generation = gen, round = round, trial = trial, trial_counter = trial_counter, referent = ref_id, speaker = speaker, listener = listener, 
             lexeme = referents_info$lexeme[ref_id], type = referents_info$type[ref_id], produced_x = produced_x, produced_y = produced_y,
-            prob = prob, evidence = recognition$evidence, success = success, expressive_agent = expressive_agent, is_expressive_trial = is_expressive_trial,
+            prob = prob, evidence = recognition$evidence, success = success, expressive_A = expressive_A, expressive_B = expressive_B, is_expressive_trial = is_expressive_trial,
             old_guess_A = old_guess_A, new_guess_A = new_guess_A, old_guess_B = old_guess_B, new_guess_B = new_guess_B,
             old_stored_y_A = old_stored_y_A, old_stored_y_B = old_stored_y_B, new_stored_y_A = new_stored_y_A, new_stored_y_B = new_stored_y_B
           )

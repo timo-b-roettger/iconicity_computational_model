@@ -418,8 +418,9 @@ d.iconicity.mean <- d.iconicity |>
             strength = mean(strength),
             .groups = "drop")
 
+# Check expressive agents
 d.expressive.agents <- d.simulation %>%
-  filter(!expressive_agent == is.na(expressive_agent)) %>%
+  filter(expressive_A == TRUE | expressive_B == TRUE) %>%
   mutate(
     total_round = (generation - 1) * 10 + round) %>%
   group_by(simulation, generation, total_round, type, lexeme) %>%
@@ -644,8 +645,6 @@ ggplot(d.simulation_success_beginning,
 #   group_by(generation) |>
 #   summarise(min = min(total_round))
 ```
-
-
 
 Figure \@ref(fig:signal-space) visualizes the distribution of produced signals across simulations 1, 5 and 10, for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge strongly, e.g., the model without corrective rate (third row).
 
