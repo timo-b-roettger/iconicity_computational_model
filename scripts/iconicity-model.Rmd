@@ -520,7 +520,114 @@ d.iconicity.gen |>
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
   theme_minimal()
-  
+
+# Check how many trials overall generate iconic signals
+d.iconicity.signals <- d.simulation %>%
+  mutate(signal_type = case_when(evidence > 0 ~ "iconic",
+                                 evidence < 0 ~ "anti-iconic",
+                                 evidence == 0 ~ "non-iconic"))
+
+d.iconicity.signals %>%
+  group_by(simulation, generation, signal_type) %>%
+  count(simulation, generation, signal_type) %>%
+  group_by(simulation, generation) %>%
+  mutate(
+    proportion = n / sum(n)) %>%
+  # get the sim and gen with max proportion of each type
+  #group_by(signal_type) %>%
+  #filter(proportion == max(proportion))
+  # Get mean of each signal type
+  group_by(signal_type) %>%
+  summarise(proportion = mean(proportion))
+
+# current value of circle_radius
+circle_radius = 0.35
+
+# Check stability of iconic signals
+d.iconicity.stability <- d.iconicity.signals %>%
+  mutate(
+    x = purrr::map_dbl(produced_signal, 1),
+    y = purrr::map_dbl(produced_signal, 2),
+    target_x = if_else(type == "small", 0.15, 0.85),
+    target_y = if_else(type == "small", 0.85, 0.15),
+    distance_to_target = sqrt((x - target_x)^2 + (y - target_y)^2),
+    inside_attractor = distance_to_target < circle_radius) %>%
+  group_by(simulation, generation) %>%
+  summarise(
+    # fraction of ALL signals that are iconic AND inside attractor
+    iconic_inside = mean(signal_type == "iconic" & inside_attractor),
+    # fraction of ICONIC signals inside attractor (conditional stability)
+    iconic_stability = mean(inside_attractor[signal_type == "iconic"], na.rm = TRUE),
+    # dispersion of iconic signals 
+    iconic_spread = sd(distance_to_target[signal_type == "iconic"], na.rm = TRUE),
+    # movement of signals between successive trials; ONLY if enough points exist
+    iconic_movement =
+      if (sum(signal_type == "iconic") > 1) {
+        x_i <- x[signal_type == "iconic"]
+        y_i <- y[signal_type == "iconic"]
+        mean(sqrt(diff(x_i)^2 + diff(y_i)^2))
+      } else {
+        NA_real_
+      },
+    .groups = "drop")
+
+# How tight it the cluster of signals around attractor
+ggplot(d.iconicity.stability,
+       aes(x = generation, y = iconic_spread)) +
+  geom_line(aes(group = simulation),
+            alpha = 0.15,
+            linewidth = 0.6) +
+  stat_summary(
+    aes(group = 1),
+    fun = mean,
+    geom = "line",
+    linewidth = 1.5,
+    colour = "black") +
+  labs(
+    title = "Spatial spread of iconic signals",
+    x = "Generation",
+    y = "SD(distance to attractor)") +
+  theme_minimal()
+
+# Temporal shifting, are signals stable or move around from trial to trial
+ggplot(d.iconicity.stability,
+       aes(x = generation, y = iconic_movement)) +
+  geom_line(aes(group = simulation),
+            alpha = 0.15,
+            linewidth = 0.6,
+            na.rm = TRUE) +
+  stat_summary(
+    aes(group = 1),
+    fun = mean,
+    geom = "line",
+    linewidth = 1.5,
+    colour = "black",
+    na.rm = TRUE) +
+  labs(
+    title = "Temporal instability of iconic signals",
+    x = "Generation",
+    y = "Mean stepwise movement") +
+  theme_minimal()
+
+# Proportion of iconic signals inside attractor, how dominant is the semantic locking-in-pocket
+ggplot(d.iconicity.stability,
+       aes(x = generation, y = iconic_inside)) +
+  geom_line(aes(group = simulation),
+            alpha = 0.15,
+            linewidth = 0.6) +
+  stat_summary(
+    aes(group = 1),
+    fun = mean,
+    geom = "line",
+    linewidth = 1.5,
+    colour = "black") +
+  ylim(0, 1) +
+  labs(
+    title = "Overall iconic dominance in signal space",
+    x = "Generation",
+    y = "P(iconic ∩ inside attractor)") +
+  theme_minimal()
+
 # # Only look at the first generation at the first round across simulations
 # d.test2 <- d.simulation %>% filter(generation == 1) %>% group_by(simulation, round, type, lexeme) %>% 
 #   summarise(evidence = mean(evidence)) %>% group_by(simulation, round) %>% summarise(evidence = mean(evidence))
