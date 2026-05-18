@@ -400,7 +400,7 @@ d.iconicity <- d.simulation %>%
   mutate(
     total_round = (generation - 1) * 10 + round,
     strength = abs(evidence)) %>%
-  group_by(simulation, generation, total_round, type, lexeme) %>%
+  group_by(simulation, generation, total_round, type, referent) %>%
   summarise(
     evidence = mean(evidence),
     strength = mean(strength),
@@ -423,7 +423,7 @@ d.expressive.agents <- d.simulation %>%
   filter(expressive_A == TRUE | expressive_B == TRUE) %>%
   mutate(
     total_round = (generation - 1) * 10 + round) %>%
-  group_by(simulation, generation, total_round, type, lexeme) %>%
+  group_by(simulation, generation, total_round, type, referent) %>%
   summarise(
     evidence = mean(evidence),
     .groups = "drop") %>%
@@ -483,7 +483,7 @@ d.iconicity |>
 d.iconicity.gen <- d.simulation %>%
   mutate(
     strength = abs(evidence)) %>%
-  group_by(simulation, generation, round, type, lexeme) %>%
+  group_by(simulation, generation, round, type, referent) %>%
   summarise(
     evidence = mean(evidence),
     strength = mean(strength),
