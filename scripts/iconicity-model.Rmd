@@ -554,8 +554,6 @@ d.iconicity.stability <- d.iconicity.signals %>%
     inside_attractor = distance_to_target < circle_radius) %>%
   group_by(simulation, generation) %>%
   summarise(
-    # fraction of ALL signals that are iconic AND inside attractor
-    iconic_inside = mean(signal_type == "iconic" & inside_attractor),
     # fraction of ICONIC signals inside attractor (conditional stability)
     iconic_stability = mean(inside_attractor[signal_type == "iconic"], na.rm = TRUE),
     # dispersion of iconic signals 
@@ -607,25 +605,6 @@ ggplot(d.iconicity.stability,
     title = "Temporal instability of iconic signals",
     x = "Generation",
     y = "Mean stepwise movement") +
-  theme_minimal()
-
-# Proportion of iconic signals inside attractor, how dominant is the semantic locking-in-pocket
-ggplot(d.iconicity.stability,
-       aes(x = generation, y = iconic_inside)) +
-  geom_line(aes(group = simulation),
-            alpha = 0.15,
-            linewidth = 0.6) +
-  stat_summary(
-    aes(group = 1),
-    fun = mean,
-    geom = "line",
-    linewidth = 1.5,
-    colour = "black") +
-  ylim(0, 1) +
-  labs(
-    title = "Overall iconic dominance in signal space",
-    x = "Generation",
-    y = "P(iconic ∩ inside attractor)") +
   theme_minimal()
 
 # # Only look at the first generation at the first round across simulations
