@@ -629,10 +629,10 @@ center_large <- c(0.85, 0.15)
 phonological_traps <- list(c(0.15, 0.15), c(0.85, 0.85))
 
 trap_radius <- 0.3
-drift_sd <- 0.18
+drift_sd <- 0.19
 k_production <- 1.5
 speaker_guess_fixed <- 0.5
-center_sd <- 0.1
+center_sd <- 0.12
 k_attractor_fixed <- 2.5
 
 grid <- expand.grid(
