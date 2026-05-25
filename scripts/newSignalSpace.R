@@ -39,7 +39,7 @@ if (
 }
 
 # Update signal evidence calculation
-signal_evidence <- function(produced_signal, center_target, k_perception = 2.5, circle_radius = 0.35) {
+signal_evidence <- function(produced_signal, center_target, k_perception = 2.5, circle_radius = 0.3) {
   # Calculate eucledian distance to target_center and to the opposite attractor
   dist_to_target <- sqrt(sum((produced_signal - center_target)^2))
   opposite_center <- c(1 - center_target[1], 1 - center_target[2])
@@ -92,15 +92,26 @@ run_interaction_sim <- function(
     n_referents = 4, # number of unique referents in guessing game
     n_generations = 10, # no of generations
     n_rounds = 10, # number of interaction rounds; 10
-    drift_sd = 0.18,       # amount of variation introduced during production; motor noise; equivalent to approx. 10% chance of wandering into a pocket when the signal is at .5
+    drift_sd = 0.19,  # amount of variation introduced during production; motor noise; equivalent to approx. 10% chance of wandering into a pocket when the signal is at .5, .5 and previous guess = 0.5
     learning_strength = 0.015, # amount of added memory strengthening for referents as dependent on success; corresponding to .01 increase for a probability of 0.5 on failure, and .09 increase on success
-    iconicity_weight = 0.04,  # multiplicator for iconicity; corresponding to 1% absolute increase for a probability of 0.5 (for the perfectly iconic signal)
+    iconicity_weight = 0.4,  # multiplicator for iconicity; corresponding to ~10% absolute increase for a probability of 0.5 (for the perfectly iconic signal)
     success_scale = 7.5, # more learning with success; 95% accuracy at the end of 10th round
     failure_scale = 1, # also increase in learning with failure, but less so; 60% accuracy at the end of 10th round
+    expressive_agents = TRUE, # switch on/off expressive agents
+    phonological_attractors = TRUE, # switch on/off use of phonological attractors
+    k_attractor = 2.5, # controls the shape of decay from attractor centers
     phonological_traps = list(c(0.15, 0.15), c(0.85, 0.85)), # define phonological attractors/traps; currently two, in the opposite corners of the two-dimensional space
-    circle_radius = 0.35, # atm, identical size of both types of attractors
-    trap_center_sd = 0.1  # Locked 5% single-step escape probability from center of phonological attractor
+    circle_radius = 0.3, # atm, identical size of both types of attractors
+    trap_center_sd = 0.12  # 5% single-step escape probability from center of phonological attractor
 ) {
+  
+  # Turn phonological attractors on/off
+  if (!phonological_attractors) {
+    phonological_traps <- list()
+  }
+  
+  # Probability of expressive speakers--10% chance that an agent is expressive; ~20% chance of an expressive agent in this generation
+  expressive_prob <- if (expressive_agents) 0.10 else 0
   
   # HELPER FUNCTIONS CALLED IN SIMULATION LOOP
   # SIGNAL PRODUCTION + MECHANISMS AFFECTING Y-DIMENSION
@@ -108,7 +119,7 @@ run_interaction_sim <- function(
 
   # At signal production, amount of noise is dependent on guess rate AND phonological traps
   # k controls how strongly sd react to speaker_guess; mindful that if p = 1 and k >2, it will return negative sd's
-  produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production, phonological_traps, circle_radius, center_sd) {
+  produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production, phonological_traps, circle_radius, center_sd, k_attractor) {
     # Calculate baseline trial-specific SD based on speaker's guess
     sd <- drift_sd * (1 + k_production * (0.5 - speaker_guess))
     is_inside <- FALSE # Default to FALSE
@@ -124,12 +135,13 @@ run_interaction_sim <- function(
         # Target the closest trap that the signal is currently inside
         closest_trap_dist <- min(distances[inside_traps])
         rel_dist <- closest_trap_dist / circle_radius
-        
-        # Scale SD linearly based on proximity to that trap's center from speaker's current noise (at border, rel_dist = 1; at attractor center, rel_dist = 0) 
-        # under target_alpha (fixed escape probability if signal at trap center)
-        # SD at entering trap
+        # scale distance dynamically; similar to semantic attractors
+        magnitude <- exp(-k_attractor * rel_dist)
+        max_mag <- exp(-k_attractor * 0)
+        min_mag <- exp(-k_attractor * 1)
+        exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
         edge_sd <- drift_sd
-        sd <- center_sd + (edge_sd - center_sd) * rel_dist
+        sd <- edge_sd - (edge_sd - center_sd) * exp_scale
       }
     }
     # Generate the signal using the final calculated SD
@@ -148,7 +160,7 @@ run_interaction_sim <- function(
   
   # Signal evidence for iconicity bias
   # Measures proximity of Y to its size prototype
-  signal_evidence <- function(produced_signal, center_target, k_perception = 2.5, circle_radius) {
+  signal_evidence <- function(produced_signal, center_target, k_perception, circle_radius) {
     # Calculate eucledian distance to target_center and to the opposite attractor
     dist_to_target <- sqrt(sum((produced_signal - center_target)^2))
     opposite_center <- c(1 - center_target[1], 1 - center_target[2])
@@ -181,13 +193,13 @@ run_interaction_sim <- function(
   
   # LISTENER RECOGNITION PROBABILITY UPDATED
   listener_guess_probability <- function(listener_guess, produced_signal, size_prototypes) {
-    icon_ev <- signal_evidence(produced_signal, size_prototypes, circle_radius = circle_radius)
+    icon_ev <- signal_evidence(produced_signal, size_prototypes, k_perception = k_attractor, circle_radius = circle_radius)
     logits <- qlogis(clamp02(listener_guess + (iconicity_weight * icon_ev)))
     probs <- plogis(logits)
     
     return(list(probs = probs, evidence = icon_ev))
   }
-  
+
   # UPDATE LEARNING AS DEPENDENT ON SUCCESS
   update_logit <- function(x, learning_strength, success, success_scale = 7.5, failure_scale = 1) {
     delta <- learning_strength * ifelse(success == 1, success_scale, failure_scale)
@@ -213,9 +225,9 @@ run_interaction_sim <- function(
     for (gen in 1:n_generations) {
       trial_counter <- 0
       
-      # expressive agent assignment--10% chance that an agent is expressive; ~20% chance of an expressive agent in this generation
-      expressive_A <- runif(1) < 0.10
-      expressive_B <- runif(1) < 0.10
+      # expressive agent assignment
+      expressive_A <- runif(1) < expressive_prob
+      expressive_B <- runif(1) < expressive_prob
       
       # Initialize agents; reset representation strength at each generation
       agentA_guess <- rbeta(n_referents, 3, 9)
@@ -258,7 +270,8 @@ run_interaction_sim <- function(
             k_production = 1.5,
             phonological_traps = phonological_traps,
             circle_radius = circle_radius,
-            center_sd = trap_center_sd)
+            center_sd = trap_center_sd,
+            k_attractor = k_attractor)
           
           signal  <- production_output$signal
           in_trap <- production_output$in_trap  # Extract the trap flag for logging
@@ -344,40 +357,83 @@ d.empty <- data.frame(
   stringsAsFactors = FALSE)
 
 # Run simulation function
-d.simulation <- d.empty %>% 
-  run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd = 0.18, iconicity_weight = 0.4, learning_strength = 0.015)
+d.sim <- rbind(
+  d.empty %>% 
+    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = FALSE) %>%
+    mutate(model_type = "semanticAttractors"),
+  d.empty %>% 
+    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = TRUE) %>%
+    mutate(model_type = "semanticAttractors_expressiveAgents"),
+  d.empty %>% 
+    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = TRUE) %>%
+    mutate(model_type = "allAttractors_expressiveAgents"))
+  
+
+write_csv(d.simulation, "temp_data/temp_data.csv")
 
 # REVISIT SCALING TESTS --------------
+# MOST TESTS generated by AI but checked
 # prob of entering a pocket
 # 1. The 2D Probability Helper
 pocket_prob_2d <- function(drift_sd_base, 
                            n = 1e5, 
                            stored_signal = c(0.5, 0.5), 
-                           target_center = c(0.2, 0.8), 
+                           target_center = c(0.15, 0.85), # Updated to match your prototypes
                            speaker_guess = 0.5, 
                            k_production = 1.5,
-                           circle_radius = 0.35) {
+                           circle_radius = 0.3,
+                           center_sd = 0.1,
+                           k_attractor = 2.5,
+                           attractor_type = c("semantic", "phonological")) {
   
-  sd_eff <- drift_sd_base * (1 + k_production * (0.5 - speaker_guess))
+  attractor_type <- match.arg(attractor_type)
   
-  # Generate 2D Gaussian noise
+  # 1. Evaluate the base variance for the trial context
+  if (attractor_type == "semantic") {
+    # Semantic respects the current conversational guess state
+    sd_eff <- drift_sd_base * (1 + k_production * (0.5 - speaker_guess))
+  } else {
+    # Phonological ignores speaker guess at its outer boundary
+    sd_eff <- drift_sd_base
+  }
+  
+  # 2. Check if the starting position falls within the attractor radius
+  dist_to_center <- sqrt(sum((stored_signal - target_center)^2))
+  
+  if (dist_to_center < circle_radius) {
+    # Apply your updated exponential landscape compression
+    rel_dist <- dist_to_center / circle_radius
+    magnitude <- exp(-k_attractor * rel_dist)
+    max_mag <- exp(-k_attractor * 0)
+    min_mag <- exp(-k_attractor * 1)
+    
+    exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
+    
+    # Compress variance based on starting proximity
+    sd_eff <- sd_eff - (sd_eff - center_sd) * exp_scale
+  }
+  
+  # Generate 2D Gaussian noise using the context-aware variance
   noise_x <- rnorm(n, mean = stored_signal[1], sd = sd_eff)
   noise_y <- rnorm(n, mean = stored_signal[2], sd = sd_eff)
   
-  # Euclidean distance to attractor center
+  # Calculate destination distances
   dists <- sqrt((noise_x - target_center[1])^2 + (noise_y - target_center[2])^2)
   
-  # Return proportion of signals that landed inside the circle
   return(mean(dists < circle_radius))
 }
 
 find_max_hit_rate_sd <- function(stored_signal = c(0.5, 0.5), 
-                                 target_center = c(0.2, 0.8), 
-                                 circle_radius = 0.35,
-                                 speaker_guess = 0.3,
-                                 k_production = 1.5) {
+                                 target_center = c(0.15, 0.85), 
+                                 circle_radius = 0.3,
+                                 speaker_guess = 0.5,
+                                 k_production = 1.5,
+                                 center_sd = 0.1,
+                                 k_attractor = 2.5,
+                                 attractor_type = c("semantic", "phonological")) { # Added toggle
   
-  # The function to maximize
+  attractor_type <- match.arg(attractor_type)
+  
   obj_fun <- function(sd_candidate) {
     pocket_prob_2d(
       drift_sd_base = sd_candidate,
@@ -386,11 +442,13 @@ find_max_hit_rate_sd <- function(stored_signal = c(0.5, 0.5),
       circle_radius = circle_radius,
       speaker_guess = speaker_guess,
       k_production = k_production,
-      n = 50000 # Higher N for a smoother peak
+      center_sd = center_sd,
+      k_attractor = k_attractor,
+      attractor_type = attractor_type, # Properly forwarded
+      n = 50000 
     )
   }
   
-  # optimize() finds the maximum between two bounds
   result <- optimize(obj_fun, interval = c(0.01, 1.0), maximum = TRUE)
   
   return(list(
@@ -399,115 +457,183 @@ find_max_hit_rate_sd <- function(stored_signal = c(0.5, 0.5),
   ))
 }
 
-# RUN IT
-peak_results <- find_max_hit_rate_sd()
-print(peak_results)
+# verify Entry Probability from Neutral Center (0.5, 0.5)
+# Checks if your current setup achieves the desired ~10% hit rate 
+prob_entering_semantic <- pocket_prob_2d(
+  drift_sd_base = 0.18, 
+  stored_signal = c(0.5, 0.5), 
+  target_center = c(0.15, 0.85), 
+  speaker_guess = 0.5, 
+  attractor_type = "semantic"
+)
+print(paste("Semantic Entry Probability:", round(prob_entering_semantic, 4)))
 
+prob_entering_phonological <- pocket_prob_2d(
+  drift_sd_base = 0.18, 
+  stored_signal = c(0.5, 0.5), 
+  target_center = c(0.15, 0.15), # Pointing to the phonological trap corner
+  speaker_guess = 0.8,           # Even with a high guess, phonological entry is unaffected
+  attractor_type = "phonological" # <--- Evaluates the phonological track rules
+)
+print(paste("Phonological Entry Probability:", round(prob_entering_phonological, 4)))
 
-p_stay_2d <- function(drift_sd_base, 
+# Find peak variance settings for Semantic; maximum possible probability that a random production step will land inside the attractor from starting position
+semantic_peaks <- find_max_hit_rate_sd(target_center = c(0.15, 0.85), attractor_type = "semantic")
+# Find peak variance settings for Phonological; maximum possible probability that a random production step will land inside the attractor from starting position
+phonological_peaks <- find_max_hit_rate_sd(target_center = c(0.15, 0.15), attractor_type = "phonological")
+
+# check ceiling
+res <- find_max_hit_rate_sd(attractor_type = "semantic")
+print(res)
+# if max_prob > 0.10, scan left side of peak to find 10% mark
+sd_scans <- seq(0.01, res$peak_sd, length.out = 100)
+
+probs <- sapply(sd_scans, function(sd_candidate) {
+  pocket_prob_2d(drift_sd_base = sd_candidate, attractor_type = "semantic", n = 10000)
+})
+
+# Find the SD that gets closest to a 0.10 probability
+closest_index <- which.min(abs(probs - 0.10))
+exact_drift_sd <- sd_scans[closest_index]
+print(paste("Use this value for drift_sd:", round(exact_drift_sd, 4)))
+
+# find sd for probability of moving out of the attractor pocket
+p_stay_2d <- function(center_sd = 0.1, 
                       n = 1e5, 
-                      target_center = c(0.2, 0.8), 
-                      speaker_guess = 0.8, # Higher guess = lower noise
-                      k_production = 1.5,
-                      circle_radius = 0.35) {
+                      circle_radius = 0.3) {
   
-  sd_eff <- drift_sd_base * (1 + k_production * (0.5 - speaker_guess))
+  # When starting at the absolute center, rel_dist = 0.
+  # Both landscapes compress fully to center_sd.
+  y_x <- rnorm(n, mean = 0, sd = center_sd)
+  y_y <- rnorm(n, mean = 0, sd = center_sd)
   
-  # Start at the perfect center
-  y_x <- rnorm(n, mean = target_center[1], sd = sd_eff)
-  y_y <- rnorm(n, mean = target_center[2], sd = sd_eff)
+  dists <- sqrt(y_x^2 + y_y^2)
   
-  dists <- sqrt((y_x - target_center[1])^2 + (y_y - target_center[2])^2)
-  
-  # Probability of staying inside the attractor
-  mean(dists < circle_radius)
+  # Returns probability of retention (1 - Escape Probability)
+  return(mean(dists < circle_radius))
 }
+# check the Escape Probability from the Center Core
+# If center_sd = 0.1 and radius = 0.3, what is the single-step escape rate?
+prob_retained <- p_stay_2d(center_sd = 0.18, circle_radius = 0.3)
+print(paste("Single-Step Escape Probability:", round(1 - prob_retained, 4)))
+
+# Find the center_sd that gives you a low escape rate (e.g., ~5%)
+# We scan candidate values for center_sd
+center_candidates <- seq(0.01, 0.18, by = 0.01)
+escapes <- sapply(center_candidates, function(csd) {
+  1 - p_stay_2d(center_sd = csd, circle_radius = 0.3)
+})
+
+best_center_sd <- center_candidates[which.min(abs(escapes - 0.05))]
+print(paste("To get a ~5% center escape rate, set trap_center_sd =", best_center_sd))
+
+# Find the drift_sd that gives a 10% entry rate from (0.5, 0.5)
+# Using the new best_center_sd we just found
+sd_scans <- seq(0.05, 0.30, length.out = 100)
+entry_probs <- sapply(sd_scans, function(dsd) {
+  pocket_prob_2d(
+    drift_sd_base = dsd, 
+    stored_signal = c(0.5, 0.5), 
+    target_center = c(0.15, 0.15), # Phonological trap corner
+    circle_radius = 0.3,
+    center_sd = best_center_sd,
+    k_attractor = 2.5,
+    attractor_type = "phonological",
+    n = 20000
+  )
+})
+
+best_drift_sd <- sd_scans[which.min(abs(entry_probs - 0.10))]
+print(paste("To get a 10% entry rate from the center, set drift_sd =", round(best_drift_sd, 4)))
 
 
 # CHECK iconicity scaling
-simulate_vector_learning <- function(trials,
-                                     icon_weight = 0.04, 
-                                     k_perception = 2.5) {
-  
+simulate_diagnostic_weights <- function(trials, 
+                                        is_iconic = FALSE, 
+                                        icon_weight = 0.2,
+                                        icon_ev = 1.8) {
   n_steps <- length(trials)
   p <- numeric(n_steps + 1)
-  p[1] <- 0.25 # Start probability (1/4 chance)
+  p[1] <- 0.25 
   
-  # Calculate iconicity evidence once
-  icon_ev <- signal_evidence( 
-    produced_signal = c(0.5, 0.5), # A "decent" but not perfect signal
-    center_target = c(0.2, 0.8),   # The actual attractor center
-    k_perception = 2.5, 
-    circle_radius = 0.35)
-  
-  # Your specific calibrations (at p=0.5)
-  # Success: +0.364 log-odds (~ +9% gain)
-  # Failure: +0.040 log-odds (~ +1% gain)
+  # Calculate impact dynamically based on the weight argument
+  icon_impact <- if (is_iconic) (icon_weight * icon_ev) else 0.0
   
   for (i in seq_len(n_steps)) {
     current_logit <- qlogis(p[i])
     
-    # Check if this specific trial was a success or failure
     step_success <- trials[i]
-    trial_impact <- ifelse(step_success == 1, 0.364, 0.04)
-    
-    # Apply the iconicity boost for this trial
-    icon_impact <- icon_weight * icon_ev
+    trial_impact <- ifelse(step_success == 1, 0.364, 0.00) 
     
     p[i+1] <- plogis(current_logit + trial_impact + icon_impact)
   }
-  
   return(p)
 }
 
-# Define a history of 40 trials (e.g., struggling at first, then succeeding)
 my_trials <- c(0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1) 
 
-# Call for an Iconic word
-iconic_results <- simulate_vector_learning(
-  trials = my_trials,
-  icon_weight = 0.04, 
-  k_perception = 2.5
-)
+# Run them using an explicit true/false flag
+neutral_res <- simulate_diagnostic(my_trials, is_iconic = FALSE)
+iconic_res  <- simulate_diagnostic(my_trials, is_iconic = TRUE)
 
-# Call for a Neutral word with the SAME trial history
-neutral_results <- simulate_vector_learning(
-  trials = my_trials, 
-  icon_weight = 0.04, 
-  k_perception = 2.5
-)
-
-# Compare the learning paths
-data.frame(
-  Trial = 0:40,
+# Print the first 10 rows explicitly to check the tracking
+df_test <- data.frame(
+  Trial   = 0:40,
   Success = c(NA, my_trials),
-  Neutral_P = round(neutral_results, 3),
-  Iconic_P = round(iconic_results, 3),
-  Difference = round(iconic_results - neutral_results, 3))
+  Neutral = round(neutral_res, 3),
+  Iconic  = round(iconic_res, 3),
+  Diff    = round(iconic_res - neutral_res, 3)
+)
 
+df_test
 
-# find trap sd 
-calibrate_trap_sd <- function(circle_radius, p_escape = 0.05) {
-  q <- qchisq(1 - p_escape, df = 2)
-  sd <- circle_radius / sqrt(q)
-  return(sd)
+# find out actual icon_ev value
+current_icon_ev <- signal_evidence( 
+  produced_signal = c(0.15, 0.85), 
+  center_target = c(0.15, 0.85),   
+  k_perception = 2.5, 
+  circle_radius = 0.3
+)
+
+# translate between weights and absolute Gains at p=0.5
+calibrate_icon_weight <- function(target_absolute_gain = NULL, 
+                                  current_weight = NULL, 
+                                  icon_ev) {
+  
+  if (!is.null(target_absolute_gain)) {
+    # Calculate required weight for a target gain (e.g., 0.10 for a 10% absolute increase)
+    target_p <- 0.5 + target_absolute_gain
+    required_logit <- qlogis(target_p)
+    required_weight <- required_logit / icon_ev
+    
+    cat(paste0("To get a +", target_absolute_gain*100, "% absolute increase (moving 0.5 -> ", target_p, "):\n"))
+    cat(paste("Set icon_weight =", round(required_weight, 4), "\n\n"))
+  }
+  
+  if (!is.null(current_weight)) {
+    # Calculate what absolute gain a specific weight gives you
+    resulting_impact <- current_weight * icon_ev
+    resulting_p <- plogis(resulting_impact)
+    absolute_gain <- resulting_p - 0.5
+    
+    cat(paste0("With an icon_weight of ", current_weight, ":\n"))
+    cat(paste0("The probability moves from 0.50 to ", round(resulting_p, 3), " (a +", round(absolute_gain*100, 2), "% absolute gain).\n"))
+  }
 }
-
-calibrate_trap_sd(0.25, 0.05)
-
-# Plot iconicity
-
+calibrate_icon_weight(target_absolute_gain = 0.01, icon_ev = current_icon_ev)
+calibrate_icon_weight(current_weight = 0.4, icon_ev = current_icon_ev)
 
 # PLOT ATTRACTORS------
 center_small <- c(0.15, 0.85)
 center_large <- c(0.85, 0.15)
 phonological_traps <- list(c(0.15, 0.15), c(0.85, 0.85))
 
-trap_radius <- 0.25
+trap_radius <- 0.3
 drift_sd <- 0.18
 k_production <- 1.5
 speaker_guess_fixed <- 0.5
 center_sd <- 0.1
+k_attractor_fixed <- 2.5
 
 grid <- expand.grid(
   x = seq(0, 1, length.out = 200),
@@ -520,7 +646,7 @@ grid_mapped <- grid %>%
     # A. Calculate semantic evidence for background fill
     ease = signal_evidence(c(x, y), 
                            if(type == "small") center_small else center_large,
-                           circle_radius = 0.4, k_perception = 5),
+                           circle_radius = 0.3, k_perception = k_attractor_fixed),
     # B. Calculate localized production SD for structural contours
     local_sd = {
       # baseline production variability (outside trap influence)
@@ -533,9 +659,15 @@ grid_mapped <- grid %>%
       if (any(inside_traps)) {
         closest_trap_dist <- min(distances[inside_traps])
         rel_dist <- closest_trap_dist / trap_radius
-        # TRAP MODEL (absolute interpolation, not multiplicative scaling)
-        edge_sd <- base_sd
-        base_sd <- center_sd + (edge_sd - center_sd) * rel_dist
+
+        magnitude <- exp(-k_attractor_fixed * rel_dist)
+        max_mag <- exp(-k_attractor_fixed * 0)
+        min_mag <- exp(-k_attractor_fixed * 1)
+        
+        exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
+        
+        edge_sd <- drift_sd
+        base_sd <- edge_sd - (edge_sd - center_sd) * exp_scale
       }
       base_sd
     }
@@ -547,8 +679,7 @@ grid_mapped %>%
     aes(x = x, y = y)) +
   geom_tile(aes(fill = ease)) +
   # Contour lines map out the dropping SD zones (the trap depth)
-  #geom_contour(aes(z = local_sd), color = "white", alpha = 0.6, bins = 8) +
-  geom_contour(aes(z = log(local_sd)), bins = 10, color = "white") +
+  geom_contour(aes(z = local_sd), bins = 10, color = "white", alpha = 0.7) +
   annotate("point", x = c(0.15, 0.85), y = c(0.15, 0.85), 
            color = "white", shape = 4, size = 4, stroke = 1.2) +
   facet_wrap(~ type) +
@@ -558,4 +689,53 @@ grid_mapped %>%
 
 # PLOT SIGNAL SPACE----
 
+# PLOT ICONICITY----
+d.iconicity <- d.simulation %>%
+  mutate(model_type = factor(
+    model_type, 
+    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "allAttractors_expressiveAgents"),
+    labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors, expressive agents"),
+    ordered = TRUE)) %>%
+  group_by(model_type) %>%
+  mutate(
+    total_round = (generation - 1) * 10 + round,
+    strength = abs(evidence)) %>%
+  group_by(model_type, simulation, generation, total_round, type, referent) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
+    .groups = "drop") %>%
+  group_by(model_type, simulation, generation, total_round) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
+    .groups = "drop")
 
+d.iconicity.mean <- d.iconicity |> 
+  group_by(model_type, total_round) %>%
+  summarise(evidence = mean(evidence),
+            strength = mean(strength),
+            .groups = "drop")
+
+d.iconicity |> 
+  ggplot(aes(x = total_round, y = evidence, group = simulation,
+             color = evidence)) +
+  geom_path(size = 0.5, alpha = 0.08,
+            color = "black") +
+  geom_path(data = d.iconicity.mean, 
+            aes(group = 1), size = 2,
+            color = "black") +
+  geom_path(data = d.iconicity.mean, 
+            aes(group = 1), size = 1) +  
+  # Add lines at generational overturn
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c(begin = 0,
+                        end = 1)+
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  labs(title = "Iconicity over generations",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal() +
+  facet_grid(~model_type)
