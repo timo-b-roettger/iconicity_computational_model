@@ -357,13 +357,16 @@ d.empty <- data.frame(
   stringsAsFactors = FALSE)
 
 # Run simulation function
-d.sim <- rbind(
+d.simulation <- rbind(
   d.empty %>% 
     run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = FALSE) %>%
     mutate(model_type = "semanticAttractors"),
   d.empty %>% 
     run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = TRUE) %>%
     mutate(model_type = "semanticAttractors_expressiveAgents"),
+  d.empty %>% 
+    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = FALSE) %>%
+    mutate(model_type = "semanticPhonAttractors"),
   d.empty %>% 
     run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = TRUE) %>%
     mutate(model_type = "allAttractors_expressiveAgents"))
@@ -688,16 +691,35 @@ grid_mapped %>%
   coord_fixed(xlim = c(0, 1), ylim = c(0, 1))
 
 # PLOT SIGNAL SPACE----
+# Signal space use across simulations
+d_signal <- d.simulation %>%
+  mutate(total_round = (generation - 1) * 10 + round,
+         x = map_dbl(produced_signal, 1),
+         y = map_dbl(produced_signal, 2)) %>%
+  group_by(model_type, total_round, type, generation) %>%
+  summarise(
+    mean_x = mean(x, na.rm = TRUE),
+    mean_y = mean(y, na.rm = TRUE),
+    .groups = "drop")
+
+# Signal space use within simulations
+d_signal_sim <- d.simulation %>%
+  mutate(total_round = (generation - 1) * 10 + round,
+         x = map_dbl(produced_signal, 1),
+         y = map_dbl(produced_signal, 2)) %>%
+  group_by(model_type, total_round, type, generation, simulation) %>%
+  summarise(
+    mean_x = mean(x, na.rm = TRUE),
+    mean_y = mean(y, na.rm = TRUE),
+    .groups = "drop")
 
 # PLOT ICONICITY----
 d.iconicity <- d.simulation %>%
   mutate(model_type = factor(
     model_type, 
-    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "allAttractors_expressiveAgents"),
-    labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors, expressive agents"),
-    ordered = TRUE)) %>%
-  group_by(model_type) %>%
-  mutate(
+    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
+    labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors", "Semantic and phonological attractors, expressive agents"),
+    ordered = TRUE),
     total_round = (generation - 1) * 10 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
@@ -717,16 +739,18 @@ d.iconicity.mean <- d.iconicity |>
             strength = mean(strength),
             .groups = "drop")
 
+# Attempt at adding densities along y
+library(ggside)
 d.iconicity |> 
-  ggplot(aes(x = total_round, y = evidence, group = simulation,
+  ggplot(aes(x = total_round, y = evidence, group = interaction(model_type, simulation),
              color = evidence)) +
-  geom_path(size = 0.5, alpha = 0.08,
+  geom_path(linewidth = 0.5, alpha = 0.06,
             color = "black") +
   geom_path(data = d.iconicity.mean, 
-            aes(group = 1), size = 2,
+            aes(group = 1), linewidth = 2,
             color = "black") +
   geom_path(data = d.iconicity.mean, 
-            aes(group = 1), size = 1) +  
+            aes(group = 1), linewidth = 1) +  
   # Add lines at generational overturn
   geom_vline(xintercept = seq(0, 100, by = 10), 
              color = "grey", 
@@ -738,4 +762,12 @@ d.iconicity |>
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal() +
-  facet_grid(~model_type)
+  facet_wrap(~model_type) +
+  # marginal distribution per facet (y-axis)
+  geom_ysidedensity(
+    data = d.iconicity,
+    aes(y = evidence, group = model_type),
+    inherit.aes = FALSE,
+    fill = "grey",
+    alpha = 0.5) +
+  scale_ysidex_continuous()
