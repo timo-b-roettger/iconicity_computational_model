@@ -691,6 +691,9 @@ grid_mapped %>%
   coord_fixed(xlim = c(0, 1), ylim = c(0, 1))
 
 # PLOT SIGNAL SPACE----
+
+# d.simulation <- read_csv("temp_data/temp_data.csv")
+
 # Signal space use across simulations
 d_signal <- d.simulation %>%
   mutate(total_round = (generation - 1) * 10 + round,
@@ -756,9 +759,11 @@ d.iconicity |>
              color = "grey", 
              lty = "dotted") +
   scale_color_viridis_c(begin = 0,
-                        end = 1)+
+                        end = 1,
+                        values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  scale_x_continuous(breaks = seq(0, 100, 10),
+                     labels = seq(0, 10, 1)) +
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal() +
