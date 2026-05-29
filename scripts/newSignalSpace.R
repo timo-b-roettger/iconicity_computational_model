@@ -691,8 +691,9 @@ grid_mapped %>%
   coord_fixed(xlim = c(0, 1), ylim = c(0, 1))
 
 # PLOT SIGNAL SPACE----
-
 # d.simulation <- read_csv("temp_data/temp_data.csv")
+# readRDS("temp_data/temp_data.rds")
+# load("temp_data/temp_data.rds")
 
 # Signal space use across simulations
 d_signal <- d.simulation %>%
@@ -776,3 +777,74 @@ d.iconicity |>
     fill = "grey",
     alpha = 0.5) +
   scale_ysidex_continuous()
+
+
+# TIMO EXPLORES ----
+## plot 10 random simulations
+### evidence
+d.iconicity |> 
+  filter(simulation %in% c(1:10)) |> 
+  filter(model_type == "Semantic attractors") |> 
+  ggplot(aes(x = total_round, y = evidence, group = interaction(model_type, simulation),
+             color = evidence)) +
+  geom_path(linewidth = 0.5, 
+            color = "black") +
+  # Add lines at generational overturn
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c(begin = 0,
+                        end = 1,
+                        values = seq(0,1,0.1))+
+  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10),
+                     labels = seq(0, 10, 1)) +
+  labs(title = "Iconicity over generations",
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+  theme_minimal() +
+  facet_wrap(simulation~model_type)
+
+### guess rate
+d.simulation |> 
+  mutate(model_type = factor(
+    model_type, 
+    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
+    labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors", "Semantic and phonological attractors, expressive agents"),
+    ordered = TRUE),
+    total_round = (generation - 1) * 10 + round,
+    strength = abs(evidence)) %>%
+  group_by(model_type, simulation, generation, total_round, type, referent) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
+    guess = mean(new_guess_A, new_guess_B),
+    .groups = "drop") %>%
+  group_by(model_type, generation, total_round) %>%
+  summarise(
+    evidence = mean(evidence),
+    strength = mean(strength),
+    guess = mean(guess),
+    .groups = "drop") |> 
+  ggplot(aes(x = total_round, y = guess, group = interaction(model_type),
+             color = evidence)) +
+  geom_path(linewidth = 0.5, 
+            color = "black") +
+  # Add lines at generational overturn
+  geom_vline(xintercept = seq(0, 100, by = 10), 
+             color = "grey", 
+             lty = "dotted") +
+  scale_color_viridis_c(begin = 0,
+                        end = 1,
+                        values = seq(0,1,0.1))+
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, 100, 10),
+                     labels = seq(0, 10, 1)) +
+  labs(title = "Representational strength over generations",
+       y = "Memory strength from 0-1\n", x = "Generation (each with 10 rounds)") +
+  theme_minimal() +
+  facet_wrap(~model_type, ncol = 1)
+
+## looks like very low memory strength, check first repetion
+d.iconicity |> 
+  filter(total_round %in% c(1,11,21,31,41,51,61,71,81,91)) |> 
+  summarise(strength = mean(strength))
