@@ -285,17 +285,36 @@ d.empty <- data.frame(
 # Run simulation function
 d.simulation <- rbind(
   d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = FALSE) %>%
+    run_interaction_sim(n_sim = 50, n_rounds = 50, n_generations = 10, phonological_attractors = FALSE, expressive_agents = FALSE) %>%
     mutate(model_type = "semanticAttractors"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = TRUE) %>%
+    run_interaction_sim(n_sim = 50, n_rounds = 50, n_generations = 10, phonological_attractors = FALSE, expressive_agents = TRUE) %>%
     mutate(model_type = "semanticAttractors_expressiveAgents"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = FALSE) %>%
+    run_interaction_sim(n_sim = 50, n_rounds = 50, n_generations = 10, phonological_attractors = TRUE, expressive_agents = FALSE) %>%
     mutate(model_type = "semanticPhonAttractors"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = TRUE) %>%
+    run_interaction_sim(n_sim = 50, n_rounds = 50, n_generations = 10, phonological_attractors = TRUE, expressive_agents = TRUE) %>%
     mutate(model_type = "allAttractors_expressiveAgents"))
+
+# Signal space use across simulations
+d_signal_mean <- d.simulation %>%
+  mutate(total_round = (generation - 1) * 10 + round,
+         x = map_dbl(produced_signal, 1),
+         y = map_dbl(produced_signal, 2)) %>%
+  group_by(model_type, total_round, type, generation) %>%
+  summarise(
+    mean_x = mean(x, na.rm = TRUE),
+    mean_y = mean(y, na.rm = TRUE),
+    .groups = "drop")
+
+
+# Signal space use across simulations
+d_signal <- d.simulation %>%
+  mutate(total_round = (generation - 1) * 50 + round,
+  #mutate(total_round = (generation - 1) * 10 + round,
+         x = map_dbl(produced_signal, 1),
+         y = map_dbl(produced_signal, 2))
 
 # PLOT ICONICITY----
 d.iconicity <- d.simulation %>%
@@ -304,7 +323,8 @@ d.iconicity <- d.simulation %>%
     levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
     labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors", "Semantic and phonological attractors, expressive agents"),
     ordered = TRUE),
-    total_round = (generation - 1) * 10 + round,
+    #total_round = (generation - 1) * 10 + round,
+    total_round = (generation - 1) * 50 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
   summarise(
@@ -342,10 +362,11 @@ d.iconicity |>
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 100, 10),
-                     labels = seq(0, 10, 1)) +
+  scale_x_continuous(breaks = seq(0, 500, 100),
+                      labels = seq(0, 50, 10)) +
   labs(title = "Iconicity over generations",
-       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
+       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", 
+       x = "Generation (each with 50 rounds)") +
   theme_minimal() +
   facet_wrap(~model_type) +
   # marginal distribution per facet (y-axis)
@@ -376,8 +397,8 @@ d.iconicity |>
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 100, 10),
-                     labels = seq(0, 10, 1)) +
+  scale_x_continuous(breaks = seq(0, 500, 100),
+                     labels = seq(0, 50, 10)) +
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal() +
@@ -390,7 +411,7 @@ d.simulation |>
     levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
     labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors", "Semantic and phonological attractors, expressive agents"),
     ordered = TRUE),
-    total_round = (generation - 1) * 10 + round,
+    total_round = (generation - 1) * 50 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
   summarise(
@@ -416,16 +437,355 @@ d.simulation |>
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 100, 10),
-                     labels = seq(0, 10, 1)) +
+  scale_x_continuous(breaks = seq(0, 500, 100),
+                     labels = seq(0, 50, 10)) +
+  
   labs(title = "Representational strength over generations",
        y = "Memory strength from 0-1\n", x = "Generation (each with 10 rounds)") +
   theme_minimal() +
   facet_wrap(~model_type, ncol = 1)
 
-## looks like very low memory strength, check first repetion
-d.iconicity |> 
-  filter(total_round %in% c(1,11,21,31,41,51,61,71,81,91)) |> 
-  summarise(strength = mean(strength))
+## signal space
+# Signal space use across simulations
+center_small <- c(0.15, 0.85)
+center_large <- c(0.85, 0.15)
+phonological_traps <- list(c(0.15, 0.15), c(0.85, 0.85))
+
+trap_radius <- 0.3
+drift_sd <- 0.19
+k_production <- 1.5
+speaker_guess_fixed <- 0.5
+center_sd <- 0.12
+k_attractor_fixed <- 2.5
+
+grid <- expand.grid(
+  x = seq(0, 1, length.out = 200),
+  y = seq(0, 1, length.out = 200),
+  type = c("small", "large"))
+
+grid_mapped <- grid %>%
+  rowwise() %>%
+  mutate(
+    # A. Calculate semantic evidence for background fill
+    ease = signal_evidence(c(x, y), 
+                           if(type == "small") center_small else center_large,
+                           circle_radius = 0.3, k_perception = k_attractor_fixed),
+    # B. Calculate localized production SD for structural contours
+    local_sd = {
+      # baseline production variability (outside trap influence)
+      base_sd <- drift_sd * (1 + k_production * (0.5 - speaker_guess_fixed))
+      distances <- sapply(
+        phonological_traps,
+        function(center) sqrt(sum((c(x, y) - center)^2))
+      )
+      inside_traps <- distances < trap_radius
+      if (any(inside_traps)) {
+        closest_trap_dist <- min(distances[inside_traps])
+        rel_dist <- closest_trap_dist / trap_radius
+        
+        magnitude <- exp(-k_attractor_fixed * rel_dist)
+        max_mag <- exp(-k_attractor_fixed * 0)
+        min_mag <- exp(-k_attractor_fixed * 1)
+        
+        exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
+        
+        edge_sd <- drift_sd
+        base_sd <- edge_sd - (edge_sd - center_sd) * exp_scale
+      }
+      base_sd
+    }
+  ) %>%
+  ungroup()
+
+grid_mapped %>%
+  ggplot(
+    aes(x = x, y = y)) +
+  geom_tile(aes(fill = ease)) +
+  # Contour lines map out the dropping SD zones (the trap depth)
+  geom_contour(aes(z = local_sd), bins = 10, color = "white", alpha = 0.7) +
+  annotate("point", x = c(0.15, 0.85), y = c(0.15, 0.85), 
+           color = "white", shape = 4, size = 4, stroke = 1.2) +
+  facet_wrap(~ type) +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  coord_fixed(xlim = c(0, 1), ylim = c(0, 1))
 
 
+# plot average gen 1-10
+## not much movement
+d_signal_mean  |> 
+  group_by(model_type, type, generation) |> 
+  summarise(mean_x = mean(mean_x),
+            mean_y = mean(mean_y)) |> 
+  #filter(generation == 10) |> 
+  ggplot(
+    aes(x = mean_x, y = mean_y,
+        fill = as.ordered(generation))) +
+   facet_grid(model_type ~ type) +
+  geom_hline(yintercept = 0.5, 
+             lty = "dashed") + 
+  geom_vline(xintercept = 0.5, 
+             lty = "dashed") +
+  geom_point(alpha = 0.8, 
+             size = 5, 
+             pch = 21,
+             color = "white") +
+  labs(x = "x dimnesion",
+       y = "y dimnesion",
+       fill = "generations") 
+
+# plot individual
+temp_ind <- d_signal  |> 
+  filter(model_type == "semanticAttractors") |> 
+  filter(simulation == 1) |> 
+  filter(generation  == 1)
+
+  ggplot(data = temp_ind,
+         aes(x = x, y = y,
+             fill = as.ordered(round),
+             color = as.ordered(round),
+             group = interaction(type, referent))) +
+  facet_grid(referent ~ type) +
+  geom_hline(yintercept = 0.5, 
+             lty = "dashed") + 
+  geom_vline(xintercept = 0.5, 
+             lty = "dashed") +
+  geom_path(
+    arrow = arrow(length = unit(0.2, "cm"), type = "closed")
+  ) +
+  # success and fail
+  geom_point(data = temp_ind |> filter(success == 1),
+             alpha = 1, 
+             size = 5, 
+             pch = 21,
+             color = "white") +
+  geom_point(data = temp_ind |> filter(success == 0),
+             alpha = 1, 
+             size = 5, 
+             pch = 24,
+             fill = "darkred",
+             color = "white") +
+  labs(x = "x dimnesion",
+       y = "y dimnesion",
+       fill = "generations") +
+  theme_bw() +
+  theme()
+
+# calculation ED to semantic attractor, to phonological distractors and semantic repeller
+euc_dist <- function(x1, x2){
+    return(sqrt(sum((x1 - x2)^2)))
+}
+
+# test
+euc_dist(c(0.15,0.85), c(0.44,0.56))
+  
+# add as vector
+d_signal_ed <- d_signal |> 
+  mutate(model_type = factor(
+    model_type, 
+    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
+    labels = c("Semantic attractors", "+ expressive agents", "+ phonological distractors", "phonological distractors and expressive agents"),
+    ordered = TRUE)) |> 
+  mutate(iconic_ed = ifelse(type == "small",
+                            sqrt((x - 0.15)^2 + (y - 0.85)^2),
+                            sqrt((x - 0.85)^2 + (y - 0.15)^2)),
+         attractor_1_ed = sqrt((x - 0.15)^2 + (y - 0.15)^2),
+         attractor_2_ed = sqrt((x - 0.85)^2 + (y - 0.85)^2)
+         )
+
+d_signal_ed_agg <- d_signal_ed |> 
+  group_by(model_type, simulation, type, total_round) |> 
+  summarise(iconic_ed = mean(iconic_ed),
+            attractor_1_ed = mean(attractor_1_ed),
+            attractor_2_ed = mean(attractor_2_ed))
+
+d_signal_ed_agg_all <- d_signal_ed_agg |> 
+  group_by(model_type, type, total_round) |> 
+  summarise(iconic_ed = mean(iconic_ed),
+            attractor_1_ed = mean(attractor_1_ed),
+            attractor_2_ed = mean(attractor_2_ed))
+
+# get reference values
+## if small where is border for attractor?
+iconic_border = euc_dist(c(0.15,0.85), c(0.45,0.55)) ## 0.42
+neutral = euc_dist(c(0.15,0.85), c(0.5,0.5)) ## ~0.5
+    
+# plot average ED
+d_signal_ed_agg_all |> 
+  ggplot(aes(x = total_round, y = iconic_ed,
+             group = interaction(model_type))) +
+  geom_path(data = d_signal_ed_agg,
+            alpha = 0.01) +
+  geom_line(data = d_signal_ed_agg_all,
+            alpha = 1) +
+  # iconic border
+  geom_hline(yintercept = iconic_border,
+             color = "purple",
+             lty = "dashed") +
+  annotate("text", 
+           x = 250,
+           y = 0.21,
+           color = "purple",
+           label = "within iconic pocket") +
+  # neutral position
+  geom_hline(yintercept = neutral,
+             color = "black",
+             lty = "dashed") +
+  facet_grid(~model_type) +
+  labs(title = "euclidean distance to iconic center",
+       y = "euclidean distance to iconic center") +
+  theme_minimal()
+
+
+# plot also for distractor
+d_signal_ed_agg_all |> 
+  ggplot(aes(x = total_round, y = attractor_1_ed,
+             group = interaction(model_type))) +
+  geom_path(data = d_signal_ed_agg,
+            alpha = 0.01) +
+  geom_line(data = d_signal_ed_agg_all,
+            alpha = 1) +
+  # attractor border
+  geom_hline(yintercept = attractor_border,
+             color = "black",
+             lty = "dashed") +
+  annotate("text", 
+           x = 50,
+           y = 0.21,
+           color = "black",
+           label = "within distractor") +
+  facet_grid(~model_type) +
+  labs(title = "euclidean distance to phonological distractors",
+       y = "euclidean distance to phonological distractors") +
+  theme_minimal()
+
+# how often does the signal enters pockets
+d_signal_ed <- d_signal_ed |> 
+  mutate(in_pocket = ifelse(iconic_ed < iconic_border, 1, 0)) 
+
+d_signal_ed_agg <- d_signal_ed |> 
+  group_by(model_type, simulation, type, total_round) |> 
+  summarise(iconic_ed = mean(iconic_ed),
+            attractor_1_ed = mean(attractor_1_ed),
+            attractor_2_ed = mean(attractor_2_ed),
+            in_pocket = mean(in_pocket))
+
+d_signal_ed_agg_all <- d_signal_ed_agg |> 
+  group_by(model_type, type, total_round) |> 
+  summarise(iconic_ed = mean(iconic_ed),
+            attractor_1_ed = mean(attractor_1_ed),
+            attractor_2_ed = mean(attractor_2_ed),
+            in_pocket = mean(in_pocket))
+
+# calculate when attractor was entered and when 
+# plot average ED
+d_signal_ed_agg_all |> 
+  ggplot(aes(x = total_round, y = in_pocket,
+             group = interaction(model_type))) +
+  geom_line() +
+  facet_grid(~model_type) +
+  labs(title = "proportion of entering the iconic pocket",
+       y = "proportion of entering the iconic pocket") +
+  theme_minimal()
+
+
+
+####
+d_signal_mean  |>
+  group_by(model_type, type, generation) |>
+  summarise(mean_x = mean(mean_x),
+            mean_y = mean(mean_y)) |> 
+  mutate(quadrant = case_when(mean_x < 0.3 & mean_y < 0.3 ~ "top left",
+                              between(mean_x, 0.3, 0.6) & mean_y < 0.3 ~ "top middle",
+                              mean_x > 0.6 & mean_y < 0.3 ~ "top right",
+                              
+                              mean_x < 0.3 & between(mean_y, 0.3, 0.6) ~ "middle left",
+                              between(mean_x, 0.3, 0.6) & between(mean_y, 0.3, 0.6) ~ "center",
+                              mean_x > 0.6 & between(mean_y, 0.3, 0.6) ~ "middle right",
+                              mean_x < 0.3 & mean_y > 0.6 ~ "bottom left",
+                              between(mean_x, 0.3, 0.6) & mean_y > 0.6 ~ "bottom middle",
+                              mean_x > 0.6 & mean_y > 0.6 ~ "bottom right"
+  )) |> 
+  group_by(model_type, type) |>
+  count(quadrant) |> 
+  ggplot(
+    aes(x = 0:1, y = 0:1,
+        fill = quadrant)) +
+  geom_tile()
+  facet_grid(model_type ~ type) +
+  geom_hline(yintercept = 0.5, 
+             lty = "dashed") + 
+  geom_vline(xintercept = 0.5, 
+             lty = "dashed") +
+  geom_point(alpha = 0.8, 
+             size = 5, 
+             pch = 21,
+             color = "white") +
+  labs(x = "x dimnesion",
+       y = "y dimnesion",
+       fill = "generations") 
+
+  my_breaks = c(2, 10, 50, 250, 1250, 6000)
+
+  d_signal  |>
+    mutate(model_type = factor(
+      model_type, 
+      levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
+      labels = c("Semantic attractors", "+ expressive agents", "+ phonological distractors", "phonological distractors and expressive agents"),
+      ordered = TRUE)) |> 
+    ggplot(aes(x = x, y = y)) +
+    # binwidth = 1/3 creates 3 bins for both X and Y across the 0-1 range
+    # boundary = 0 forces the bins to start exactly at 0.0
+    #geom_bin2d(binwidth = c(1/27, 1/27), boundary = 0, color = "white", linewidth = 0.5) +
+    stat_binhex() +
+  
+    # Use a clean color scale for the heatmap counts
+    # scale_fill_gradient2(name = "count", trans = "log",
+    #                     breaks = my_breaks, labels = my_breaks,
+    #                     low = "white", 
+    #                     mid = "blue",
+    #                     high = "red"
+    #                     ) +
+    scale_fill_gradientn(
+      # Step A: Define the exact sequence of colors
+      colors = c("#f7f7f7", "#fe9e2a", "#d7191c"),
+      
+      # Step B: Map those colors to specific numeric points along the data range
+      # Rescale your target numbers between 0.0 (min) and 1.0 (max)
+      values = scales::rescale(c(0.0, 0.1, 1.0)),
+      
+      # Step C: Customize the legend appearance
+      #guide = guide_colorbar(barwidth = 1, barheight = 15)
+    ) +
+    
+    # Styling
+    theme_minimal() +
+    # attractor outline
+    # annotate("rect", 
+    #          xmin = c(0, 2/3, 0, 2/3), 
+    #          xmax = c(1/3, 1, 1/3, 1), 
+    #          ymin = c(0, 0, 2/3, 2/3), 
+    #          ymax = c(1/3, 1/3, 1, 1), 
+    #          colour = "black", 
+    #          fill = "transparent", 
+    #          size = 0.5) +
+    labs(
+      title = "Signal Space",
+      subtitle = "Data binned into equal intervals",
+      x = "X Coordinate",
+      y = "Y Coordinate",
+      fill = "Count"
+    ) +
+    facet_grid(type~model_type) +
+    scale_x_continuous(limits = c(0,1),
+                       breaks = seq(0,1,1/3),
+                       labels = c(0,"1/3", "2/3", 1)) +
+    scale_y_continuous(limits = c(0,1),
+                       breaks = seq(0,1,1/3),
+                       labels = c(0,"1/3", "2/3", 1)) +
+      theme(
+        legend.position = "none",
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(face = "bold")
+    )  
+  
