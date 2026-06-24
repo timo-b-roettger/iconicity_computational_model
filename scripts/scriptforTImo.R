@@ -285,16 +285,16 @@ d.empty <- data.frame(
 # Run simulation function
 d.simulation <- rbind(
   d.empty %>% 
-    run_interaction_sim(n_sim = 50, n_rounds = 50, n_generations = 10, phonological_attractors = FALSE, expressive_agents = FALSE) %>%
+    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = FALSE) %>%
     mutate(model_type = "semanticAttractors"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 50, n_rounds = 50, n_generations = 10, phonological_attractors = FALSE, expressive_agents = TRUE) %>%
+    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = TRUE) %>%
     mutate(model_type = "semanticAttractors_expressiveAgents"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 50, n_rounds = 50, n_generations = 10, phonological_attractors = TRUE, expressive_agents = FALSE) %>%
+    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = FALSE) %>%
     mutate(model_type = "semanticPhonAttractors"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 50, n_rounds = 50, n_generations = 10, phonological_attractors = TRUE, expressive_agents = TRUE) %>%
+    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = TRUE) %>%
     mutate(model_type = "allAttractors_expressiveAgents"))
 
 # Signal space use across simulations
