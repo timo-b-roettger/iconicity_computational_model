@@ -7,9 +7,126 @@ library(broom)      # for regression analysis
 library(ggdist)     # for plotting
 library(ggside)
 
+clamp01 <- function(x) pmax(0, pmin(1, x))
+clamp02 <- function(x) pmax(0.05, pmin(0.95, x))
+
+points_equal <- function(a, b, tol = 1e-9) {
+  sqrt(sum((a - b)^2)) < tol
+}
+
 normalize_01 <- function(x) {
   return((x - min(x)) / (max(x) - min(x)))
 }
+
+# Index (and distance) of the nearest attractor center to a point; this correctly detects "is this point inside SOME attractor" as long as 
+# all attractors share the same circle_radius. The nearest center is always the one whose circle contains the point, if any does. 
+nearest_attractor <- function(point, attractor_centers) {
+  if (length(attractor_centers) == 0) {
+    return(list(id = NA_integer_, dist = Inf))
+  }
+  dists <- vapply(attractor_centers, function(c) sqrt(sum((point - c)^2)), numeric(1))
+  id <- which.min(dists)
+  list(id = id, dist = dists[id])
+}
+
+# Signal production: ALL attractors pull on the signal identically. "Semantic transparency" is purely a property of *where* an attractor 
+# happens to sit, not of how it behaves. At signal production, amount of noise is dependent on guess rate and motor noise
+# k controls how strongly sd react to speaker_guess
+produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production,
+                           attractor_centers, circle_radius, center_sd, k_attractor) {
+  # Calculate baseline trial-specific SD based on speaker's guess
+  sd <- drift_sd * (1 + k_production * (0.5 - speaker_guess))
+  
+  # Dynamically calculate Euclidean distance to every defined attractor center
+  # Find if the signal is inside any attractor, and locate the closest one
+  nn <- nearest_attractor(stored_signal, attractor_centers)
+  is_inside <- is.finite(nn$dist) && nn$dist < circle_radius
+  attractor_id <- NA_integer_
+  
+  if (is_inside) {
+    attractor_id <- nn$id
+    rel_dist <- nn$dist / circle_radius
+    # scale distance dynamically
+    magnitude <- exp(-k_attractor * rel_dist)
+    max_mag <- exp(-k_attractor * 0)
+    min_mag <- exp(-k_attractor * 1)
+    exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
+    edge_sd <- drift_sd
+    sd <- edge_sd - (edge_sd - center_sd) * exp_scale
+  }
+  # Generate the signal using the final calculated SD
+  signal <- rnorm(length(stored_signal), mean = stored_signal, sd = sd)
+  # Return both the produced signal and the boolean status flag
+  list(
+    signal = clamp01(signal),
+    in_attractor = is_inside,
+    attractor_id = attractor_id,
+    dist_to_nearest = nn$dist
+  )
+}
+
+# Recognition
+# The probability of correct guess refers to the probability of form-meaning mapping = the signal representing the semantic prototype
+# Signal evidence for iconicity bias; measures proximity of Y to its size prototype
+signal_evidence <- function(produced_signal, center_target, k_perception, circle_radius) {
+  # Calculate eucledian distance to target_center and to the opposite semantic attractor
+  dist_to_target <- sqrt(sum((produced_signal - center_target)^2))
+  opposite_center <- c(1 - center_target[1], 1 - center_target[2])
+  dist_to_opposite <- sqrt(sum((produced_signal - opposite_center)^2))
+  
+  # If signal is inside the circle, calculate evidence
+  if (dist_to_target < circle_radius) {
+    # Calculate distance to targer center from edge of attractor, independent of circle size; 0 at center, 1 at edge
+    rel_dist <- dist_to_target / circle_radius
+    # as relative dist grows, magnitude shrinks as a function of k_perception
+    magnitude <- exp(-k_perception * rel_dist)
+    # Simple normalization: center = 1, edge = 0
+    max_mag <- exp(-k_perception * 0)
+    min_mag <- exp(-k_perception * 1)
+    return((magnitude - min_mag) / (max_mag - min_mag))
+    # Punish anti-iconic behavior: if signal instead is inside the opposite attractor, return negative evidence of the same magnitude
+  } else if (dist_to_opposite < circle_radius) {
+    rel_dist <- dist_to_opposite / circle_radius
+    magnitude <- exp(-k_perception * rel_dist)
+    max_mag <- exp(-k_perception * 0)
+    min_mag <- exp(-k_perception * 1)
+    return(-((magnitude - min_mag) / (max_mag - min_mag)))
+  } else {
+    return(0)
+  }
+}
+
+listener_guess_probability <- function(listener_guess, produced_signal, size_prototypes,
+                                       recognition_bias, iconicity_weight,
+                                       k_attractor, circle_radius) {
+  icon_ev <- signal_evidence(produced_signal, size_prototypes,
+                             k_perception = k_attractor, circle_radius = circle_radius)
+  effective_weight <- if (recognition_bias) iconicity_weight else 0
+  
+  # raw is the pre-clamp probability-space combination. The previous
+  # version routed this through qlogis() then plogis() -- an exact
+  # round trip that changes nothing -- so this is simplified to the
+  # equivalent direct form. probs is what's actually used downstream;
+  # hit_floor / hit_ceiling flag whenever clamping was actually engaged,
+  # for diagnosing how often referents get capped at the extremes.
+  raw <- listener_guess + (effective_weight * icon_ev)
+  probs <- clamp02(raw)
+  
+  list(
+    probs = probs,
+    evidence = icon_ev,
+    raw = raw,
+    hit_floor = raw <= 0.05,
+    hit_ceiling = raw >= 0.95
+  )
+}
+
+# Update learning as dependent on success
+update_logit <- function(x, learning_strength, success, success_scale, failure_scale) {
+  delta <- learning_strength * ifelse(success == 1, success_scale, failure_scale)
+  plogis(qlogis(clamp02(x)) + delta)
+}
+
 
 # MAIN SIM FUNCTION----
 run_interaction_sim <- function(
@@ -18,135 +135,52 @@ run_interaction_sim <- function(
     n_referents = 4, # number of unique referents in guessing game
     n_generations = 10, # no of generations
     n_rounds = 10, # number of interaction rounds; 10
-    drift_sd = 0.19,  # amount of variation introduced during production; motor noise; equivalent to approx. 10% chance of wandering into a pocket when the signal is at .5, .5 and previous guess = 0.5
+    drift_sd = 0.19,  # amount of variation introduced during production; motor noise; equivalent to approx. 48% chance of wandering into *any* attractor when the signal is at .5, .5 and previous guess = 0.5
     learning_strength = 0.015, # amount of added memory strengthening for referents as dependent on success; corresponding to .01 increase for a probability of 0.5 on failure, and .09 increase on success
+    k_production = 1.5,
+    recognition_bias = FALSE,
     iconicity_weight = 0.4,  # multiplicator for iconicity; corresponding to ~10% absolute increase for a probability of 0.5 (for the perfectly iconic signal)
     success_scale = 7.5, # more learning with success; 95% accuracy at the end of 10th round
     failure_scale = 1, # also increase in learning with failure, but less so; 60% accuracy at the end of 10th round
     expressive_agents = TRUE, # switch on/off expressive agents
-    phonological_attractors = TRUE, # switch on/off use of phonological attractors
+    expressive_noise_sd = 0.08, # production noise, but not so large that the signal falls out of the semantic attractor
+    expressive_prob_per_agent = 0.10, # 10% chance that an agent is expressive; ~20% chance of an expressive agent in this generation
+    expressive_trial_prob = 0.20,
     k_attractor = 2.5, # controls the shape of decay from attractor centers
-    phonological_traps = list(c(0.15, 0.15), c(0.85, 0.85)), # define phonological attractors/traps; currently two, in the opposite corners of the two-dimensional space
+    neutral_attractor_centers = list(c(0.15, 0.15), c(0.85, 0.85)), # define phonological attractors; currently two, in the opposite corners of the two-dimensional space
     circle_radius = 0.3, # atm, identical size of both types of attractors
-    trap_center_sd = 0.12  # 5% single-step escape probability from center of phonological attractor
+    center_sd = 0.12  # 5% single-step escape probability from center of phonological attractor
 ) {
-  
-  # Turn phonological attractors on/off
-  if (!phonological_attractors) {
-    phonological_traps <- list()
-  }
-  
-  # Probability of expressive speakers--10% chance that an agent is expressive; ~20% chance of an expressive agent in this generation
-  expressive_prob <- if (expressive_agents) 0.10 else 0
-  
-  # HELPER FUNCTIONS CALLED IN SIMULATION LOOP
-  # SIGNAL PRODUCTION + MECHANISMS AFFECTING Y-DIMENSION
-  clamp01 <- function(x) pmax(0, pmin(1, x))
-  
-  # At signal production, amount of noise is dependent on guess rate AND phonological traps
-  # k controls how strongly sd react to speaker_guess; mindful that if p = 1 and k >2, it will return negative sd's
-  produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production, phonological_traps, circle_radius, center_sd, k_attractor) {
-    # Calculate baseline trial-specific SD based on speaker's guess
-    sd <- drift_sd * (1 + k_production * (0.5 - speaker_guess))
-    is_inside <- FALSE # Default to FALSE
-    
-    if (length(phonological_traps) > 0) {
-      # Dynamically calculate Euclidean distance to every defined trap center
-      distances <- sapply(phonological_traps, function(center) sqrt(sum((stored_signal - center)^2)))
-      # Find if the signal is inside any trap, and locate the closest one
-      inside_traps <- distances < circle_radius
-      
-      if (any(inside_traps)) {
-        is_inside <- TRUE # Flip to TRUE because the starting signal is in a trap
-        # Target the closest trap that the signal is currently inside
-        closest_trap_dist <- min(distances[inside_traps])
-        rel_dist <- closest_trap_dist / circle_radius
-        # scale distance dynamically; similar to semantic attractors
-        magnitude <- exp(-k_attractor * rel_dist)
-        max_mag <- exp(-k_attractor * 0)
-        min_mag <- exp(-k_attractor * 1)
-        exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
-        edge_sd <- drift_sd
-        sd <- edge_sd - (edge_sd - center_sd) * exp_scale
-      }
-    }
-    # Generate the signal using the final calculated SD
-    signal <- rnorm(
-      length(stored_signal),
-      mean = stored_signal,
-      sd = sd)
-    
-    # Return both the produced signal and the boolean status flag
-    return(list(signal = clamp01(signal), in_trap = is_inside))
-  }
-  
-  # RECOGNIZE A SIGNAL
-  # The probability of correct guess refers to the probability of form-meaning mapping = the signal representing the semantic prototype
-  clamp02 <- function(x) pmax(0, pmin(0.95, x))
-  
-  # Signal evidence for iconicity bias
-  # Measures proximity of Y to its size prototype
-  signal_evidence <- function(produced_signal, center_target, k_perception, circle_radius) {
-    # Calculate eucledian distance to target_center and to the opposite attractor
-    dist_to_target <- sqrt(sum((produced_signal - center_target)^2))
-    opposite_center <- c(1 - center_target[1], 1 - center_target[2])
-    dist_to_opposite <- sqrt(sum((produced_signal - opposite_center)^2))
-    # If signal is inside the circle, calculate evidence
-    if (dist_to_target < circle_radius) {
-      # Calculate distance to targer center from edge of attractor, independent of circle size; 0 at center, 1 at edge
-      rel_dist <- dist_to_target / circle_radius 
-      # as relative dist grows, magnitude shrinks as a function of k_perception
-      magnitude <- exp(-k_perception * rel_dist) 
-      # Simple normalization: center = 1, edge = 0
-      max_mag <- exp(-k_perception * 0)
-      min_mag <- exp(-k_perception * 1) 
-      evidence <- (magnitude - min_mag) / (max_mag - min_mag)
-      return(evidence)
-      # Punish anti-iconic behavior: if signal instead is inside the opposite attractor, return negative evidence of the same magnitude
-    } else if (dist_to_opposite < circle_radius) {
-      rel_dist <- dist_to_opposite / circle_radius
-      magnitude <- exp(-k_perception * rel_dist)
-      max_mag <- exp(-k_perception * 0)
-      min_mag <- exp(-k_perception * 1)
-      
-      evidence <- (magnitude - min_mag) / (max_mag - min_mag)
-      return(-evidence)
-      
-    } else {
-      return(0)
-    }
-  }
-  
-  # LISTENER RECOGNITION PROBABILITY UPDATED
-  listener_guess_probability <- function(listener_guess, produced_signal, size_prototypes) {
-    icon_ev <- signal_evidence(produced_signal, size_prototypes, k_perception = k_attractor, circle_radius = circle_radius)
-    logits <- qlogis(clamp02(listener_guess + (iconicity_weight * icon_ev)))
-    probs <- plogis(logits)
-    
-    return(list(probs = probs, evidence = icon_ev))
-  }
-  
-  # UPDATE LEARNING AS DEPENDENT ON SUCCESS
-  update_logit <- function(x, learning_strength, success, success_scale = 7.5, failure_scale = 1) {
-    delta <- learning_strength * ifelse(success == 1, success_scale, failure_scale)
-    plogis(qlogis(clamp02(x)) + delta)
-  }
   
   # SETTING UP SIGNAL-MEANING INFORMATION
   # No of referents + their prototypical values; semantic prototypes; initial signal y values
-  referents_info <- tibble(
+  referents_blueprint <- tibble(
     id = seq_len(n_referents),
-    type = rep(c("small","large"), length.out = n_referents),
-    size_prototypes = if_else(type == "small", 
-                              list(c(0.15, 0.85)), 
-                              list(c(0.85, 0.15))),
-    agentA_stored_signal = rep(list(c(0.5, 0.5)), n_referents),
-    agentB_stored_signal = rep(list(c(0.5, 0.5)), n_referents))
+    type = rep(c("small", "large"), length.out = n_referents),
+    size_prototypes = if_else(type == "small",
+                              list(c(0.15, 0.85)),
+                              list(c(0.85, 0.15))))
+  
+  # --- Unified attractor set: semantically-transparent + arbitrary ---
+  semantic_attractor_centers <- unique(referents_blueprint$size_prototypes)
+  attractor_centers <- c(semantic_attractor_centers, neutral_attractor_centers)
+  is_semantic_attractor <- c(
+    rep(TRUE, length(semantic_attractor_centers)),
+    rep(FALSE, length(neutral_attractor_centers))
+  )
+  
+  expressive_prob <- if (expressive_agents) expressive_prob_per_agent else 0
   
   simulation_log <- list()
-  
+
   # MAIN SIMULATION LOOP
   for (sim in 1:n_sim) {
+    
+    # Fresh, independent lexicon for every simulation replicate
+    referents_info <- referents_blueprint %>%
+      mutate(
+        agentA_stored_signal = rep(list(c(0.5, 0.5)), n_referents),
+        agentB_stored_signal = rep(list(c(0.5, 0.5)), n_referents))
     
     for (gen in 1:n_generations) {
       trial_counter <- 0
@@ -185,41 +219,49 @@ run_interaction_sim <- function(
           old_guess_B <- agentB_guess[ref_id]
           old_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
           old_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
-          
           old_stored_signal <- if (speaker == "A") old_stored_signal_A else old_stored_signal_B
           
           # Signal production (speaker knows lexeme & size)
           production_output <- produce_signal(
             stored_signal = old_stored_signal,
-            speaker_guess[ref_id],
+            speaker_guess = speaker_guess[ref_id],
             drift_sd = drift_sd,
-            k_production = 1.5,
-            phonological_traps = phonological_traps,
+            k_production = k_production,
+            attractor_centers = attractor_centers,
             circle_radius = circle_radius,
-            center_sd = trap_center_sd,
+            center_sd = center_sd,
             k_attractor = k_attractor)
           
           signal  <- production_output$signal
-          in_trap <- production_output$in_trap  # Extract the trap flag for logging
+          in_attractor <- production_output$in_attractor  # Extract the attractor flag for logging
+          attractor_id <- production_output$attractor_id
           
           # Override signal production if agent is expressive; on ~20% of all trials for that expressive agent
           is_expressive_trial <- FALSE
           if (
             ((speaker == "A" && expressive_A) ||
              (speaker == "B" && expressive_B)) &&
-            runif(1) < 0.20
+            runif(1) < expressive_trial_prob
           ) {
-            # If the trial is expressive, produce a perfectly iconic signal for that referent
+            # If the trial is expressive, produce a iconic signal (with noise) for that referent
             is_expressive_trial <- TRUE
-            signal <- referents_info$size_prototypes[[ref_id]]
-            signal <- clamp01(signal)
+            target_center <- referents_info$size_prototypes[[ref_id]]
+            signal <- clamp01(rnorm(2, mean = target_center, sd = expressive_noise_sd))
+            
+            nn <- nearest_attractor(signal, attractor_centers)
+            in_attractor <- is.finite(nn$dist) && nn$dist < circle_radius
+            attractor_id <- if (in_attractor) nn$id else NA_integer_
           }
           
           # Calculate recognition probability for the listener
           recognition <- listener_guess_probability(
             listener_guess[ref_id],
             signal,
-            referents_info$size_prototypes[[ref_id]])
+            referents_info$size_prototypes[[ref_id]],
+            recognition_bias = recognition_bias,
+            iconicity_weight = iconicity_weight,
+            k_attractor = k_attractor,
+            circle_radius = circle_radius)
           
           prob <- recognition$probs
           
@@ -228,9 +270,11 @@ run_interaction_sim <- function(
           
           # Update listener's guess for this referent as dependent on success or failure
           if (listener == "A") {
-            agentA_guess[ref_id] <- update_logit(prob, learning_strength, success)
+            agentA_guess[ref_id] <- update_logit(prob, learning_strength, success,
+                                                 success_scale, failure_scale)
           } else {
-            agentB_guess[ref_id] <- update_logit(prob, learning_strength, success)
+            agentB_guess[ref_id] <- update_logit(prob, learning_strength, success,
+                                                 success_scale, failure_scale)
           }
           
           # Update stored signal of both listener and speaker if success; integrate over stored and produced signals
@@ -241,30 +285,42 @@ run_interaction_sim <- function(
               (signal + referents_info$agentB_stored_signal[[ref_id]]) / 2
           }
           
-          
+
           # Store POST-UPDATE values
           new_guess_A <- agentA_guess[ref_id]
           new_guess_B <- agentB_guess[ref_id]
           new_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
           new_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
+
+          nn_A <- nearest_attractor(new_stored_signal_A, attractor_centers)
+          nn_B <- nearest_attractor(new_stored_signal_B, attractor_centers)
           
+          # Does the attractor the (speaker's) signal currently sits in -- if any, and if semantic -- match THIS referent's own meaning,
+          # or is it the other referent's (anti-iconic) location? NA if not in any attractor, or in a neutral one.
+          is_correct_semantic_attractor <- if (!is.na(attractor_id) && is_semantic_attractor[attractor_id]) {
+            points_equal(attractor_centers[[attractor_id]], referents_info$size_prototypes[[ref_id]])
+          } else {
+            NA
+          }
           
           # Log everything
           simulation_log[[length(simulation_log) + 1]] <- tibble(
-            simulation = sim, generation = gen, round = round, trial = trial, trial_counter = trial_counter, referent = ref_id, speaker = speaker, listener = listener, 
-            type = referents_info$type[ref_id], produced_signal = list(signal), in_trap = in_trap, prob = prob, evidence = recognition$evidence, success = success, expressive_A = expressive_A, 
-            expressive_B = expressive_B, is_expressive_trial = is_expressive_trial, old_guess_A = old_guess_A, new_guess_A = new_guess_A, old_guess_B = old_guess_B, new_guess_B = new_guess_B,
-            old_stored_signal_A = list(old_stored_signal_A), old_stored_signal_B = list(old_stored_signal_B), new_stored_signal_A = list(new_stored_signal_A), new_stored_signal_B = list(new_stored_signal_B)
+            simulation = sim, generation = gen, round = round, trial = trial, trial_counter = trial_counter, 
+            referent = ref_id, speaker = speaker, listener = listener, type = referents_info$type[ref_id], 
+            produced_signal = list(signal), in_attractor = in_attractor, attractor_id = attractor_id, 
+            is_semantic_attractor = is_semantic_attractor[attractor_id], is_correct_semantic_attractor = is_correct_semantic_attractor,
+            prob = prob, evidence = recognition$evidence, success = success, expressive_A = expressive_A, 
+            expressive_B = expressive_B, is_expressive_trial = is_expressive_trial, old_guess_A = old_guess_A, new_guess_A = new_guess_A, 
+            old_guess_B = old_guess_B, new_guess_B = new_guess_B, old_stored_signal_A = list(old_stored_signal_A), 
+            old_stored_signal_B = list(old_stored_signal_B), new_stored_signal_A = list(new_stored_signal_A), 
+            new_stored_signal_B = list(new_stored_signal_B)
           )
         }
       }
     }
-    
-    # Combine
-    full_history <- bind_rows(simulation_log)
-    
   }
-  return(full_history)
+  # Combine
+  bind_rows(simulation_log)
 }
 
 # Call it
@@ -272,7 +328,8 @@ d.empty <- data.frame(
   sim = integer(), gen = integer(), round = integer(), trial = integer(),
   trial_counter = integer(), referent = integer(), 
   speaker = character(), listener = character(), type = character(),
-  produced_signal = I(list()), in_trap = logical(), 
+  produced_signal = I(list()), in_attractor = logical(), attractor_id = character(),
+  is_semantic_attractor = logical(), is_correct_semantic_attractor = logical(),
   old_stored_signal_A = I(list()), new_stored_signal_A = I(list()),
   old_stored_signal_B = I(list()), new_stored_signal_B = I(list()),
   prob = numeric(), success = integer(), evidence = numeric(),
@@ -285,17 +342,17 @@ d.empty <- data.frame(
 # Run simulation function
 d.simulation <- rbind(
   d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = FALSE) %>%
-    mutate(model_type = "semanticAttractors"),
+    run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, recognition_bias = FALSE, expressive_agents = FALSE) %>%
+    mutate(model_type = "baseline"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = FALSE, expressive_agents = TRUE) %>%
-    mutate(model_type = "semanticAttractors_expressiveAgents"),
+    run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, recognition_bias = FALSE, expressive_agents = TRUE) %>%
+    mutate(model_type = "expressiveAgents"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = FALSE) %>%
-    mutate(model_type = "semanticPhonAttractors"),
+    run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, recognition_bias = TRUE, expressive_agents = FALSE) %>%
+    mutate(model_type = "recognitionBias"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 10, n_generations = 10, phonological_attractors = TRUE, expressive_agents = TRUE) %>%
-    mutate(model_type = "allAttractors_expressiveAgents"))
+    run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, recognition_bias = TRUE, expressive_agents = TRUE) %>%
+    mutate(model_type = "recognitionBias_expressiveAgents"))
 
 # Signal space use across simulations
 d_signal_mean <- d.simulation %>%
@@ -320,11 +377,10 @@ d_signal <- d.simulation %>%
 d.iconicity <- d.simulation %>%
   mutate(model_type = factor(
     model_type, 
-    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
-    labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors", "Semantic and phonological attractors, expressive agents"),
+    levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
+    labels = c("Baseline", "Expressive agents", "Iconicity recognition bias", "Iconicity recognition bias, expressive agents"),
     ordered = TRUE),
-    #total_round = (generation - 1) * 10 + round,
-    total_round = (generation - 1) * 50 + round,
+    total_round = (generation - 1) * 10 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
   summarise(
@@ -362,11 +418,11 @@ d.iconicity |>
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 500, 100),
-                      labels = seq(0, 50, 10)) +
+  scale_x_continuous(breaks = seq(0, 100, 10),
+                      labels = seq(0, 10, 1)) +
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", 
-       x = "Generation (each with 50 rounds)") +
+       x = "Generation (each with 10 rounds)") +
   theme_minimal() +
   facet_wrap(~model_type) +
   # marginal distribution per facet (y-axis)
@@ -384,7 +440,7 @@ d.iconicity |>
 ### evidence
 d.iconicity |> 
   filter(simulation %in% c(1:10)) |> 
-  filter(model_type == "Semantic attractors") |> 
+  filter(model_type == "Baseline") |> 
   ggplot(aes(x = total_round, y = evidence, group = interaction(model_type, simulation),
              color = evidence)) +
   geom_path(linewidth = 0.5, 
@@ -397,8 +453,8 @@ d.iconicity |>
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 500, 100),
-                     labels = seq(0, 50, 10)) +
+  scale_x_continuous(breaks = seq(0, 100, 10),
+                     labels = seq(0, 10, 1)) +
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds)") +
   theme_minimal() +
@@ -408,10 +464,10 @@ d.iconicity |>
 d.simulation |> 
   mutate(model_type = factor(
     model_type, 
-    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
-    labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors", "Semantic and phonological attractors, expressive agents"),
+    levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
+    labels = c("Baseline", "Expressive agents", "Iconicity recognition bias", "Iconicity recognition bias, expressive agents"),
     ordered = TRUE),
-    total_round = (generation - 1) * 50 + round,
+    total_round = (generation - 1) * 10 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
   summarise(
@@ -437,21 +493,24 @@ d.simulation |>
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 500, 100),
-                     labels = seq(0, 50, 10)) +
+  scale_x_continuous(breaks = seq(0, 100, 10),
+                     labels = seq(0, 10, 1)) +
   
   labs(title = "Representational strength over generations",
        y = "Memory strength from 0-1\n", x = "Generation (each with 10 rounds)") +
   theme_minimal() +
   facet_wrap(~model_type, ncol = 1)
 
-## signal space
 # Signal space use across simulations
 center_small <- c(0.15, 0.85)
 center_large <- c(0.85, 0.15)
-phonological_traps <- list(c(0.15, 0.15), c(0.85, 0.85))
+neutral_attractors <- list(c(0.15, 0.15), c(0.85, 0.85))
 
-trap_radius <- 0.3
+# The unified set used by produce_signal() in the simulation above.
+plot_attractor_centers <- list(center_small, center_large,
+                               neutral_attractors[[1]], neutral_attractors[[2]])
+
+circle_radius <- 0.3
 drift_sd <- 0.19
 k_production <- 1.5
 speaker_guess_fixed <- 0.5
@@ -466,27 +525,24 @@ grid <- expand.grid(
 grid_mapped <- grid %>%
   rowwise() %>%
   mutate(
-    # A. Calculate semantic evidence for background fill
-    ease = signal_evidence(c(x, y), 
-                           if(type == "small") center_small else center_large,
-                           circle_radius = 0.3, k_perception = k_attractor_fixed),
-    # B. Calculate localized production SD for structural contours
+    ease = signal_evidence(c(x, y),
+                           if (type == "small") center_small else center_large,
+                           circle_radius = circle_radius, k_perception = k_attractor_fixed),
+    # localized production SD -- now driven by ALL FOUR attractors.
     local_sd = {
-      # baseline production variability (outside trap influence)
       base_sd <- drift_sd * (1 + k_production * (0.5 - speaker_guess_fixed))
       distances <- sapply(
-        phonological_traps,
+        plot_attractor_centers,
         function(center) sqrt(sum((c(x, y) - center)^2))
       )
-      inside_traps <- distances < trap_radius
-      if (any(inside_traps)) {
-        closest_trap_dist <- min(distances[inside_traps])
-        rel_dist <- closest_trap_dist / trap_radius
+      inside_attractors <- distances < circle_radius
+      if (any(inside_attractors)) {
+        closest_dist <- min(distances[inside_attractors])
+        rel_dist <- closest_dist / circle_radius
         
         magnitude <- exp(-k_attractor_fixed * rel_dist)
         max_mag <- exp(-k_attractor_fixed * 0)
         min_mag <- exp(-k_attractor_fixed * 1)
-        
         exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
         
         edge_sd <- drift_sd
@@ -497,14 +553,39 @@ grid_mapped <- grid %>%
   ) %>%
   ungroup()
 
+# Mark all four attractor centers, distinguishing -- per facet -- this
+# referent's correct meaning, the OTHER referent's (wrong) meaning, and
+# the two purely arbitrary/neutral attractors. Built with base merge()
+# to avoid requiring tidyr::crossing(), but that works equally well.
+attractor_points <- merge(
+  data.frame(
+    x = c(0.15, 0.85, 0.15, 0.85),
+    y = c(0.85, 0.15, 0.15, 0.85),
+    is_semantic = c(TRUE, TRUE, FALSE, FALSE)
+  ),
+  data.frame(type = c("small", "large"))
+) %>%
+  mutate(
+    role = case_when(
+      !is_semantic ~ "neutral",
+      type == "small" & x == 0.15 & y == 0.85 ~ "correct",
+      type == "large" & x == 0.85 & y == 0.15 ~ "correct",
+      is_semantic ~ "wrong",
+      TRUE ~ NA_character_
+    )
+  )
+
 grid_mapped %>%
-  ggplot(
-    aes(x = x, y = y)) +
+  ggplot(aes(x = x, y = y)) +
   geom_tile(aes(fill = ease)) +
-  # Contour lines map out the dropping SD zones (the trap depth)
+  # Contour lines now map out all four basins, not two -- identical
+  # across facets, since production doesn't know about meaning.
   geom_contour(aes(z = local_sd), bins = 10, color = "white", alpha = 0.7) +
-  annotate("point", x = c(0.15, 0.85), y = c(0.15, 0.85), 
-           color = "white", shape = 4, size = 4, stroke = 1.2) +
+  geom_point(data = attractor_points,
+             aes(x = x, y = y, shape = role, color = role),
+             size = 4, stroke = 1.2) +
+  scale_shape_manual(values = c(correct = 4, wrong = 4, neutral = 1)) +
+  scale_color_manual(values = c(correct = "white", wrong = "red", neutral = "white")) +
   facet_wrap(~ type) +
   scale_fill_viridis_c() +
   theme_minimal() +
@@ -536,7 +617,7 @@ d_signal_mean  |>
 
 # plot individual
 temp_ind <- d_signal  |> 
-  filter(model_type == "semanticAttractors") |> 
+  filter(model_type == "baseline") |> 
   filter(simulation == 1) |> 
   filter(generation  == 1)
 
@@ -583,8 +664,8 @@ euc_dist(c(0.15,0.85), c(0.44,0.56))
 d_signal_ed <- d_signal |> 
   mutate(model_type = factor(
     model_type, 
-    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
-    labels = c("Semantic attractors", "+ expressive agents", "+ phonological distractors", "phonological distractors and expressive agents"),
+    levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
+    labels = c("Baseline", "+ expressive agents", "+ iconicity recognition bias", "+ iconicity recognition bias and expressive agents"),
     ordered = TRUE)) |> 
   mutate(iconic_ed = ifelse(type == "small",
                             sqrt((x - 0.15)^2 + (y - 0.85)^2),
@@ -730,8 +811,8 @@ d_signal_mean  |>
   d_signal  |>
     mutate(model_type = factor(
       model_type, 
-      levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
-      labels = c("Semantic attractors", "+ expressive agents", "+ phonological distractors", "phonological distractors and expressive agents"),
+      levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
+      labels = c("Baseline", "+ expressive agents", "+ iconicity recognition bias", "+ iconicity recognition bias and expressive agents"),
       ordered = TRUE)) |> 
     ggplot(aes(x = x, y = y)) +
     # binwidth = 1/3 creates 3 bins for both X and Y across the 0-1 range
