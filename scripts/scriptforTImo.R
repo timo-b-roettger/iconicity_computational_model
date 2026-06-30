@@ -143,7 +143,7 @@ run_interaction_sim <- function(
     success_scale = 7.5, # more learning with success; 95% accuracy at the end of 10th round
     failure_scale = 1, # also increase in learning with failure, but less so; 60% accuracy at the end of 10th round
     expressive_agents = TRUE, # switch on/off expressive agents
-    expressive_noise_sd = 0.08, # production noise, but not so large that the signal falls out of the semantic attractor
+    expressive_noise_sd = 0.04, # production noise, but not so large that the signal falls out of the semantic attractor
     expressive_prob_per_agent = 0.10, # 10% chance that an agent is expressive; ~20% chance of an expressive agent in this generation
     expressive_trial_prob = 0.20,
     k_attractor = 2.5, # controls the shape of decay from attractor centers
@@ -342,17 +342,54 @@ d.empty <- data.frame(
 # Run simulation function
 d.simulation <- rbind(
   d.empty %>% 
-    run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, recognition_bias = FALSE, expressive_agents = FALSE) %>%
+    run_interaction_sim(n_sim = 1000, n_rounds = 10, n_generations = 10, recognition_bias = FALSE, expressive_agents = FALSE) %>%
     mutate(model_type = "baseline"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, recognition_bias = FALSE, expressive_agents = TRUE) %>%
+    run_interaction_sim(n_sim = 1000, n_rounds = 10, n_generations = 10, recognition_bias = FALSE, expressive_agents = TRUE) %>%
     mutate(model_type = "expressiveAgents"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, recognition_bias = TRUE, expressive_agents = FALSE) %>%
+    run_interaction_sim(n_sim = 1000, n_rounds = 10, n_generations = 10, recognition_bias = TRUE, expressive_agents = FALSE) %>%
     mutate(model_type = "recognitionBias"),
   d.empty %>% 
-    run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, recognition_bias = TRUE, expressive_agents = TRUE) %>%
+    run_interaction_sim(n_sim = 1000, n_rounds = 10, n_generations = 10, recognition_bias = TRUE, expressive_agents = TRUE) %>%
     mutate(model_type = "recognitionBias_expressiveAgents"))
+
+# CALCULATIONS----
+d.attractor_stats <- d.simulation %>%
+  # Arrange by the experimental structure and sequential rounds for each referent
+  arrange(model_type, simulation, generation, referent, round) %>%
+  # Group by referent track within each simulation/generation to observe round-to-round transitions
+  group_by(model_type, simulation, generation, referent) %>%
+  mutate(
+    # Look ahead to the next round's attractor status for this specific referent
+    next_in_attractor = lead(in_attractor),
+    next_attractor_id = lead(attractor_id),
+    # An escape happens if the signal is currently in an attractor, AND in the next round
+    # it is either completely out of all attractors (NA) OR has moved to a different attractor.
+    escaped = in_attractor & (is.na(next_attractor_id) | (attractor_id != next_attractor_id))) %>%
+  # Aggregate at the level of each model type, simulation, and generation
+  group_by(model_type, simulation, generation) %>%
+  summarize(
+    # TIME SPENT: Proportion of all trials where the produced signal was inside an attractor
+    prop_time_in_attractor = mean(in_attractor, na.rm = TRUE),
+    # PROBABILITY OF GETTING OUT:
+    # Total opportunities to escape (was in an attractor and has a subsequent round to transition to)
+    escape_opportunities = sum(in_attractor & !is.na(next_in_attractor), na.rm = TRUE),
+    # Total actual escapes observed
+    escape_actuals = sum(escaped & !is.na(next_in_attractor), na.rm = TRUE),
+    # Escape probability (returns NA if the signal never entered an attractor in that generation)
+    prob_getting_out = if_else(escape_opportunities > 0, 
+                               escape_actuals / escape_opportunities, 
+                               NA_real_), .groups = "drop")
+
+# Optional: Summarize ACROSS all 1000 simulations to get grand averages per generation
+d.generation_summary <- d.attractor_stats %>%
+  group_by(model_type, generation) %>%
+  summarize(
+    mean_time_in_attractor = mean(prop_time_in_attractor, na.rm = TRUE),
+    mean_prob_getting_out  = mean(prob_getting_out, na.rm = TRUE),
+    .groups = "drop")
+
 
 # Signal space use across simulations
 d_signal_mean <- d.simulation %>%
