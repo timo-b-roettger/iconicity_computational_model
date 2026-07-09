@@ -310,7 +310,7 @@ d.empty <- data.frame(
   old_stored_signal_A = I(list()), new_stored_signal_A = I(list()),
   old_stored_signal_B = I(list()), new_stored_signal_B = I(list()),
   prob = numeric(), success = integer(), evidence = numeric(),
-  expressive_A = logical(), expressive_B = logical(),
+  #expressive_A = logical(), expressive_B = logical(),
   is_expressive_trial = logical(),
   old_guess_A = numeric(), new_guess_A = numeric(),
   old_guess_B = numeric(), new_guess_B = numeric(),
@@ -489,7 +489,7 @@ empty_df <- data.frame(
   old_stored_signal_A = I(list()), new_stored_signal_A = I(list()),
   old_stored_signal_B = I(list()), new_stored_signal_B = I(list()),
   prob = numeric(), success = integer(), evidence = numeric(),
-  expressive_A = logical(), expressive_B = logical(),
+  #expressive_A = logical(), expressive_B = logical(),
   is_expressive_trial = logical(),
   old_guess_A = numeric(), new_guess_A = numeric(),
   old_guess_B = numeric(), new_guess_B = numeric(),
@@ -537,8 +537,7 @@ if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
 if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
   
   d.grid.expressiveAgents <- expand.grid(
-    expressive_prob_per_agent = seq(0, 1, length.out = 8),   # 0 = never expressive, 1 = always
-    expressive_trial_prob     = seq(0, 1, length.out = 8),   # per-trial expression rate for that agent
+    expressive_probability = seq(0, 0.3, length.out = 8),
     drift_sd                  = seq(0.09, 0.5, length.out = 8)) %>%
     mutate(iconicity = NA_real_, history = vector("list", n()))
   
@@ -556,8 +555,7 @@ if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
       recognition_bias = FALSE,
       iconicity_weight = 0,
       expressive_agents = TRUE,
-      expressive_prob_per_agent = params$expressive_prob_per_agent,
-      expressive_trial_prob = params$expressive_trial_prob,
+      expressive_probability = params$expressive_probability,
       success_scale = 7.5,
       failure_scale = 1
     )
