@@ -134,7 +134,7 @@ run_interaction_sim <- function(
     expressive_agents = TRUE, # switch on/off expressive agents
     expressive_noise_sd = circle_radius / 4.8, # production noise for expressive speakers, 99.9999% of signals land within iconic attractor radius
     expressive_prob_per_agent = 0.10, # 10% chance that an agent is expressive; ~20% chance of an expressive agent in this generation
-    expressive_trial_prob = 0.20
+    expressive_trial_prob = 0.20 # if a speaker is expressive, what is the probability that the trial is expressive
 ) {
   
   # SETTING UP SIGNAL-MEANING INFORMATION
@@ -348,6 +348,28 @@ d.empty <- data.frame(
   stringsAsFactors = FALSE)
 
 # Run simulation function
+d.simulation <- rbind(
+  d.empty %>% 
+    run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
+    mutate(model_type = "baseline"),
+  d.empty %>% 
+    run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
+    mutate(model_type = "expressiveAgents"),
+  d.empty %>% 
+    run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
+    mutate(model_type = "recognitionBias"))
+
+d.simulation.medium <- rbind(
+  d.empty %>% 
+    run_interaction_sim(n_sim = 100, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
+    mutate(model_type = "baseline"),
+  d.empty %>% 
+    run_interaction_sim(n_sim = 100, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
+    mutate(model_type = "expressiveAgents"),
+  d.empty %>% 
+    run_interaction_sim(n_sim = 100, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
+    mutate(model_type = "recognitionBias"))
+
 d.simulation.small <- rbind(
   d.empty %>% 
     run_interaction_sim(n_sim = 10, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
@@ -359,8 +381,23 @@ d.simulation.small <- rbind(
     run_interaction_sim(n_sim = 10, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
     mutate(model_type = "recognitionBias"))
 
+d.test_high_expr <- d.empty %>%
+  run_interaction_sim(
+    n_sim = 200, n_rounds = 50, n_generations = 1,
+    recognition_bias = FALSE, expressive_agents = TRUE,
+    expressive_prob_per_agent = 0.5,
+    expressive_trial_prob = 0.6)
+
+d.test_high_expr %>%
+  group_by(is_expressive_trial) %>%
+  summarise(success_rate = mean(success), mean_evidence = mean(evidence), n = n())
+
+# and the actual comparison metric:
+compute_iconicity(d.test_high_expr, n_rounds = 50)
+
+
 # Signal space use across simulations
-d_signal_mean <- d.simulation %>%
+d_signal_mean <- d.simulation.small %>%
   mutate(total_round = (generation - 1) * 50 + round,
          x = map_dbl(produced_signal, 1),
          y = map_dbl(produced_signal, 2)) %>%
@@ -372,7 +409,7 @@ d_signal_mean <- d.simulation %>%
 
 
 # Signal space use across simulations
-d_signal <- d.simulation.small %>%
+d_signal <- d.simulation.medium %>%
   mutate(total_round = (generation - 1) * 50 + round,
          #mutate(total_round = (generation - 1) * 10 + round,
          x = map_dbl(produced_signal, 1),
@@ -380,7 +417,7 @@ d_signal <- d.simulation.small %>%
 
 
 # calculate proportion of trials ending up in an attractor, in a semantic attractor, in the correct semantic attractor
-d.simulation.small %>%
+d.simulation %>%
   group_by(model_type) %>%
   summarise(
     total_trials = n(),
@@ -396,7 +433,7 @@ d.simulation.small %>%
   select(-n_in, -n_out, -n_sem, -n_corr_sem)
 
 # PLOT ICONICITY----
-d.iconicity <- d.simulation.small %>%
+d.iconicity <- d.simulation %>%
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias"),
@@ -455,6 +492,116 @@ d.iconicity |>
     fill = "grey",
     alpha = 0.5) +
   scale_ysidex_continuous()
+
+# GRID SEARCHES ----
+compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
+  d.iconicity <- history %>%
+    mutate(total_round = (generation - 1) * n_rounds + round) %>%
+    group_by(simulation, total_round) %>%
+    summarise(evidence = mean(evidence, na.rm = TRUE), .groups = "drop")
+  
+  max_round <- max(d.iconicity$total_round)
+  threshold <- max_round * cutoff
+  
+  d.iconicity %>%
+    filter(total_round >= threshold) %>%
+    summarise(mean_iconicity = mean(evidence, na.rm = TRUE)) %>%
+    pull(mean_iconicity)
+}
+
+RESET_MODELS <- FALSE  # set TRUE to force a rerun
+
+empty_df <- data.frame(
+  sim = integer(), gen = integer(), round = integer(), trial = integer(),
+  trial_counter = integer(), referent = integer(),
+  speaker = character(), listener = character(), type = character(),
+  produced_signal = I(list()), dist_to_nearest = numeric(), in_attractor = logical(),
+  attractor_id = integer(), is_semantic_attractor = logical(), is_correct_semantic_attractor = logical(),
+  old_stored_signal_A = I(list()), new_stored_signal_A = I(list()),
+  old_stored_signal_B = I(list()), new_stored_signal_B = I(list()),
+  prob = numeric(), success = integer(), evidence = numeric(),
+  expressive_A = logical(), expressive_B = logical(),
+  is_expressive_trial = logical(),
+  old_guess_A = numeric(), new_guess_A = numeric(),
+  old_guess_B = numeric(), new_guess_B = numeric(),
+  stringsAsFactors = FALSE)
+
+N_ROUNDS <- 50  # matches your n_rounds elsewhere; used by compute_iconicity()
+
+## --- GRID 1: recognition-bias mechanism -------------------------------
+if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
+  
+  d.grid.recognitionBias <- expand.grid(
+    iconicity_weight  = seq(0, 0.5, length.out = 8),
+    learning_strength = seq(0, 0.05, length.out = 8),
+    drift_sd          = seq(0.09, 0.5, length.out = 8)) %>%
+    mutate(iconicity = NA_real_, history = vector("list", n()))
+  
+  for (i in seq_len(nrow(d.grid.recognitionBias))) {
+    params <- d.grid.recognitionBias[i, ]
+    
+    history <- run_interaction_sim(
+      data = empty_df,
+      n_sim = 100,
+      n_referents = 4,
+      n_generations = 1,
+      n_rounds = N_ROUNDS,
+      drift_sd = params$drift_sd,
+      learning_strength = params$learning_strength,
+      recognition_bias = TRUE,
+      iconicity_weight = params$iconicity_weight,
+      expressive_agents = FALSE,
+      success_scale = 7.5,
+      failure_scale = 1)
+    
+    d.grid.recognitionBias$history[[i]] <- history
+    d.grid.recognitionBias$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
+    message("recognitionBias: completed parameter set ", i, " of ", nrow(d.grid.recognitionBias))
+  }
+  saveRDS(d.grid.recognitionBias, file = "models/grid-search-recognitionBias.rds", compress = TRUE)
+  
+} else {
+  d.grid.recognitionBias <- readRDS("models/grid-search-recognitionBias.rds")
+}
+
+## --- GRID 2: expressive-agent mechanism -------------------------------
+if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
+  
+  d.grid.expressiveAgents <- expand.grid(
+    expressive_prob_per_agent = seq(0, 1, length.out = 8),   # 0 = never expressive, 1 = always
+    expressive_trial_prob     = seq(0, 1, length.out = 8),   # per-trial expression rate for that agent
+    drift_sd                  = seq(0.09, 0.5, length.out = 8)) %>%
+    mutate(iconicity = NA_real_, history = vector("list", n()))
+  
+  for (i in seq_len(nrow(d.grid.expressiveAgents))) {
+    params <- d.grid.expressiveAgents[i, ]
+    
+    history <- run_interaction_sim(
+      data = empty_df,
+      n_sim = 100,
+      n_referents = 4,
+      n_generations = 1,
+      n_rounds = N_ROUNDS,
+      drift_sd = params$drift_sd,
+      learning_strength = 0.015,      # hold fixed; not this mechanism's axis
+      recognition_bias = FALSE,
+      iconicity_weight = 0,
+      expressive_agents = TRUE,
+      expressive_prob_per_agent = params$expressive_prob_per_agent,
+      expressive_trial_prob = params$expressive_trial_prob,
+      success_scale = 7.5,
+      failure_scale = 1
+    )
+    
+    d.grid.expressiveAgents$history[[i]] <- history
+    d.grid.expressiveAgents$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
+    message("expressiveAgents: completed parameter set ", i, " of ", nrow(d.grid.expressiveAgents))
+  }
+  saveRDS(d.grid.expressiveAgents, file = "models/grid-search-expressiveAgents.rds", compress = TRUE)
+  
+} else {
+  d.grid.expressiveAgents <- readRDS("models/grid-search-expressiveAgents.rds")
+}
 
 
 # TIMO EXPLORES ----
