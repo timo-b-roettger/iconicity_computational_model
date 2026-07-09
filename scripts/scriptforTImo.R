@@ -603,6 +603,52 @@ if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
   d.grid.expressiveAgents <- readRDS("models/grid-search-expressiveAgents.rds")
 }
 
+# plot_grid_tiles <- function(d.grid, x_var, y_var, fixed_var, fixed_val, x_lab, y_lab) {
+#   d.grid %>%
+#     filter(.data[[fixed_var]] == fixed_val) %>%
+#     ggplot(aes(x = factor(.data[[x_var]]), y = factor(.data[[y_var]]), fill = iconicity)) +
+#     geom_tile() +
+#     geom_point(data = . %>% filter(iconicity == max(iconicity)), shape = 4) +
+#     scale_fill_viridis_c(limits = c(-1, 1)) +
+#     theme_minimal() +
+#     labs(x = x_lab, y = y_lab, fill = "Iconicity")
+# }
+# 
+# # pick a representative drift_sd (nearest value actually in the grid)
+# sd_fixed <- unique(d.grid.recognitionBias$drift_sd)[4]
+# 
+# p.recognitionBias <- plot_grid_tiles(
+#   d.grid.recognitionBias, "learning_strength", "iconicity_weight",
+#   "drift_sd", sd_fixed, "Learning strength", "Iconicity weight")
+# 
+# sd_fixed_expr <- unique(d.grid.expressiveAgents$drift_sd)[4]
+# 
+# p.expressiveAgents <- plot_grid_tiles(
+#   d.grid.expressiveAgents, "expressive_prob_per_agent", "expressive_trial_prob",
+#   "drift_sd", sd_fixed_expr, "Expressive agent probability", "Expressive trial probability")
+# 
+# p.recognitionBias | p.expressiveAgents
+# 
+# 
+# d.grid.compare <- bind_rows(
+#   d.grid.recognitionBias %>%
+#     group_by(drift_sd) %>%
+#     summarise(peak_iconicity = max(iconicity, na.rm = TRUE), .groups = "drop") %>%
+#     mutate(mechanism = "Iconicity recognition bias"),
+#   d.grid.expressiveAgents %>%
+#     group_by(drift_sd) %>%
+#     summarise(peak_iconicity = max(iconicity, na.rm = TRUE), .groups = "drop") %>%
+#     mutate(mechanism = "Expressive agents"))
+# 
+# ggplot(d.grid.compare, aes(x = drift_sd, y = peak_iconicity, color = mechanism)) +
+#   geom_line(linewidth = 1) +
+#   geom_point() +
+#   scale_y_continuous(limits = c(-1, 1)) +
+#   theme_minimal() +
+#   labs(x = "Drift SD", y = "Peak iconicity (best parameter combo at this drift_sd)",
+#        color = "Mechanism",
+#        title = "Best achievable iconicity per mechanism, across noise levels")
+
 
 # TIMO EXPLORES ----
 ## plot 10 random simulations
