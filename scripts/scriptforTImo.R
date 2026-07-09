@@ -117,28 +117,29 @@ update_logit <- function(x, learning_strength, success, success_scale, failure_s
 # MAIN SIM FUNCTION----
 run_interaction_sim <- function(
     data,
-    n_sim = 1, # number of simulations
-    n_referents = 4, # number of unique referents in guessing game
-    n_generations = 1, # no of generations
-    n_rounds = 50, # number of interaction rounds; 50
-    drift_sd = 0.19,  # amount of variation introduced during production; motor noise; equivalent to approx. 10% chance of wandering into a pocket when the signal is at .5, .5 and previous guess = 0.5
-    learning_strength = 0.015, # amount of added memory strengthening for referents as dependent on success; corresponding to .01 increase for a probability of 0.5 on failure, and .09 increase on success
-    recognition_bias = FALSE, # switch on/off iconicity bias for recognition
-    iconicity_weight = 0.4,  # multiplicator for iconicity; corresponding to ~10% absolute increase for a probability of 0.5 (for the perfectly iconic signal)
-    success_scale = 7.5, # more learning with success; 95% accuracy at the end of 10th round
-    failure_scale = 1, # also increase in learning with failure, but less so; 60% accuracy at the end of 10th round
-    k_attractor = 2.5, # controls the shape of decay from attractor centers
-    neutral_attractor_centers = list(c(0.15, 0.15), c(0.85, 0.85)), # define phonological attractors/traps; currently two, in the opposite corners of the two-dimensional space
-    circle_radius = 0.3, # identical size for all attractors
-    trap_center_sd = 0.12,  # 5% single-step escape probability from center of attractor
-    expressive_agents = TRUE, # switch on/off expressive agents
-    expressive_noise_sd = circle_radius / 4.8, # production noise for expressive speakers, 99.9999% of signals land within iconic attractor radius
-    expressive_prob_per_agent = 0.10, # 10% chance that an agent is expressive; ~20% chance of an expressive agent in this generation
-    expressive_trial_prob = 0.20 # if a speaker is expressive, what is the probability that the trial is expressive
+    n_sim = 1,
+    n_referents = 4,
+    n_generations = 1,
+    n_rounds = 50,
+    drift_sd = 0.19,
+    learning_strength = 0.015,
+    recognition_bias = FALSE,
+    iconicity_weight = 0.4,
+    success_scale = 7.5,
+    failure_scale = 1,
+    k_attractor = 2.5,
+    neutral_attractor_centers = list(c(0.15, 0.15), c(0.85, 0.85)),
+    circle_radius = 0.3,
+    trap_center_sd = 0.12,
+    expressive_agents = TRUE,
+    expressive_noise_sd = circle_radius / 4.8,
+    # --- OLD two-level hierarchical expressiveness (kept for generational-overturn work) ---
+    # expressive_prob_per_agent = 0.10, # per-generation probability an agent is "the expressive type"
+    # expressive_trial_prob = 0.20,     # per-trial probability of override, conditional on being that type
+    # --- NEW simplified single-parameter version ---
+    expressive_probability = 0.1  # flat per-trial probability of an expressive override, no agent-level persistence
 ) {
   
-  # SETTING UP SIGNAL-MEANING INFORMATION
-  # No of referents + their prototypical values; semantic prototypes; initial signal y values
   referents_blueprint <- tibble(
     id = seq_len(n_referents),
     type = rep(c("small", "large"), length.out = n_referents),
@@ -146,7 +147,6 @@ run_interaction_sim <- function(
                               list(c(0.15, 0.85)),
                               list(c(0.85, 0.15))))
   
-  # Attractors: iconic + arbitrary
   semantic_attractor_centers <- unique(referents_blueprint$size_prototypes)
   attractor_centers <- c(semantic_attractor_centers, neutral_attractor_centers)
   is_semantic_attractor <- c(
@@ -154,15 +154,15 @@ run_interaction_sim <- function(
     rep(FALSE, length(neutral_attractor_centers))
   )
   
-  # Probability of expressive speakers
-  expressive_prob <- if (expressive_agents) expressive_prob_per_agent else 0
+  # --- OLD: probability of expressive speakers (agent-level trait) ---
+  # expressive_prob <- if (expressive_agents) expressive_prob_per_agent else 0
+  # --- NEW: flat per-trial probability, no agent-level draw needed ---
+  trial_expressive_prob <- if (expressive_agents) expressive_probability else 0
   
   simulation_log <- list()
   
-  # MAIN SIMULATION LOOP
   for (sim in 1:n_sim) {
     
-    # Setup lexicon for every simulation replicate
     referents_info <- referents_blueprint %>%
       mutate(
         agentA_stored_signal = rep(list(c(0.5, 0.5)), n_referents),
@@ -171,24 +171,20 @@ run_interaction_sim <- function(
     for (gen in 1:n_generations) {
       trial_counter <- 0
       
-      # expressive agent assignment
-      expressive_A <- runif(1) < expressive_prob
-      expressive_B <- runif(1) < expressive_prob
+      # --- OLD: agent-level expressive assignment, drawn once per generation ---
+      # expressive_A <- runif(1) < expressive_prob
+      # expressive_B <- runif(1) < expressive_prob
       
-      # Initialize agents; reset representation strength at each generation
       agentA_guess <- rbeta(n_referents, 3, 9)
       agentB_guess <- rbeta(n_referents, 3, 9)
       
       for (round in 1:n_rounds) {
-        # Shuffle referents so the order is different each round
         referent_order <- sample(1:n_referents)
         roles <- sample(rep(c("A", "B"), length.out = n_referents))
         
         for (trial in 1:n_referents) {
-          # Increment global trial counter within generation (for expressive agent trials)
           trial_counter <- trial_counter + 1
           ref_id <- referent_order[trial]
-          # speakers/listeners are taking turns
           speaker <- roles[trial]
           listener <- ifelse(speaker == "A", "B", "A")
           
@@ -200,14 +196,12 @@ run_interaction_sim <- function(
             listener_guess <- agentA_guess
           }
           
-          # Store guesses before trial updates
           old_guess_A <- agentA_guess[ref_id]
           old_guess_B <- agentB_guess[ref_id]
           old_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
           old_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
           old_stored_signal <- if (speaker == "A") old_stored_signal_A else old_stored_signal_B
           
-          # Signal production (speaker knows lexeme & size)
           production_output <- produce_signal(
             stored_signal = old_stored_signal,
             speaker_guess = speaker_guess[ref_id],
@@ -218,19 +212,21 @@ run_interaction_sim <- function(
             center_sd = trap_center_sd,
             k_attractor = k_attractor)
           
-          # Override signal production if agent is expressive; on ~20% of all trials for that expressive agent
           is_expressive_trial <- FALSE
-          if (
-            ((speaker == "A" && expressive_A) ||
-             (speaker == "B" && expressive_B)) &&
-            runif(1) < expressive_trial_prob
-          ) {
-            # If the trial is expressive, produce a perfectly iconic signal for that referent
+          
+          # --- OLD: override only if speaker is the pre-assigned expressive agent for this generation ---
+          # if (
+          #   ((speaker == "A" && expressive_A) ||
+          #    (speaker == "B" && expressive_B)) &&
+          #   runif(1) < expressive_trial_prob
+          # ) {
+          
+          # --- NEW: flat per-trial draw, no agent identity involved ---
+          if (runif(1) < trial_expressive_prob) {
             is_expressive_trial <- TRUE
             target_center <- referents_info$size_prototypes[[ref_id]]
             signal <- clamp01(rnorm(2, mean = target_center, sd = expressive_noise_sd))
             
-            # for logging reasons, keep track of signal position in relation to attractors
             distances <- sapply(attractor_centers, function(center) sqrt(sum((signal - center)^2)))
             dist_to_nearest <- min(distances)
             nearest_id <- which.min(distances)
@@ -243,7 +239,6 @@ run_interaction_sim <- function(
             attractor_id    <- production_output$attractor_id
           }
           
-          # Calculate recognition probability for the listener
           recognition <- listener_guess_probability(
             listener_guess[ref_id],
             signal,
@@ -254,18 +249,14 @@ run_interaction_sim <- function(
             circle_radius = circle_radius)
           
           prob <- recognition$probs
-          
-          # Success or failure
           success <- rbinom(1, 1, prob)
           
-          # Update listener's guess for this referent as dependent on success or failure
           if (listener == "A") {
             agentA_guess[ref_id] <- update_logit(prob, learning_strength, success, success_scale, failure_scale)
           } else {
             agentB_guess[ref_id] <- update_logit(prob, learning_strength, success, success_scale, failure_scale)
           }
           
-          # Update stored signal of both listener and speaker if success; integrate over stored and produced signals
           if (success == 1) {
             referents_info$agentA_stored_signal[[ref_id]] <- 
               (signal + referents_info$agentA_stored_signal[[ref_id]]) / 2
@@ -273,15 +264,11 @@ run_interaction_sim <- function(
               (signal + referents_info$agentB_stored_signal[[ref_id]]) / 2
           }
           
-          
-          # Store POST-UPDATE values
           new_guess_A <- agentA_guess[ref_id]
           new_guess_B <- agentB_guess[ref_id]
           new_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
           new_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
           
-          # Does the attractor the (speaker's) signal currently sits in -- if any, and if semantic -- match THIS referent's own meaning,
-          # or is it the other referent's (anti-iconic) location? NA if not in any attractor, or in a neutral one.
           has_semantic <- !is.na(attractor_id) && is_semantic_attractor[attractor_id]
           log_is_semantic <- if (is.na(attractor_id)) FALSE else is_semantic_attractor[attractor_id]
           is_correct_semantic_attractor <- if (has_semantic) {
@@ -290,43 +277,25 @@ run_interaction_sim <- function(
             FALSE
           }
           
-          # Log everything
           simulation_log[[length(simulation_log) + 1]] <- tibble(
-            simulation = sim, 
-            generation = gen, 
-            round = round, 
-            trial = trial, 
-            trial_counter = trial_counter, 
-            referent = ref_id, 
-            speaker = speaker, 
-            listener = listener, 
-            type = referents_info$type[ref_id], 
-            produced_signal = list(signal), 
-            dist_to_nearest = dist_to_nearest, 
-            in_attractor = in_attractor, 
-            attractor_id = attractor_id, 
-            is_semantic_attractor = log_is_semantic, # Uses the safe scalar variable
+            simulation = sim, generation = gen, round = round, trial = trial, trial_counter = trial_counter,
+            referent = ref_id, speaker = speaker, listener = listener, type = referents_info$type[ref_id],
+            produced_signal = list(signal), dist_to_nearest = dist_to_nearest, in_attractor = in_attractor,
+            attractor_id = attractor_id, is_semantic_attractor = log_is_semantic,
             is_correct_semantic_attractor = is_correct_semantic_attractor,
-            prob = prob, 
-            evidence = recognition$evidence, 
-            success = success, 
-            expressive_A = expressive_A, 
-            expressive_B = expressive_B, 
-            is_expressive_trial = is_expressive_trial, 
-            old_guess_A = old_guess_A, 
-            new_guess_A = new_guess_A, 
-            old_guess_B = old_guess_B, 
-            new_guess_B = new_guess_B, 
-            old_stored_signal_A = list(old_stored_signal_A), 
-            old_stored_signal_B = list(old_stored_signal_B), 
-            new_stored_signal_A = list(new_stored_signal_A), 
-            new_stored_signal_B = list(new_stored_signal_B)
+            prob = prob, evidence = recognition$evidence, success = success,
+            # --- OLD: agent-level expressive flags, no longer meaningful under flat design ---
+            # expressive_A = expressive_A, expressive_B = expressive_B,
+            is_expressive_trial = is_expressive_trial,
+            old_guess_A = old_guess_A, new_guess_A = new_guess_A,
+            old_guess_B = old_guess_B, new_guess_B = new_guess_B,
+            old_stored_signal_A = list(old_stored_signal_A), old_stored_signal_B = list(old_stored_signal_B),
+            new_stored_signal_A = list(new_stored_signal_A), new_stored_signal_B = list(new_stored_signal_B)
           )
         }
       }
     }
   }
-  # Combine
   full_history <- bind_rows(simulation_log)
   return(full_history)
 }
@@ -409,7 +378,7 @@ d_signal_mean <- d.simulation.small %>%
 
 
 # Signal space use across simulations
-d_signal <- d.simulation.medium %>%
+d_signal <- d.simulation.small %>%
   mutate(total_round = (generation - 1) * 50 + round,
          #mutate(total_round = (generation - 1) * 10 + round,
          x = map_dbl(produced_signal, 1),
@@ -433,7 +402,7 @@ d.simulation %>%
   select(-n_in, -n_out, -n_sem, -n_corr_sem)
 
 # PLOT ICONICITY----
-d.iconicity <- d.simulation %>%
+d.iconicity <- d.simulation.small %>%
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias"),
