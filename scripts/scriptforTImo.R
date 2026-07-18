@@ -516,7 +516,7 @@ d.nuisance_grid <- expand.grid(
 if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias-full.rds")) {
   
   d.grid.recognitionBias <- d.nuisance_grid %>%
-    tidyr::crossing(iconicity_weight = seq(0, 0.5, length.out = 10)) %>%
+    tidyr::crossing(iconicity_weight = seq(0, 0.8, length.out = 10)) %>%
     mutate(iconicity = NA_real_, history = vector("list", n()))
   
   for (i in seq_len(nrow(d.grid.recognitionBias))) {
@@ -641,7 +641,7 @@ if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents-full.rds")
 
 
 combined_range <- range(c(d.grid.recognitionBias$iconicity, d.grid.expressiveAgents$iconicity), na.rm = TRUE)
-# combined_range ≈ c(-0.08, 0.57)
+# combined_range b	 c(-0.08, 0.57)
 
 # adjust this to try different learning strength (0, .0125, .025...)
 ls_fixed <- unique(d.grid.recognitionBias$learning_strength)[3]
