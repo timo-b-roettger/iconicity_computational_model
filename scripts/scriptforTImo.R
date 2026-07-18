@@ -105,6 +105,7 @@ listener_guess_probability <- function(listener_guess, produced_signal, size_pro
   
   logit_guess <- qlogis(clamp02(listener_guess))
   logits <- logit_guess + (effective_weight * icon_ev)
+  #logits <- qlogis(clamp02(listener_guess + (effective_weight * icon_ev)))
   probs <- plogis(logits)
 
   return(list(probs = probs, evidence = icon_ev))
@@ -535,7 +536,7 @@ if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias-full.rds"))
   }
   saveRDS(d.grid.recognitionBias, "models/grid-search-recognitionBias-full.rds", compress = TRUE)
 } else {
-  d.grid.recognitionBias <- readRDS("models/grid-search-recognitionBias-full.rds")
+  d.grid.recognitionBias <- readRDS("models/grid-search-recognitionBias-update.rds")
 }
 
 ## GRID 2: expressiveAgents
@@ -641,10 +642,10 @@ if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents-full.rds")
 
 
 combined_range <- range(c(d.grid.recognitionBias$iconicity, d.grid.expressiveAgents$iconicity), na.rm = TRUE)
-# combined_range b	 c(-0.08, 0.57)
+# combined_range = c(-0.08, 0.57)
 
 # adjust this to try different learning strength (0, .0125, .025...)
-ls_fixed <- unique(d.grid.recognitionBias$learning_strength)[3]
+ls_fixed <- unique(d.grid.recognitionBias$learning_strength)[2]
 
 plot_grid_faceted <- function(d.grid, x_var, x_lab, fixed_learning_strength, limits) {
   d.grid %>%
