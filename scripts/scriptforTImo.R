@@ -508,10 +508,10 @@ empty_df <- data.frame(
 
 # Shared "nuisance" grid, coarse, reused for both mechanisms
 d.nuisance_grid <- expand.grid(
-  drift_sd          = seq(0.05, 0.35, length.out = 5),
-  learning_strength = seq(0, 0.05, length.out = 5),
-  circle_radius     = seq(0.15, 0.4, length.out = 3),
-  center_sd_ratio   = c(0.2, 0.4, 0.6)   # proportion of circle_radius for grid search; since center_sd is dependent on radius (0.4 = 40% of the basin's radius is steady-state noise)
+  drift_sd          = c(0.125, 0.200, 0.275), #= seq(0.05, 0.35, length.out = 5),
+  learning_strength = 0.015, # seq(0, 0.05, length.out = 5),
+  circle_radius     = c(0.275, 0.400), # seq(0.15, 0.4, length.out = 3), 
+  center_sd_ratio   = c(0.4, 0.6)   # c(0.2, 0.4, 0.6) proportion of circle_radius for grid search; since center_sd is dependent on radius (0.4 = 40% of the basin's radius is steady-state noise)
 ) %>%
   mutate(center_sd = circle_radius * center_sd_ratio)
 
@@ -519,13 +519,13 @@ d.nuisance_grid <- expand.grid(
 if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias-full.rds")) {
   
   d.grid.recognitionBias <- d.nuisance_grid %>%
-    tidyr::crossing(iconicity_weight = seq(0, 0.8, length.out = 10)) %>%
+    tidyr::crossing(iconicity_weight = seq(0, 3, by = 0.2)) %>% #seq(0, 0.8, length.out = 10)
     mutate(iconicity = NA_real_, history = vector("list", n()))
   
   for (i in seq_len(nrow(d.grid.recognitionBias))) {
     p <- d.grid.recognitionBias[i, ]
     history <- run_interaction_sim(
-      data = empty_df, n_sim = 20, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
+      data = empty_df, n_sim = 100, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
       drift_sd = p$drift_sd, learning_strength = p$learning_strength,
       recognition_bias = TRUE, iconicity_weight = p$iconicity_weight,
       circle_radius = p$circle_radius, trap_center_sd = p$center_sd,
@@ -536,7 +536,7 @@ if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias-full.rds"))
     d.grid.recognitionBias$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
     if (i %% 50 == 0) message("recognitionBias: ", i, " / ", nrow(d.grid.recognitionBias))
   }
-  saveRDS(d.grid.recognitionBias, "models/grid-search-recognitionBias-full.rds", compress = TRUE)
+  saveRDS(d.grid.recognitionBias, "models/grid-search-recognitionBias-spec.rds", compress = TRUE)
 } else {
   d.grid.recognitionBias <- readRDS("models/grid-search-recognitionBias-update.rds")
 }
