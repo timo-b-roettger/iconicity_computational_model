@@ -103,10 +103,12 @@ listener_guess_probability <- function(listener_guess, produced_signal, size_pro
   icon_ev <- signal_evidence(produced_signal, size_prototypes, k_perception = k_perception, circle_radius = circle_radius)
   effective_weight <- if (recognition_bias) iconicity_weight else 0
   
-  logit_guess <- qlogis(clamp02(listener_guess))
+  # qlogis() is undefined at exactly 0 or 1 (-Inf/Inf), we clamp listener_guess minimally from those exact bounds before converting to 
+  # logits (listener_guess should already be within (0, 0.95) after update_logit() which applies 0.95 lapse-rate clamp, so this is 
+  # purely a numerical safety net, not where the lapse rate is enforced).
+  logit_guess <- qlogis(pmax(1e-9, pmin(1 - 1e-9, listener_guess)))
   logits <- logit_guess + (effective_weight * icon_ev)
-  #logits <- qlogis(clamp02(listener_guess + (effective_weight * icon_ev)))
-  probs <- plogis(logits)
+  probs <- clamp02(plogis(logits))
 
   return(list(probs = probs, evidence = icon_ev))
 }
