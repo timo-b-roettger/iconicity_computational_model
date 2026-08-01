@@ -538,7 +538,7 @@ if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias-full.rds"))
   }
   saveRDS(d.grid.recognitionBias, "models/grid-search-recognitionBias-spec.rds", compress = TRUE)
 } else {
-  d.grid.recognitionBias <- readRDS("models/grid-search-recognitionBias-update.rds")
+  d.grid.recognitionBias.full <- readRDS("models/grid-search-recognitionBias-full.rds")
 }
 
 ## GRID 2: expressiveAgents
@@ -564,7 +564,7 @@ if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents-full.rds")
   }
   saveRDS(d.grid.expressiveAgents, "models/grid-search-expressiveAgents-full.rds", compress = TRUE)
 } else {
-  d.grid.expressiveAgents <- readRDS("models/grid-search-expressiveAgents-full.rds")
+  d.grid.expressiveAgents <- readRDS("models/grid-search-expressiveAgents-spec.rds")
 }
 
 # ## GRID 1: recognition-bias mechanism (not all params)
@@ -643,11 +643,12 @@ if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents-full.rds")
 # }
 
 
-combined_range <- range(c(d.grid.recognitionBias$iconicity, d.grid.expressiveAgents$iconicity), na.rm = TRUE)
+combined_range <- range(c(d.grid.recognitionBias.spec$iconicity, d.grid.expressiveAgents$iconicity), na.rm = TRUE)
 # combined_range = c(-0.08, 0.57)
 
 # adjust this to try different learning strength (0, .0125, .025...)
-ls_fixed <- unique(d.grid.recognitionBias$learning_strength)[2]
+ls_fixed <- 0.015
+ls_fixed <- unique(d.grid.recognitionBias.full$learning_strength)[2]
 
 plot_grid_faceted <- function(d.grid, x_var, x_lab, fixed_learning_strength, limits) {
   d.grid %>%
@@ -667,7 +668,7 @@ plot_grid_faceted <- function(d.grid, x_var, x_lab, fixed_learning_strength, lim
          title = paste0("Learning strength = ", round(fixed_learning_strength, 3)))
 }
 
-p.recognitionBias <- plot_grid_faceted(d.grid.recognitionBias, "iconicity_weight",
+p.recognitionBias <- plot_grid_faceted(d.grid.recognitionBias.spec, "iconicity_weight",
                                        "Iconicity weight", ls_fixed, combined_range)
 p.expressiveAgents <- plot_grid_faceted(d.grid.expressiveAgents, "expressive_probability",
                                         "Expressive probability", ls_fixed, combined_range)
