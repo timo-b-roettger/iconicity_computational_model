@@ -346,33 +346,40 @@ d.empty <- data.frame(
 #     mutate(model_type = "expressiveAgents"),
 #   d.empty %>%
 #     run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
-#     mutate(model_type = "recognitionBias"))
-# 
-# # store as rds (due to list cols)
-# saveRDS(d.simulation, "scripts/temp_data/d_simulation.rds", compress = TRUE)
+#     mutate(model_type = "recognitionBias")) %>%
+#   # split signal cols for easier processing and saving
+#   mutate(
+#     produced_signal_x = map_dbl(produced_signal, 1),
+#     produced_signal_y = map_dbl(produced_signal, 2),
+#     old_stored_signal_A_x = map_dbl(old_stored_signal_A, 1),
+#     old_stored_signal_A_y = map_dbl(old_stored_signal_A, 2),
+#     old_stored_signal_B_x = map_dbl(old_stored_signal_B, 1),
+#     old_stored_signal_B_y = map_dbl(old_stored_signal_B, 2),
+#     new_stored_signal_A_x = map_dbl(new_stored_signal_A, 1),
+#     new_stored_signal_A_y = map_dbl(new_stored_signal_A, 2),
+#     new_stored_signal_B_x = map_dbl(new_stored_signal_B, 1),
+#     new_stored_signal_B_y = map_dbl(new_stored_signal_B, 2)) %>%
+#   select(-produced_signal, -old_stored_signal_A, -old_stored_signal_B,
+#          -new_stored_signal_A, -new_stored_signal_B)
 
-d.simulation <- readRDS("scripts/temp_data/d_simulation.rds")
+# # save simulation data
+# write_csv(d.simulation, "scripts/temp_data/temp_data.csv")
+
+d.simulation <- read_csv("scripts/temp_data/temp_data.csv")
 
 # EVALUATE ICONICITY----
 # Signal space use across simulations
 d_signal_mean <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 50 + round,
-         x = map_dbl(produced_signal, 1),
-         y = map_dbl(produced_signal, 2)) %>%
+  mutate(total_round = (generation - 1) * 50 + round) %>%
   group_by(model_type, total_round, type, generation) %>%
   summarise(
-    mean_x = mean(x, na.rm = TRUE),
-    mean_y = mean(y, na.rm = TRUE),
+    mean_x = mean(produced_signal_x, na.rm = TRUE),
+    mean_y = mean(produced_signal_y, na.rm = TRUE),
     .groups = "drop")
-
 
 # Signal space use across simulations
 d_signal <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 50 + round,
-         #mutate(total_round = (generation - 1) * 10 + round,
-         x = map_dbl(produced_signal, 1),
-         y = map_dbl(produced_signal, 2))
-
+  mutate(total_round = (generation - 1) * 50 + round)
 
 # calculate proportion of trials ending up in an attractor, in a semantic attractor, in the correct semantic attractor
 d.simulation %>%
@@ -834,7 +841,7 @@ d_signal  |>
     levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
     labels = c("Baseline", "+ expressive agents", "+ iconicity recognition bias", "+ iconicity recognition bias and expressive agents"),
     ordered = TRUE)) |> 
-  ggplot(aes(x = x, y = y)) +
+  ggplot(aes(x = produced_signal_x, y = produced_signal_y)) +
   # binwidth = 1/3 creates 3 bins for both X and Y across the 0-1 range
   # boundary = 0 forces the bins to start exactly at 0.0
   #geom_bin2d(binwidth = c(1/27, 1/27), boundary = 0, color = "white", linewidth = 0.5) +
