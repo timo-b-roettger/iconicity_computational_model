@@ -480,8 +480,8 @@ d.iconicity |>
 d.simulation |> 
   mutate(model_type = factor(
     model_type, 
-    levels = c("semanticAttractors", "semanticAttractors_expressiveAgents", "semanticPhonAttractors", "allAttractors_expressiveAgents"),
-    labels = c("Semantic attractors", "Semantic attractors, expressive agents", "Semantic and phonological attractors", "Semantic and phonological attractors, expressive agents"),
+    levels = c("baseline", "expressiveAgents", "recognitionBias"),
+    labels = c("Baseline", "Expressive agents", "Iconicity recognition bias"),
     ordered = TRUE),
     total_round = (generation - 1) * 50 + round,
     strength = abs(evidence)) %>%
@@ -501,19 +501,18 @@ d.simulation |>
              color = evidence)) +
   geom_path(linewidth = 0.5, 
             color = "black") +
-  # Add lines at generational overturn
-  geom_vline(xintercept = seq(0, 100, by = 10), 
-             color = "grey", 
-             lty = "dotted") +
+  # # Add lines at generational overturn
+  # geom_vline(xintercept = seq(0, 100, by = 10), 
+  #            color = "grey", 
+  #            lty = "dotted") +
   scale_color_viridis_c(begin = 0,
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 500, 100),
-                     labels = seq(0, 50, 10)) +
-  
+  scale_x_continuous(breaks = seq(0, 50, by = 10),
+                   labels = seq(0, 50, by = 10)) +
   labs(title = "Representational strength over generations",
-       y = "Memory strength from 0-1\n", x = "Generation (each with 10 rounds)") +
+       y = "Memory strength from 0-1\n", x = "Interaction rounds") +
   theme_minimal() +
   facet_wrap(~model_type, ncol = 1)
 
