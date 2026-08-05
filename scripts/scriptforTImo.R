@@ -19,8 +19,7 @@ normalize_01 <- function(x) {
 # At signal production, amount of noise is dependent on guess rate AND distance to attractor centres
 # k controls how strongly sd react to speaker_guess; mindful that if p = 1 and k >2, it will return negative sd's
 produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production, 
-                           attractor_centers, circle_radius, center_sd, k_attractor,
-                           k_attractor_production) {
+                           attractor_centers, circle_radius, center_sd, k_attractor_production) {
   # Calculate baseline trial-specific SD based on speaker's guess
   baseline_sd <- drift_sd * (1 + k_production * (0.5 - speaker_guess))
   # Dynamically calculate Euclidean distance to every defined attractor center
@@ -141,7 +140,7 @@ run_interaction_sim <- function(
     recognition_bias = FALSE,
     # multiplicator for iconicity; corresponding to ~10% absolute increase for a listener_guess of 0.5 
     # (for the perfectly iconic signal; icon_ev = 1)
-    iconicity_weight = 0.4,
+    iconicity_weight = 3,
     # amount of added memory strengthening per exposure, dependent on trial success/failure
     learning_strength = 0.015,
     # substantially faster learning for success than failure; from p=0.3, 10 pure-success updates reach ~0.57,
@@ -336,73 +335,27 @@ d.empty <- data.frame(
   old_guess_B = numeric(), new_guess_B = numeric(),
   stringsAsFactors = FALSE)
 
-# Run simulation function
-d.simulation <- rbind(
-  d.empty %>% 
-    run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
-    mutate(model_type = "baseline"),
-  d.empty %>% 
-    run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
-    mutate(model_type = "expressiveAgents"),
-  d.empty %>% 
-    run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
-    mutate(model_type = "recognitionBias"))
+# # Run simulation function
+# set.seed(2534)
+# d.simulation <- rbind(
+#   d.empty %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
+#     mutate(model_type = "baseline"),
+#   d.empty %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
+#     mutate(model_type = "expressiveAgents"),
+#   d.empty %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
+#     mutate(model_type = "recognitionBias"))
+# 
+# # store as rds (due to list cols)
+# saveRDS(d.simulation, "scripts/temp_data/d_simulation.rds", compress = TRUE)
 
-d.simulation.medium <- rbind(
-  d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
-    mutate(model_type = "baseline"),
-  d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
-    mutate(model_type = "expressiveAgents"),
-  d.empty %>% 
-    run_interaction_sim(n_sim = 100, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
-    mutate(model_type = "recognitionBias"))
+d.simulation <- readRDS("scripts/temp_data/d_simulation.rds")
 
-d.simulation.small <- rbind(
-  d.empty %>% 
-    run_interaction_sim(n_sim = 10, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
-    mutate(model_type = "baseline"),
-  d.empty %>% 
-    run_interaction_sim(n_sim = 10, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
-    mutate(model_type = "expressiveAgents"),
-  d.empty %>% 
-    run_interaction_sim(n_sim = 10, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
-    mutate(model_type = "recognitionBias"))
-
-# function to compute iconicity (signal evidence; e.g., for grid searches further down)
-compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
-  d.iconicity <- history %>%
-    mutate(total_round = (generation - 1) * n_rounds + round) %>%
-    group_by(simulation, total_round) %>%
-    summarise(evidence = mean(evidence, na.rm = TRUE), .groups = "drop")
-  
-  max_round <- max(d.iconicity$total_round)
-  threshold <- max_round * cutoff
-  
-  d.iconicity %>%
-    filter(total_round >= threshold) %>%
-    summarise(mean_iconicity = mean(evidence, na.rm = TRUE)) %>%
-    pull(mean_iconicity)
-}
-
-# test increasing expressivity proportion
-d.test_high_expr <- d.empty %>%
-  run_interaction_sim(
-    n_sim = 10, n_rounds = 50, n_generations = 1,
-    recognition_bias = FALSE, expressive_agents = TRUE,
-    expressive_probability = 0.15)
-
-# calculate mean signal evidence and success rate by expressive probability proportion
-d.test_high_expr %>%
-  group_by(is_expressive_trial) %>%
-  summarise(success_rate = mean(success), mean_evidence = mean(evidence), n = n())
-
-# and the actual comparison metric:
-compute_iconicity(d.test_high_expr, n_rounds = 50)
-
+# EVALUATE ICONICITY----
 # Signal space use across simulations
-d_signal_mean <- d.simulation.small %>%
+d_signal_mean <- d.simulation %>%
   mutate(total_round = (generation - 1) * 50 + round,
          x = map_dbl(produced_signal, 1),
          y = map_dbl(produced_signal, 2)) %>%
@@ -414,7 +367,7 @@ d_signal_mean <- d.simulation.small %>%
 
 
 # Signal space use across simulations
-d_signal <- d.simulation.small %>%
+d_signal <- d.simulation %>%
   mutate(total_round = (generation - 1) * 50 + round,
          #mutate(total_round = (generation - 1) * 10 + round,
          x = map_dbl(produced_signal, 1),
@@ -437,8 +390,8 @@ d.simulation %>%
     .groups = "drop") %>%
   select(-n_in, -n_out, -n_sem, -n_corr_sem)
 
-# PLOT ICONICITY----
-d.iconicity <- d.simulation.small %>%
+# plot iconicity
+d.iconicity <- d.simulation %>%
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias"),
@@ -497,148 +450,6 @@ d.iconicity |>
     fill = "grey",
     alpha = 0.5) +
   scale_ysidex_continuous()
-
-# GRID SEARCHES ----
-RESET_MODELS <- FALSE  # set TRUE to force a rerun
-
-plan(multisession, workers = parallel::detectCores() - 1)
-
-N_ROUNDS <- 50
-
-empty_df <- data.frame(
-  sim = integer(), gen = integer(), round = integer(), trial = integer(),
-  trial_counter = integer(), referent = integer(),
-  speaker = character(), listener = character(), type = character(),
-  produced_signal = I(list()), dist_to_nearest = numeric(), in_attractor = logical(),
-  attractor_id = integer(), is_semantic_attractor = logical(), is_correct_semantic_attractor = logical(),
-  old_stored_signal_A = I(list()), new_stored_signal_A = I(list()),
-  old_stored_signal_B = I(list()), new_stored_signal_B = I(list()),
-  prob = numeric(), success = integer(), evidence = numeric(),
-  is_expressive_trial = logical(),
-  old_guess_A = numeric(), new_guess_A = numeric(),
-  old_guess_B = numeric(), new_guess_B = numeric(),
-  stringsAsFactors = FALSE)
-
-# Shared "nuisance" grid, coarse, reused for both mechanisms
-d.nuisance_grid <- expand.grid(
-  drift_sd          = c(0.125, 0.200, 0.275), #= seq(0.05, 0.35, length.out = 5),
-  learning_strength = c(0.015, 0.03, 0.045, 0.06, 0.075, 0.09), # seq(0, 0.05, length.out = 5),
-  circle_radius     = c(0.275, 0.400), # seq(0.15, 0.4, length.out = 3), 
-  center_sd_ratio   = c(0.4, 0.6)   # c(0.2, 0.4, 0.6) proportion of circle_radius for grid search; since center_sd is dependent on radius (0.4 = 40% of the basin's radius is steady-state noise)
-) %>%
-  mutate(center_sd = circle_radius * center_sd_ratio)
-
-## GRID 1: recognitionBias
-if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias-full.rds")) {
-  
-  d.grid.recognitionBias <- d.nuisance_grid %>%
-    tidyr::crossing(iconicity_weight = seq(0, 6, length.out = 15)) %>% #seq(0, 0.8, length.out = 10)
-    mutate(iconicity = NA_real_, history = vector("list", n()))
-  
-  for (i in seq_len(nrow(d.grid.recognitionBias))) {
-    p <- d.grid.recognitionBias[i, ]
-    history <- run_interaction_sim(
-      data = empty_df, n_sim = 100, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
-      drift_sd = p$drift_sd, learning_strength = p$learning_strength,
-      recognition_bias = TRUE, iconicity_weight = p$iconicity_weight,
-      circle_radius = p$circle_radius, trap_center_sd = p$center_sd,
-      expressive_agents = FALSE,
-      success_scale = 7.5, failure_scale = 1
-    )
-    d.grid.recognitionBias$history[[i]] <- history
-    d.grid.recognitionBias$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
-    if (i %% 50 == 0) message("recognitionBias: ", i, " / ", nrow(d.grid.recognitionBias))
-  }
-  saveRDS(d.grid.recognitionBias, "models/grid-search-recognitionBias-spec.rds", compress = TRUE)
-} else {
-  d.grid.recognitionBias.full <- readRDS("models/grid-search-recognitionBias-full.rds")
-}
-
-## GRID 2: expressiveAgents
-if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents-full.rds")) {
-  
-  d.grid.expressiveAgents <- d.nuisance_grid %>%
-    tidyr::crossing(expressive_probability = seq(0.02, 0.20, by = 0.02)) %>%
-    mutate(iconicity = NA_real_, history = vector("list", n()))
-  
-  for (i in seq_len(nrow(d.grid.expressiveAgents))) {
-    p <- d.grid.expressiveAgents[i, ]
-    history <- run_interaction_sim(
-      data = empty_df, n_sim = 20, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
-      drift_sd = p$drift_sd, learning_strength = p$learning_strength,
-      recognition_bias = FALSE, iconicity_weight = 0,
-      circle_radius = p$circle_radius, trap_center_sd = p$center_sd,
-      expressive_agents = TRUE, expressive_probability = p$expressive_probability,
-      success_scale = 7.5, failure_scale = 1
-    )
-    d.grid.expressiveAgents$history[[i]] <- history
-    d.grid.expressiveAgents$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
-    if (i %% 50 == 0) message("expressiveAgents: ", i, " / ", nrow(d.grid.expressiveAgents))
-  }
-  saveRDS(d.grid.expressiveAgents, "models/grid-search-expressiveAgents-full.rds", compress = TRUE)
-} else {
-  d.grid.expressiveAgents <- readRDS("models/grid-search-expressiveAgents-spec.rds")
-}
-
-combined_range <- range(c(d.grid.recognitionBias.spec$iconicity, d.grid.expressiveAgents$iconicity), na.rm = TRUE)
-# combined_range = c(-0.08, 0.57)
-
-# adjust this to try different learning strength (0, .0125, .025...)
-ls_fixed <- 0.015
-ls_fixed <- unique(d.grid.recognitionBias.full$learning_strength)[5]
-
-plot_grid_faceted <- function(d.grid, x_var, x_lab, fixed_learning_strength, limits) {
-  d.grid %>%
-    filter(learning_strength == fixed_learning_strength) %>%
-    ggplot(aes(x = factor(round(.data[[x_var]], 3)),
-               y = factor(round(drift_sd, 3)),
-               fill = iconicity)) +
-    geom_tile() +
-    geom_text(aes(label = round(iconicity, 2)), size = 2.5, color = "black") +
-    scale_fill_distiller(palette = "RdBu", direction = -1,
-                         limits = limits,
-                         rescaler = ~ scales::rescale_mid(.x, mid = 0, to = c(0, 1),
-                                                          from = limits)) +
-    facet_grid(center_sd_ratio ~ circle_radius, labeller = label_both) +
-    theme_minimal() +
-    labs(x = x_lab, y = "Drift SD", fill = "Iconicity",
-         title = paste0("Learning strength = ", round(fixed_learning_strength, 3)))
-}
-
-p.recognitionBias <- plot_grid_faceted(d.grid.recognitionBias.full, "iconicity_weight",
-                                       "Iconicity weight", ls_fixed, combined_range)
-p.expressiveAgents <- plot_grid_faceted(d.grid.expressiveAgents, "expressive_probability",
-                                        "Expressive probability", ls_fixed, combined_range)
-
-#to derive a radius value for a given center_sd_ratio in the plot, do this:
-d.nuisance_grid %>%
-  filter(center_sd_ratio == 0.2) %>%
-  select(circle_radius, center_sd_ratio, center_sd) %>%
-  distinct() %>%
-  arrange(circle_radius)
-
-d.grid.compare <- bind_rows(
-  d.grid.recognitionBias %>%
-    group_by(drift_sd) %>%
-    summarise(peak_iconicity = max(iconicity, na.rm = TRUE), .groups = "drop") %>%
-    mutate(mechanism = "Iconicity recognition bias"),
-  d.grid.expressiveAgents %>%
-    group_by(drift_sd) %>%
-    summarise(peak_iconicity = max(iconicity, na.rm = TRUE), .groups = "drop") %>%
-    mutate(mechanism = "Expressive agents"))
-
-ggplot(d.grid.compare, 
-       aes(x = drift_sd, 
-           y = peak_iconicity, 
-           color = mechanism)) +
-  geom_line(linewidth = 1) + 
-  geom_point() +
-  scale_y_continuous(limits = c(-1, 1)) + 
-  theme_minimal() +
-  labs(x = "Drift SD", 
-       y = "Peak iconicity (best combo of all other params)", 
-       color = "Mechanism")
-
 
 # TIMO EXPLORES ----
 ## plot 10 random simulations
