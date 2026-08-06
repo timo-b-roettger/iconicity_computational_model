@@ -367,6 +367,7 @@ d.empty <- data.frame(
 
 d.simulation <- read_csv("scripts/temp_data/temp_data.csv")
 
+
 # EVALUATE ICONICITY----
 # Signal space use across simulations
 d_signal_mean <- d.simulation %>%
@@ -402,7 +403,7 @@ d.iconicity <- d.simulation %>%
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias"),
-    labels = c("Baseline", "Expressive agents", "Iconicity recognition bias"),
+    labels = c("baseline", "expressive agents", "recognition bias"),
     ordered = TRUE),
     total_round = (generation - 1) * 50 + round,
     strength = abs(evidence)) %>%
@@ -423,17 +424,53 @@ d.iconicity.mean <- d.iconicity |>
             strength = mean(strength),
             .groups = "drop")
 
+# theme
+timo_theme <- theme_classic() + 
+  theme(legend.position = "right",
+        text = element_text(size = 12, 
+                            family = "Roboto"),
+        plot.title = element_text(color = "black",
+                                  size = 17,
+                                  vjust = 0,
+                                  face = "bold",
+                                  margin = margin(t = 0, r = 0, b = 0.5, l = 0, unit = "cm")),
+        plot.subtitle = element_text(size = 12, 
+                                     color = "#555555"),
+        strip.placement = "outside", 
+        strip.background =element_rect(color = NA),
+        strip.text = element_text(size = 12, 
+                                  hjust = .5,
+                                  color = "#555555"),
+        axis.title.x = element_text(size = 12, 
+                                    hjust = .5,
+                                    color = "#555555"),
+        axis.title.y = element_text(size = 12, 
+                                    angle = 0, 
+                                    vjust = 0.5,
+                                    color = "#555555"),
+        axis.line = element_line(color = "#555555"),
+        axis.ticks = element_line(color = "#555555"),
+        axis.text = element_text(size = 12,
+                                 color = "#555555"),
+        plot.margin = unit(c(0.5,0.5,0.5,0.5),
+                           "cm"))
+
+
 # Attempt at adding densities along y
-d.iconicity |> 
+average_iconicity_interactions <- 
+  d.iconicity |> 
   ggplot(aes(x = total_round, y = evidence, group = interaction(model_type, simulation),
              color = evidence)) +
-  geom_path(linewidth = 0.5, alpha = 0.06,
+  geom_path(linewidth = 0.5, alpha = 0.05,
             color = "black") +
+  geom_hline(yintercept = 0,
+             color = "white",
+             lty = "dashed") +
   geom_path(data = d.iconicity.mean, 
-            aes(group = 1), linewidth = 2,
-            color = "black") +
+            aes(group = 1), linewidth = 3,
+            color = "white") +
   geom_path(data = d.iconicity.mean, 
-            aes(group = 1), linewidth = 1) +  
+            aes(group = 1), linewidth = 1.5) +  
   # # Add lines at generational overturn
   # geom_vline(xintercept = seq(0, max(d.iconicity$total_round), by = 50), 
   #            color = "grey", 
@@ -441,54 +478,53 @@ d.iconicity |>
   scale_color_viridis_c(begin = 0,
                         end = 1,
                         values = seq(0,1,0.1))+
-  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 10),
-                     labels = seq(0, max(d.iconicity$total_round), by = 10)) +
-  labs(title = "Iconicity over interaction rounds",
-       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", 
-       x = "Interaction rounds") +
-  theme_minimal() +
+  scale_y_continuous(limits = c(-0.6,0.8), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 25),
+                     labels = seq(0, max(d.iconicity$total_round), by = 25)) +
+  guides(x = guide_axis(cap = "both"),
+         y = guide_axis(cap = "both")) +
+  labs(title = "Iconicity evolves via both\nexpressive speakers and recognition bias",
+       subtitle = "above 0 = iconic, below zero = anti-iconic",
+       y = "Iconicity\n", 
+       x = "\nInteraction rounds") +
   facet_wrap(~model_type) +
   # marginal distribution per facet (y-axis)
   geom_ysidedensity(
     data = d.iconicity,
     aes(y = evidence, group = model_type),
     inherit.aes = FALSE,
-    fill = "grey",
+    color = NA,
+    fill = "black",
     alpha = 0.5) +
-  scale_ysidex_continuous()
+  scale_ysidex_continuous() +
+  timo_theme +
+  # Apply theme changes ONLY to the y-side panel
+  theme(
+    legend.position = "none",
+    ggside.panel.grid.major = element_blank(),
+    ggside.panel.grid.minor = element_blank(),
+    ggside.axis.text = element_blank(),
+    ggside.axis.line = element_blank(),
+    ggside.axis.ticks = element_blank(),
+    ggside.panel.scale.y = 0.25
+  )
 
-# TIMO EXPLORES ----
-## plot 10 random simulations
-### evidence
-d.iconicity |> 
-  filter(simulation %in% c(1:10)) |> 
-  filter(model_type == "Baseline") |> 
-  ggplot(aes(x = total_round, y = evidence, group = interaction(model_type, simulation),
-             color = evidence)) +
-  geom_path(linewidth = 0.5, 
-            color = "black") +
-  # # Add lines at generational overturn
-  # geom_vline(xintercept = seq(0, max(d.iconicity$total_round), by = 50), 
-  #            color = "grey", 
-  #            lty = "dotted") +
-  scale_color_viridis_c(begin = 0,
-                        end = 1,
-                        values = seq(0,1,0.1))+
-  scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 10),
-                     labels = seq(0, max(d.iconicity$total_round), by = 10)) +
-  labs(title = "Iconicity over interaction rounds",
-       y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Interaction rounds") +
-  theme_minimal() +
-  facet_wrap(simulation~model_type)
+ggsave("figures/average_iconicity_interactions.png",
+       average_iconicity_interactions,
+       device = "png",
+       bg = "white",
+       width = 180, 
+       height = 120, 
+       units = "mm", 
+       dpi = 300) 
+
 
 ### guess rate
-d.simulation |> 
+guess_rate <- d.simulation |> 
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias"),
-    labels = c("Baseline", "Expressive agents", "Iconicity recognition bias"),
+    labels = c("baseline", "expressive agents", "recognition bias"),
     ordered = TRUE),
     total_round = (generation - 1) * 50 + round,
     strength = abs(evidence)) %>%
@@ -503,25 +539,49 @@ d.simulation |>
     evidence = mean(evidence),
     strength = mean(strength),
     guess = mean(guess),
-    .groups = "drop") |> 
+    .groups = "drop")
+
+
+average_guess_rate <- 
+  guess_rate |> 
   ggplot(aes(x = total_round, y = guess, group = interaction(model_type),
              color = evidence)) +
-  geom_path(linewidth = 0.5, 
+  geom_path(linewidth = 1,
             color = "black") +
   # # Add lines at generational overturn
-  # geom_vline(xintercept = seq(0, 100, by = 10), 
-  #            color = "grey", 
-  #            lty = "dotted") +
+  geom_hline(yintercept = 0.25,
+             color = "grey",
+             lty = "dotted") +
+  annotate("text",
+           x = 5,
+           y = 0.2,
+           label = "starting value",
+           size = 4,
+           hjust = 0) +
   scale_color_viridis_c(begin = 0,
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 50, by = 10),
-                   labels = seq(0, 50, by = 10)) +
-  labs(title = "Representational strength over generations",
-       y = "Memory strength from 0-1\n", x = "Interaction rounds") +
-  theme_minimal() +
-  facet_wrap(~model_type, ncol = 1)
+  scale_x_continuous(breaks = seq(0, 50, by = 25),
+                   labels = seq(0, 50, by = 25)) +
+  guides(x = guide_axis(cap = "both"),
+         y = guide_axis(cap = "both")) +
+  labs(title = "Memory strength increases over time\nthrough learningbut levels off.",
+       subtitle = "Memory strength measured between 0 (not learned) to 1 (fully learned)",
+       y = "\n", 
+       x = "\nInteraction rounds") +
+  facet_wrap(model_type ~.) +
+  timo_theme 
+
+ggsave("figures/average_guess_rate.png",
+       average_guess_rate,
+       device = "png",
+       bg = "white",
+       width = 180, 
+       height = 120, 
+       units = "mm", 
+       dpi = 300) 
+
 
 ## signal space
 # Signal space use across simulations
@@ -619,7 +679,7 @@ grid_mapped %>%
   coord_fixed(xlim = c(0, 1), ylim = c(0, 1))
 
 
-# plot average gen 1-10
+# plot average 
 ## not much movement
 d_signal_mean  |> 
   group_by(model_type, type, generation) |> 
@@ -649,7 +709,7 @@ temp_ind <- d_signal  |>
   filter(generation  == 1)
 
 ggplot(data = temp_ind,
-       aes(x = x, y = y,
+       aes(x = produced_signal_x, y = produced_signal_y,
            fill = as.ordered(round),
            color = as.ordered(round),
            group = interaction(type, referent))) +
@@ -692,13 +752,13 @@ d_signal_ed <- d_signal |>
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias"),
-    labels = c("Baseline", "Expressive agents", "Iconicity recognition bias"),
+    labels = c("baseline", "expressive agents", "recognition bias"),
     ordered = TRUE)) |> 
   mutate(iconic_ed = ifelse(type == "small",
-                            sqrt((x - 0.15)^2 + (y - 0.85)^2),
-                            sqrt((x - 0.85)^2 + (y - 0.15)^2)),
-         attractor_1_ed = sqrt((x - 0.15)^2 + (y - 0.15)^2),
-         attractor_2_ed = sqrt((x - 0.85)^2 + (y - 0.85)^2)
+                            sqrt((produced_signal_x - 0.15)^2 + (produced_signal_y - 0.85)^2),
+                            sqrt((produced_signal_x - 0.85)^2 + (produced_signal_y - 0.15)^2)),
+         attractor_1_ed = sqrt((produced_signal_x - 0.15)^2 + (produced_signal_y - 0.15)^2),
+         attractor_2_ed = sqrt((produced_signal_x - 0.85)^2 + (produced_signal_y - 0.85)^2)
   )
 
 d_signal_ed_agg <- d_signal_ed |> 
@@ -835,18 +895,25 @@ facet_grid(model_type ~ type) +
 
 my_breaks = c(2, 10, 50, 250, 1250, 6000)
 
-d_signal  |>
+signal_space_map <- 
+  d_signal  |>
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
-    labels = c("Baseline", "+ expressive agents", "+ iconicity recognition bias", "+ iconicity recognition bias and expressive agents"),
+    labels = c("baseline", "expressive agents", "recognition bias", "recognition bias and expressive agents"),
     ordered = TRUE)) |> 
+  filter(type == "small") |> 
+  mutate(bins = cut(round, 
+                    breaks = seq(0, 50, by = 10),
+                    labels = c("1-10", "11-20", "21-30", "31-40", "41-50"))) |> 
+  # group_by(bins, simulation, model_type) |> 
+  # summarise(produced_signal_x = mean(produced_signal_x),
+  #           produced_signal_y = mean(produced_signal_y)) |> 
   ggplot(aes(x = produced_signal_x, y = produced_signal_y)) +
   # binwidth = 1/3 creates 3 bins for both X and Y across the 0-1 range
   # boundary = 0 forces the bins to start exactly at 0.0
   #geom_bin2d(binwidth = c(1/27, 1/27), boundary = 0, color = "white", linewidth = 0.5) +
   stat_binhex() +
-  
   # Use a clean color scale for the heatmap counts
   # scale_fill_gradient2(name = "count", trans = "log",
   #                     breaks = my_breaks, labels = my_breaks,
@@ -860,7 +927,7 @@ d_signal  |>
     
     # Step B: Map those colors to specific numeric points along the data range
     # Rescale your target numbers between 0.0 (min) and 1.0 (max)
-    values = scales::rescale(c(0.0, 0.1, 1.0)),
+    values = scales::rescale(c(0.0, 0.2, 1.0)),
     
     # Step C: Customize the legend appearance
     #guide = guide_colorbar(barwidth = 1, barheight = 15)
@@ -878,24 +945,36 @@ d_signal  |>
   #          fill = "transparent", 
   #          size = 0.5) +
   labs(
-    title = "Signal Space",
+    title = "The evolution of the signal\nfor small referents over time",
     subtitle = "Data binned into equal intervals",
-    x = "X Coordinate",
-    y = "Y Coordinate",
+    x = "",
+    y = "",
     fill = "Count"
   ) +
-  facet_grid(type~model_type) +
+  facet_grid(bins~model_type) +
   scale_x_continuous(limits = c(0,1),
                      breaks = seq(0,1,1/3),
                      labels = c(0,"1/3", "2/3", 1)) +
   scale_y_continuous(limits = c(0,1),
                      breaks = seq(0,1,1/3),
                      labels = c(0,"1/3", "2/3", 1)) +
+  timo_theme +
   theme(
     legend.position = "none",
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
     panel.grid.minor = element_blank(),
+    axis.text = element_blank(),
+    strip.text.y = element_text(angle = 0),
     plot.title = element_text(face = "bold")
   ) 
 
-
+ggsave("figures/signal_space_map.png",
+       signal_space_map,
+       device = "png",
+       bg = "white",
+       width = 140, 
+       height = 180, 
+       units = "mm", 
+       dpi = 300) 
 

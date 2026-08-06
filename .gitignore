@@ -2,7 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
-*.png
+#*.png
 *.js
 *.css
 *.html
@@ -10,3 +10,4 @@
 *.pdf
 *.DS_Store
 *.log
+.positai
