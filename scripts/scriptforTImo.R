@@ -456,7 +456,7 @@ timo_theme <- theme_classic() +
                            "cm"))
 
 
-# Attempt at adding densities along y
+## plot: average iconicity over time----
 average_iconicity_interactions <- 
   d.iconicity |> 
   ggplot(aes(x = total_round, y = evidence, group = interaction(model_type, simulation),
@@ -519,7 +519,7 @@ ggsave("figures/average_iconicity_interactions.png",
        dpi = 300) 
 
 
-### guess rate
+## plot: guess rate over time----
 guess_rate <- d.simulation |> 
   mutate(model_type = factor(
     model_type, 
@@ -789,7 +789,7 @@ arrow_data <- data.frame(
   text = "more iconic" 
 )
 
-# plot average ED
+## plot: average ED over time----
 average_ED_interactions <- 
   d_signal_ed_agg_all |> 
   ggplot(aes(x = round, y = iconic_ed,
@@ -948,6 +948,8 @@ facet_grid(model_type ~ type) +
 
 my_breaks = c(2, 10, 50, 250, 1250, 6000)
 
+
+## plot: signal space over time----
 signal_space_map <- 
   d_signal  |>
   mutate(model_type = factor(
