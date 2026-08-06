@@ -1,0 +1,670 @@
+---
+title: "Supplementary Information"
+format: html
+editor: visual
+---
+
+## Supplementary Information for Persson & Roettger, 2026
+
+This is the Supplementary Information (SI) for the XX paper. The SI contains models and analyses...
+
+## Calibration of parameter values
+
+...calibration based on theoretical plausibility/deterministic math...
+
+```{r load-libraries, echo=FALSE}
+library(dplyr)
+library(tibble)
+library(ggplot2)
+```
+
+### Attractor dimensions and mechanics: circle radius, sd of produced signal, sd of signal inside attractor
+
+The attractor dynamics is defined by three parameters: the circle radius, the standard deviation of the two-dimensional signal that is being produced, and the standard devation of a signal once inside an attractor.
+
+```{r functions, echo=FALSE}
+# core helpers from main simulation function
+clamp01 <- function(x) pmax(0, pmin(1, x))
+clamp02 <- function(x) pmax(0, pmin(0.95, x))
+
+produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production,
+                           attractor_centers, circle_radius, center_sd,
+                           k_attractor_production) {
+  baseline_sd <- drift_sd * (1 + k_production * (0.5 - speaker_guess))
+  distances <- sapply(attractor_centers, function(center) sqrt(sum((stored_signal - center)^2)))
+  dist_to_nearest <- min(distances)
+  nearest_id <- which.min(distances)
+  inside_attractor <- distances < circle_radius
+  is_inside <- any(inside_attractor)
+  
+  max_possible_baseline_sd <- drift_sd * (1 + k_production * 0.5)
+  f_dist_max <- max_possible_baseline_sd - center_sd
+  attractor_reduction <- 0
+  
+  if (is_inside) {
+    closest_attractor_dist <- min(distances[inside_attractor])
+    rel_dist <- closest_attractor_dist / circle_radius
+    magnitude <- exp(-k_attractor_production * rel_dist)
+    max_mag <- exp(-k_attractor_production * 0)
+    min_mag <- exp(-k_attractor_production * 1)
+    exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
+    attractor_reduction <- f_dist_max * exp_scale
+  }
+  
+  final_sd <- max(baseline_sd - attractor_reduction, 0.001)
+  signal <- rnorm(length(stored_signal), mean = stored_signal, sd = final_sd)
+  
+  list(signal = clamp01(signal),
+       inside_attractor = is_inside,       # renamed to match main script
+       dist_to_nearest = dist_to_nearest,  # added, was missing
+       attractor_id = if (is_inside) nearest_id else NA_integer_)
+}
+
+
+```
+
+The circle radius of the attractors were set to 0.3, given the boundaries of the space (0-1 in both dimensions).
+
+The sd of the produced signal (drift_sd) was calibrated to 0.2, which corresponds to a \~43% chance of the signal wandering into any attractor in a single production step at the initial stages of the interaction—when the signal is neutral \[0.5, 0.5\], and the signal sender's associative strength (speaker_guess) is 0.3. The calibration was done using a function that generates single-step signal productions from the signal origin \[0.5, 0.5\] and calculates the probability of a signal landing within the defined boundary radius of any attractor basin (0.3).
+
+```{r}
+test_single_step_capture <- function(attractor_centers = list(c(0.15, 0.85), c(0.85, 0.15), 
+                                                             c(0.15, 0.15), c(0.85, 0.85)),
+                                      circle_radius = 0.3,
+                                      drift_sd = 0.2,
+                                      k_production = 1.5,
+                                      guess = 0.5,
+                                      start = c(0.5, 0.5),
+                                      n_sims = 100000,
+                                      movement = "signal") {
+  # Effective standard deviation
+  baseline_sd <- drift_sd * (1 + k_production * (0.5 - guess))
+  # generate 2D signal draws
+  sig_x <- pmax(0, pmin(1, rnorm(n_sims, mean = start[1], sd = baseline_sd)))
+  sig_y <- pmax(0, pmin(1, rnorm(n_sims, mean = start[2], sd = baseline_sd)))
+  # adjust target point depending on whether testing raw signal or half-step movement
+  if (movement == "half_step") {
+    target_x <- (sig_x + start[1]) / 2
+    target_y <- (sig_y + start[2]) / 2
+  } else {
+    target_x <- sig_x
+    target_y <- sig_y
+  }
+  # check capture across all attractors
+  captured <- rep(FALSE, n_sims)
+  for (c in attractor_centers) {
+    dist_sq <- (target_x - c[1])^2 + (target_y - c[2])^2
+    captured <- captured | (dist_sq < circle_radius^2)
+  }
+  
+  mean(captured)
+}
+
+attractors <- list(c(0.15, 0.85), c(0.85, 0.15), c(0.15, 0.15), c(0.85, 0.85))
+# Test raw signal capture
+p_signal <- test_single_step_capture(
+  attractor_centers = attractors,
+  circle_radius = 0.3,
+  drift_sd = 0.2,
+  movement = "signal")
+cat("Single-step signal capture probability:", round(p_signal, 3), "\n")
+
+```
+
+The sd of a signal that has fallen into an attractor, center_sd, was calibrated to 0.12, which corresponds to a \~5% chance of escaping from the attractor in a single production step when the signal is at the center of the attractor, the circle_radius is 0.3, and speaker_guess is 0.
+
+Should probably add a test that includes simulating signals at different locations inside the attractor...
+
+```{r}
+# closed-form single-step escape probability from the exact centre of an attractor
+#
+# At dead-centre, rel_dist = 0 always, so exp_scale = 1 regardless of k_attractor_production 
+# and final_sd reduces to: center_sd - drift_sd * k_production * guess. Since production noise # is an isotropic 2D Gaussian, the radial distance from the mean follows a Rayleigh
+# distribution with scale = final_sd, so P(distance > circle_radius) = exp(-circle_radius^2 / # (2 * final_sd^2)) exactly (ignoring the clamp01() boundary clipping, which is negligible
+# here since attractor centres sit well away from 0/1 and final_sd is small).
+escape_probability_exact <- function(center_sd,
+                                     circle_radius = 0.3,
+                                     drift_sd = 0.2,
+                                     k_production = 1.5,
+                                     guess = 0.8) {
+  final_sd <- max(center_sd - drift_sd * k_production * guess, 0.001)
+  exp(-(circle_radius^2) / (2 * final_sd^2))
+}
+
+# Single call, matching your original center_sd = 0.12 check:
+escape_probability_exact(center_sd = 0.2, circle_radius = 0.3,
+                         drift_sd = 0.2, k_production = 1.5, guess = 0.3)
+center_sd_values <- c(0.12, 0.14, 0.15, 0.2, 0.3, 0.4)
+
+d.escape_check <- tibble(
+  center_sd = center_sd_values,
+  ratio = center_sd / 0.3,
+  p_escape = sapply(center_sd_values, escape_probability_exact,
+                    circle_radius = 0.3, drift_sd = 0.2, k_production = 1.5, guess = 0.3))
+print(d.escape_check)
+
+```
+
+### Learning strength
+
+After signal recognition, signal sender and signal receiver updates their representations as dependent on interaction outcome---success or failure. The amount of learning is controlled by the parameters learning strength and success/failure scale. The learning strength is calibrated to 0.015 which, together with a success scale of 7.5 and a failure scale of 1, corresponds to reaching an overall associative strength of \~0.96 after 50 trials of all-successes, and of \~0.48 after 50 trials of all-fails.
+
+```{r}
+# check the two idealized extreme trajectories (pure-success-only, pure-failure-only) for a given learning_strength/success_scale/failure_scale.
+report_pure_paths <- function(learning_strength, success_scale = 7.5, failure_scale = 1,
+                              n_updates = 50, start_p = 0.3) {
+  logit_success <- qlogis(clamp02(start_p))
+  logit_failure <- qlogis(clamp02(start_p))
+  for (i in seq_len(n_updates)) {
+    logit_success <- qlogis(clamp02(plogis(logit_success))) + (learning_strength * success_scale)
+    logit_failure <- qlogis(clamp02(plogis(logit_failure))) + (learning_strength * failure_scale)
+  }
+  tibble(
+    n_updates = n_updates,
+    start_p = start_p,
+    pure_success_p = plogis(logit_success),
+    pure_failure_p = plogis(logit_failure),
+    single_update_boost_success = plogis(qlogis(start_p) + learning_strength*success_scale) - start_p,
+    single_update_boost_failure = plogis(qlogis(start_p) + learning_strength*failure_scale) - start_p
+  )
+}
+
+# e.g. report this for whatever learning_strength the round-50 calibration settles on:
+report_pure_paths(calibrated_learning_strength)
+
+
+# Fast standalone simulator of ONLY the guess-updating dynamics -- mirrors run_interaction_sim()'s
+# actual update structure exactly: each of the two agents' guesses for a referent updates only on
+# the ~half of rounds where that agent happens to be drawn as listener for that referent, and in
+# the baseline condition (recognition_bias = FALSE), success probability equals the current guess
+# itself (since effective_weight = 0 there, icon_ev never enters). This lets us calibrate
+# learning_strength quickly without running the full production/attractor simulation.
+update_logit <- function(x, learning_strength, success, success_scale, failure_scale) {
+  delta <- learning_strength * ifelse(success == 1, success_scale, failure_scale)
+  plogis(qlogis(clamp02(x)) + delta)
+}
+
+simulate_learning_curve <- function(learning_strength, success_scale, failure_scale,
+                                    n_rounds, n_reps = 2000) {
+  # one row per simulated agent-referent "track" (mirrors agentX_guess[ref_id] for one agent)
+  guess <- rbeta(n_reps, 3, 9)   # matches your actual initialization
+  trajectory <- matrix(NA_real_, nrow = n_reps, ncol = n_rounds)
+  
+  for (r in seq_len(n_rounds)) {
+    is_listener_this_round <- runif(n_reps) < 0.5   # ~50% chance this agent is listener for this referent this round
+    success <- rbinom(n_reps, 1, clamp02(guess))     # baseline: prob = current guess
+    
+    new_guess <- update_logit(guess, learning_strength, success, success_scale, failure_scale)
+    guess <- ifelse(is_listener_this_round, new_guess, guess)  # only update if this agent was listener
+    trajectory[, r] <- guess
+  }
+  
+  trajectory
+}
+
+# --- CALIBRATION SEARCH ---
+# Target: mean associative strength of 0.9 by round 50, holding success_scale:failure_scale
+# ratio fixed at 7.5:1 (preserves the qualitative "learns faster from success than failure" property).
+target_round <- 50
+target_mean <- 0.90   # midpoint of your 90% target range
+
+mean_at_target_round <- function(learning_strength, success_scale = 7.5, failure_scale = 1,
+                                 n_rounds = target_round, n_reps = 2000) {
+  traj <- simulate_learning_curve(learning_strength, success_scale, failure_scale, n_rounds, n_reps)
+  mean(traj[, n_rounds])
+}
+
+# Quick coarse sweep to bracket the right range before fine search
+learning_strength_candidates <- seq(0.01, 0.15, by = 0.01)
+d.sweep <- tibble(
+  learning_strength = learning_strength_candidates,
+  mean_guess_round50 = sapply(learning_strength_candidates, mean_at_target_round))
+print(d.sweep, n = 20)
+
+# Fine-grained root-find: solve for the learning_strength that hits target_mean exactly
+calibrated_learning_strength <- uniroot(
+  function(ls) mean_at_target_round(ls) - target_mean,
+  interval = range(learning_strength_candidates),
+  tol = 0.0001)$root
+
+cat("\nCalibrated learning_strength for", target_mean * 100, "% mean guess at round", target_round,
+    ":", round(calibrated_learning_strength, 4), "\n")
+
+```
+
+### Update listener guess (logits or probs)
+
+```{r}
+# CHECK LOGIT BOUNDS --------
+# --- OLD formula: addition happens in probability space, qlogis/plogis is a no-op ---
+old_formula <- function(listener_guess, effective_weight, icon_ev) {
+  logits <- qlogis(clamp02(listener_guess + (effective_weight * icon_ev)))
+  probs <- plogis(logits)
+  probs
+}
+
+# --- NEW formula: addition happens in logit space ---
+new_formula <- function(listener_guess, effective_weight, icon_ev) {
+  logit_guess <- qlogis(pmax(1e-9, pmin(1 - 1e-9, listener_guess)))
+  logits <- logit_guess + (effective_weight * icon_ev)
+  probs <- clamp02(plogis(logits))
+  probs
+}
+
+# --- Sweep across the full range of inputs ---
+d.check <- expand.grid(
+  listener_guess   = seq(0.01, 0.99, by = 0.02),   # avoid exact 0/1 (qlogis undefined there)
+  icon_ev           = seq(-1, 1, by = 0.25),         # full range of signal_evidence()
+  effective_weight  = c(0, 0.2, 0.4, 0.8)            # a few realistic iconicity_weight values
+) %>%
+  mutate(
+    prob_old = old_formula(listener_guess, effective_weight, icon_ev),
+    prob_new = new_formula(listener_guess, effective_weight, icon_ev)
+  )
+
+# --- 1. Bounds check: are all probabilities within [0, 1]? ---
+cat("=== BOUNDS CHECK ===\n")
+cat("OLD formula -- min:", min(d.check$prob_old), " max:", max(d.check$prob_old), "\n")
+cat("NEW formula -- min:", min(d.check$prob_new), " max:", max(d.check$prob_new), "\n")
+cat("Any OLD values outside [0,1]?", any(d.check$prob_old < 0 | d.check$prob_old > 1), "\n")
+cat("Any NEW values outside [0,1]?", any(d.check$prob_new < 0 | d.check$prob_new > 1), "\n\n")
+
+# --- 2. Direct comparison at a few illustrative points ---
+cat("=== ILLUSTRATIVE COMPARISON (effective_weight = 0.4) ===\n")
+d.check %>%
+  filter(effective_weight == 0.4, icon_ev == -1,
+         listener_guess %in% c(0.05, 0.25, 0.5, 0.75, 0.95)) %>%
+  select(listener_guess, icon_ev, effective_weight, prob_old, prob_new) %>%
+  mutate(boost_old = prob_old - listener_guess,
+         boost_new = prob_new - listener_guess) %>%
+  print(digits = 3)
+
+# --- 3. Visualize: probability vs listener_guess, faceted by weight, colored by icon_ev, old vs new ---
+d.plot <- d.check %>%
+  filter(icon_ev %in% c(-1, -0.5,  0, 0.5, 1)) %>%
+  tidyr::pivot_longer(cols = c(prob_old, prob_new), names_to = "version", values_to = "prob") %>%
+  mutate(version = recode(version, prob_old = "Old (prob-space add)", prob_new = "New (logit-space add)"))
+
+ggplot(d.plot, aes(x = listener_guess, y = prob, color = factor(icon_ev))) +
+  geom_line(linewidth = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey60") +  # reference: no effect
+  facet_grid(version ~ effective_weight, labeller = label_both) +
+  scale_color_viridis_d(name = "icon_ev") +
+  coord_cartesian(ylim = c(0, 1)) +
+  theme_minimal() +
+  labs(x = "listener_guess (input)", y = "resulting probability",
+       title = "Old vs new listener_guess_probability formula",
+       subtitle = "Dashed line = no effect (prob equals input guess)")
+
+```
+
+### Expressive noise calibration
+
+...
+
+```{r}
+# =====================================================================
+# STEP 3: expressive-noise calibration
+#
+# The expressive override in run_interaction_sim() doesn't go through
+# produce_signal() or the attractor machinery at all -- it's a direct
+# draw: rnorm(2, mean = target_center, sd = expressive_noise_sd), then
+# clamp01(). This replicates exactly that, and asks: what fraction of
+# expressive productions end up far enough from the semantic prototype
+# that they leave its own attractor circle (and so are no longer really
+# iconic)?
+# =====================================================================
+estimate_expressive_iconicity_loss <- function(target_center, expressive_noise_sd,
+                                               circle_radius, n_draws = 20000) {
+  x <- pmax(0, pmin(1, rnorm(n_draws, mean = target_center[1], sd = expressive_noise_sd)))
+  y <- pmax(0, pmin(1, rnorm(n_draws, mean = target_center[2], sd = expressive_noise_sd)))
+  dist_to_target <- sqrt((x - target_center[1])^2 + (y - target_center[2])^2)
+  mean(dist_to_target >= circle_radius)
+}
+
+# Example sweep:
+for (sd in c(0.03, 0.05, 0.08, 0.1)) {
+  loss <- estimate_expressive_iconicity_loss(
+    target_center = c(0.15, 0.85), expressive_noise_sd = sd, circle_radius = 0.3
+  )
+  cat("expressive_noise_sd =", sd, "-> un-iconic rate =", round(loss, 3), "\n")
+}
+
+```
+
+### Iconicity weight
+
+```{r}
+w <- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 1, 2, 3)
+p_ref <- c(0.3, 0.5, 0.7)  # low / mid / high starting associative strength
+
+sapply(p_ref, function(p) plogis(qlogis(p) + w) - p) |>
+  `rownames<-`(paste0("w=", w)) |>
+  `colnames<-`(paste0("p=", p_ref)) |>
+  round(3)
+
+# What weight is needed to produce a target percentage-point boost, at a reference p?
+weight_for_boost <- function(target_boost_pp, p_ref = 0.5) {
+  target_p <- p_ref + target_boost_pp / 100
+  qlogis(target_p) - qlogis(p_ref)
+}
+
+# e.g., what weight gives a 10pp, 20pp, 30pp boost at p = 0.5 for the perfectly iconic signal?
+sapply(c(5, 10, 15, 20, 25, 30, 35, 40), weight_for_boost, p_ref = 0.5)
+
+# Given a vector of realized icon_ev values (e.g. d.simulation$evidence from a baseline run),
+# compute the AVERAGE probability boost a given weight would produce -- not just the ceiling case.
+expected_boost <- function(weight, icon_ev_values, p_ref = 0.5) {
+  logit_ref <- qlogis(p_ref)
+  boosted_probs <- plogis(logit_ref + weight * icon_ev_values)
+  mean(boosted_probs - p_ref)
+}
+
+# Example: pull realistic icon_ev values from a baseline run (no recognition bias active,
+# so `evidence` reflects the natural distribution of how iconic signals happen to be
+# just from production dynamics, before any recognition-side weighting)
+icon_ev_empirical <- d.simulation.medium %>%
+  filter(model_type == "recognitionBias") %>%  # instead of 'baseline'
+  pull(evidence)
+
+# Compare: ceiling-case boost (icon_ev = 1) vs. realistic average boost, same weight
+weight_test <- 0.8
+cat("Ceiling boost (icon_ev=1):   ", plogis(qlogis(0.5) + weight_test) - 0.5, "\n")
+cat("Average boost (empirical):  ", expected_boost(weight_test, icon_ev_empirical, p_ref = 0.5), "\n")
+
+weight_for_average_boost <- function(target_boost_pp, icon_ev_values, p_ref = 0.5, weight_max = 50) {
+  target_boost <- target_boost_pp / 100
+  ceiling <- expected_boost(weight_max, icon_ev_values, p_ref)
+  
+  if (ceiling < target_boost) {
+    warning(sprintf(
+      "Target boost of %.1fpp is unreachable -- max average boost at weight=%.0f is only %.2fpp. Returning NA.",
+      target_boost_pp, weight_max, ceiling * 100
+    ))
+    return(NA_real_)
+  }
+  
+  root <- uniroot(
+    function(w) expected_boost(w, icon_ev_values, p_ref) - target_boost,
+    interval = c(0, weight_max)
+  )
+  root$root
+}
+
+# e.g. what weight gives an average (not ceiling) 10pp boost at p_ref = 0.5, 
+# given the realistic distribution of icon_ev from your baseline run?
+weight_for_average_boost(10, icon_ev_empirical, p_ref = 0.5)
+
+expected_boost_conditional <- function(weight, icon_ev_values, p_ref = 0.5) {
+  nonzero_ev <- icon_ev_values[icon_ev_values != 0]
+  logit_ref <- qlogis(p_ref)
+  boosted_probs <- plogis(logit_ref + weight * nonzero_ev)
+  mean(boosted_probs - p_ref)
+}
+
+weight_for_conditional_boost <- function(target_boost_pp, icon_ev_values, p_ref = 0.5, weight_max = 50) {
+  target_boost <- target_boost_pp / 100
+  nonzero_ev <- icon_ev_values[icon_ev_values != 0]
+  ceiling <- expected_boost_conditional(weight_max, nonzero_ev, p_ref)
+  
+  if (ceiling < target_boost) {
+    warning(sprintf("Still unreachable -- ceiling at weight=%.0f is %.2fpp", weight_max, ceiling * 100))
+    return(NA_real_)
+  }
+  
+  uniroot(function(w) expected_boost_conditional(w, nonzero_ev, p_ref) - target_boost,
+          interval = c(0, weight_max))$root
+}
+
+# use BASELINE evidence, not recognitionBias's own (avoids circularity)
+icon_ev_baseline <- d.simulation.medium %>% filter(model_type == "baseline") %>% pull(evidence)
+
+weight_for_conditional_boost(10, icon_ev_baseline, p_ref = 0.5)
+
+
+# Question 1: for trials where the signal WAS iconic (icon_ev > 0), 
+# how much does a given weight boost recognition probability?
+expected_boost_positive <- function(weight, icon_ev_values, p_ref = 0.5) {
+  pos_ev <- icon_ev_values[icon_ev_values > 0]
+  logit_ref <- qlogis(p_ref)
+  mean(plogis(logit_ref + weight * pos_ev) - p_ref)
+}
+
+# Question 2: for trials where the signal was anti-iconic (icon_ev < 0),
+# how much does it penalize recognition probability?
+expected_penalty_negative <- function(weight, icon_ev_values, p_ref = 0.5) {
+  neg_ev <- icon_ev_values[icon_ev_values < 0]
+  logit_ref <- qlogis(p_ref)
+  mean(plogis(logit_ref + weight * neg_ev) - p_ref)
+}
+
+weight_for_positive_boost <- function(target_boost_pp, icon_ev_values, p_ref = 0.5, weight_max = 50) {
+  target_boost <- target_boost_pp / 100
+  pos_ev <- icon_ev_values[icon_ev_values > 0]
+  ceiling <- expected_boost_positive(weight_max, pos_ev, p_ref)
+  if (ceiling < target_boost) {
+    warning(sprintf("Unreachable -- ceiling is %.2fpp", ceiling * 100))
+    return(NA_real_)
+  }
+  uniroot(function(w) expected_boost_positive(w, pos_ev, p_ref) - target_boost,
+          interval = c(0, weight_max))$root
+}
+
+weight_for_positive_boost(10, icon_ev_baseline, p_ref = 0.5)
+
+sapply(c(5, 10, 15, 20, 25, 30), weight_for_positive_boost, icon_ev_values = icon_ev_baseline, p_ref = 0.5)
+
+d.grid.recognitionBias.spec
+d.check <- d.grid.expressiveAgents %>%
+  filter(circle_radius == 0.275, center_sd_ratio == 0.4,
+         drift_sd == 0.125, expressive_probability > 0.18) %>%
+  pull(history) %>%
+  .[[1]]
+
+# per-simulation iconicity, not pooled
+d.check %>%
+  mutate(total_round = round) %>%
+  group_by(simulation) %>%
+  filter(total_round >= max(total_round) * 0.8) %>%
+  summarise(evidence = mean(evidence), .groups = "drop") %>%
+  summarise(mean = mean(evidence), sd = sd(evidence), se = sd(evidence)/sqrt(n()))
+
+d.confirm.recognitionBias <- d.empty %>%
+  run_interaction_sim(
+    n_sim = 1000, n_rounds = N_ROUNDS, n_generations = 1,
+    drift_sd = 0.19,             # exact original default, not the grid-rounded 0.2
+    learning_strength = 0.015,
+    recognition_bias = TRUE,
+    iconicity_weight = 2.8,      # or whatever you settle on from the grid's plateau region
+    circle_radius = 0.3,         # exact original default, not 0.275
+    trap_center_sd = 0.12,       # exact original default
+    expressive_agents = FALSE,
+    k_attractor_production = 2.5, k_perception = 2.5,
+    success_scale = 7.5, failure_scale = 1
+  ) %>%
+  mutate(model_type = "recognitionBias")
+
+compute_iconicity(d.confirm.recognitionBias, n_rounds = N_ROUNDS)
+
+```
+
+## Grid searches through the parameter space
+
+We conducted several grid searches of the parameter space...
+
+```{r}
+# GRID SEARCHES ----
+RESET_MODELS <- FALSE  # set TRUE to force a rerun
+
+plan(multisession, workers = parallel::detectCores() - 1)
+
+N_ROUNDS <- 50
+
+empty_df <- data.frame(
+  sim = integer(), gen = integer(), round = integer(), trial = integer(),
+  trial_counter = integer(), referent = integer(),
+  speaker = character(), listener = character(), type = character(),
+  produced_signal = I(list()), dist_to_nearest = numeric(), in_attractor = logical(),
+  attractor_id = integer(), is_semantic_attractor = logical(), is_correct_semantic_attractor = logical(),
+  old_stored_signal_A = I(list()), new_stored_signal_A = I(list()),
+  old_stored_signal_B = I(list()), new_stored_signal_B = I(list()),
+  prob = numeric(), success = integer(), evidence = numeric(),
+  is_expressive_trial = logical(),
+  old_guess_A = numeric(), new_guess_A = numeric(),
+  old_guess_B = numeric(), new_guess_B = numeric(),
+  stringsAsFactors = FALSE)
+
+# Shared "nuisance" grid, coarse, reused for both mechanisms
+d.nuisance_grid <- expand.grid(
+  drift_sd          = c(0.125, 0.200, 0.275), #= seq(0.05, 0.35, length.out = 5),
+  learning_strength = c(0.015, 0.03, 0.045, 0.06, 0.075, 0.09), # seq(0, 0.05, length.out = 5),
+  circle_radius     = c(0.275, 0.400), # seq(0.15, 0.4, length.out = 3), 
+  center_sd_ratio   = c(0.4, 0.6)   # c(0.2, 0.4, 0.6) proportion of circle_radius for grid search; since center_sd is dependent on radius (0.4 = 40% of the basin's radius is steady-state noise)
+) %>%
+  mutate(center_sd = circle_radius * center_sd_ratio)
+
+## GRID 1: recognitionBias
+if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias-full.rds")) {
+  
+  d.grid.recognitionBias <- d.nuisance_grid %>%
+    tidyr::crossing(iconicity_weight = seq(0, 6, length.out = 15)) %>% #seq(0, 0.8, length.out = 10)
+    mutate(iconicity = NA_real_, history = vector("list", n()))
+  
+  for (i in seq_len(nrow(d.grid.recognitionBias))) {
+    p <- d.grid.recognitionBias[i, ]
+    history <- run_interaction_sim(
+      data = empty_df, n_sim = 100, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
+      drift_sd = p$drift_sd, learning_strength = p$learning_strength,
+      recognition_bias = TRUE, iconicity_weight = p$iconicity_weight,
+      circle_radius = p$circle_radius, trap_center_sd = p$center_sd,
+      expressive_agents = FALSE,
+      success_scale = 7.5, failure_scale = 1
+    )
+    d.grid.recognitionBias$history[[i]] <- history
+    d.grid.recognitionBias$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
+    if (i %% 50 == 0) message("recognitionBias: ", i, " / ", nrow(d.grid.recognitionBias))
+  }
+  saveRDS(d.grid.recognitionBias, "models/grid-search-recognitionBias-spec.rds", compress = TRUE)
+} else {
+  d.grid.recognitionBias <- readRDS("models/grid-search-recognitionBias-spec.rds")
+}
+
+## GRID 2: expressiveAgents
+if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents-full.rds")) {
+  
+  d.grid.expressiveAgents <- d.nuisance_grid %>%
+    tidyr::crossing(expressive_probability = seq(0.02, 0.20, by = 0.02)) %>%
+    mutate(iconicity = NA_real_, history = vector("list", n()))
+  
+  for (i in seq_len(nrow(d.grid.expressiveAgents))) {
+    p <- d.grid.expressiveAgents[i, ]
+    history <- run_interaction_sim(
+      data = empty_df, n_sim = 20, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
+      drift_sd = p$drift_sd, learning_strength = p$learning_strength,
+      recognition_bias = FALSE, iconicity_weight = 0,
+      circle_radius = p$circle_radius, trap_center_sd = p$center_sd,
+      expressive_agents = TRUE, expressive_probability = p$expressive_probability,
+      success_scale = 7.5, failure_scale = 1
+    )
+    d.grid.expressiveAgents$history[[i]] <- history
+    d.grid.expressiveAgents$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
+    if (i %% 50 == 0) message("expressiveAgents: ", i, " / ", nrow(d.grid.expressiveAgents))
+  }
+  saveRDS(d.grid.expressiveAgents, "models/grid-search-expressiveAgents-full.rds", compress = TRUE)
+} else {
+  d.grid.expressiveAgents <- readRDS("models/grid-search-expressiveAgents-spec.rds")
+}
+
+combined_range <- range(c(d.grid.recognitionBias$iconicity, d.grid.expressiveAgents$iconicity), na.rm = TRUE)
+# combined_range = c(-0.08, 0.57)
+
+# adjust this to try different learning strength (0, .0125, .025...)
+ls_fixed <- 0.015
+ls_fixed <- unique(d.grid.recognitionBias.new$learning_strength)[5]
+
+plot_grid_faceted <- function(d.grid, x_var, x_lab, fixed_learning_strength, limits) {
+  d.grid %>%
+    filter(learning_strength == fixed_learning_strength) %>%
+    ggplot(aes(x = factor(round(.data[[x_var]], 3)),
+               y = factor(round(drift_sd, 3)),
+               fill = iconicity)) +
+    geom_tile() +
+    geom_text(aes(label = round(iconicity, 2)), size = 2.5, color = "black") +
+    scale_fill_distiller(palette = "RdBu", direction = -1,
+                         limits = limits,
+                         rescaler = ~ scales::rescale_mid(.x, mid = 0, to = c(0, 1),
+                                                          from = limits)) +
+    facet_grid(center_sd_ratio ~ circle_radius, labeller = label_both) +
+    #facet_grid(learning_strength ~ center_sd_ratio + circle_radius, labeller = label_both) +
+    theme_minimal() +
+    labs(x = x_lab, y = "Drift SD", fill = "Iconicity",
+         title = paste0("Learning strength = ", round(fixed_learning_strength, 3)))
+}
+
+p.recognitionBias <- plot_grid_faceted(d.grid.recognitionBias, "iconicity_weight",
+                                       "Iconicity weight", ls_fixed, combined_range)
+p.expressiveAgents <- plot_grid_faceted(d.grid.expressiveAgents, "expressive_probability",
+                                        "Expressive probability", ls_fixed, combined_range)
+
+#to derive a radius value for a given center_sd_ratio in the plot, do this:
+d.nuisance_grid %>%
+  filter(center_sd_ratio == 0.2) %>%
+  select(circle_radius, center_sd_ratio, center_sd) %>%
+  distinct() %>%
+  arrange(circle_radius)
+
+d.grid.compare <- bind_rows(
+  d.grid.recognitionBias %>%
+    group_by(drift_sd) %>%
+    summarise(peak_iconicity = max(iconicity, na.rm = TRUE), .groups = "drop") %>%
+    mutate(mechanism = "Iconicity recognition bias"),
+  d.grid.expressiveAgents %>%
+    group_by(drift_sd) %>%
+    summarise(peak_iconicity = max(iconicity, na.rm = TRUE), .groups = "drop") %>%
+    mutate(mechanism = "Expressive agents"))
+
+ggplot(d.grid.compare, 
+       aes(x = drift_sd, 
+           y = peak_iconicity, 
+           color = mechanism)) +
+  geom_line(linewidth = 1) + 
+  geom_point() +
+  scale_y_continuous(limits = c(-1, 1)) + 
+  theme_minimal() +
+  labs(x = "Drift SD", 
+       y = "Peak iconicity (best combo of all other params)", 
+       color = "Mechanism")
+
+
+# function to compute iconicity (signal evidence; e.g., for grid searches further down)
+compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
+  d.iconicity <- history %>%
+    mutate(total_round = (generation - 1) * n_rounds + round) %>%
+    group_by(simulation, total_round) %>%
+    summarise(evidence = mean(evidence, na.rm = TRUE), .groups = "drop")
+  
+  max_round <- max(d.iconicity$total_round)
+  threshold <- max_round * cutoff
+  
+  d.iconicity %>%
+    filter(total_round >= threshold) %>%
+    summarise(mean_iconicity = mean(evidence, na.rm = TRUE)) %>%
+    pull(mean_iconicity)
+}
+
+# test increasing expressivity proportion
+d.test_high_expr <- d.empty %>%
+  run_interaction_sim(
+    n_sim = 10, n_rounds = 50, n_generations = 1,
+    recognition_bias = FALSE, expressive_agents = TRUE,
+    expressive_probability = 0.15)
+
+# calculate mean signal evidence and success rate by expressive probability proportion
+d.test_high_expr %>%
+  group_by(is_expressive_trial) %>%
+  summarise(success_rate = mean(success), mean_evidence = mean(evidence), n = n())
+
+# and the actual comparison metric:
+compute_iconicity(d.test_high_expr, n_rounds = 50)
+
+```
