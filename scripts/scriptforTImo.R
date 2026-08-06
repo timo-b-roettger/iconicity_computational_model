@@ -774,36 +774,89 @@ d_signal_ed_agg_all <- d_signal_ed_agg |>
             attractor_2_ed = mean(attractor_2_ed))
 
 # get reference values
-## if small where is border for attractor?
+## if small where is border for attractor? 
+# NOTE TR: that does not take the exponentional nature into account
 iconic_border = euc_dist(c(0.15,0.85), c(0.45,0.55)) ## 0.42
 neutral = euc_dist(c(0.15,0.85), c(0.5,0.5)) ## ~0.5
 
+# for annotation below
+arrow_data <- data.frame(
+  x = 2,        # Arrow tail X
+  y = 0.22,       # Arrow tail Y
+  xend = 2,     # Arrow head X
+  yend = 0,    # Arrow head Y
+  model_type = "baseline", # Target facet level
+  text = "more iconic" 
+)
+
 # plot average ED
-d_signal_ed_agg_all |> 
+average_ED_interactions <- 
+  d_signal_ed_agg_all |> 
   ggplot(aes(x = round, y = iconic_ed,
              group = interaction(model_type))) +
-  geom_path(data = d_signal_ed_agg,
-            alpha = 0.01) +
+  geom_line(data = d_signal_ed_agg |> 
+              filter(simulation %in% sample(unique(d_signal_ed_agg$simulation), size = 15)),
+            aes(group = interaction(model_type, simulation)),
+            color = "black",
+            alpha = 0.1) +
   geom_line(data = d_signal_ed_agg_all,
-            alpha = 1) +
+            color = "white",
+            size = 3) +
+  geom_line(data = d_signal_ed_agg_all,
+            color = "#440154ff",
+            size = 1.5) +
   # iconic border
-  geom_hline(yintercept = iconic_border,
-             color = "purple",
-             lty = "dashed") +
-  annotate("text", 
-           x = 25,
-           y = 0.21,
-           color = "purple",
-           label = "within iconic pocket") +
+  # geom_hline(yintercept = iconic_border,
+  #            color = "purple",
+  #            lty = "dashed") +
+  # annotate("text", 
+  #          x = 25,
+  #          y = 0.21,
+  #          color = "purple",
+  #          label = "within iconic pocket") +
   # neutral position
-  geom_hline(yintercept = neutral,
-             color = "black",
-             lty = "dashed") +
+  # geom_hline(yintercept = neutral,
+  #            color = "white",
+  #            lty = "dashed") +
+  geom_segment(data = arrow_data,
+               aes(x = x, y = y, xend = xend, yend = yend),
+           arrow = arrow(length = unit(0.1, "cm"),
+                         type = "closed"),
+           size = 6, linewidth = 0.5,
+           colour = "black",
+  ) +
+  geom_text(data = arrow_data,
+            aes(x = x+2,
+                y = yend,
+                label = text),
+            #x = 10,
+            #y = 1.25,
+            hjust = 0,
+            size = 3,
+            colour = "black",
+  ) +
   facet_grid(~model_type) +
-  labs(title = "euclidean distance to iconic center",
-       y = "euclidean distance to iconic center") +
-  theme_minimal()
+  scale_y_continuous(limits = c(0,1.3), 
+                     trans = "reverse",
+                     breaks = seq(0,1.25,0.25)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 25),
+                     labels = seq(0, max(d.iconicity$total_round), by = 25)) +
+  guides(x = guide_axis(cap = "both"),
+         y = guide_axis(cap = "both")) +
+  labs(title = "The signal moves to iconic pocket for both\nexpressive speakers and recognition bias ",
+       subtitle = "euclidean distance to center of iconic pocket\nblack lines illustrate 15 random simulations",
+       y = "",
+       x = "\nInteraction rounds") +
+  timo_theme
 
+ggsave("figures/average_ED_interactions.png",
+       average_ED_interactions,
+       device = "png",
+       bg = "white",
+       width = 180, 
+       height = 120, 
+       units = "mm", 
+       dpi = 300) 
 
 # plot also for distractor
 d_signal_ed_agg_all |> 
