@@ -626,6 +626,69 @@ calibrate_icon_weight <- function(target_absolute_gain = NULL,
 calibrate_icon_weight(target_absolute_gain = 0.01, icon_ev = current_icon_ev)
 calibrate_icon_weight(current_weight = 0.4, icon_ev = current_icon_ev)
 
+
+# CHECK LOGIT BOUNDS 
+# --- OLD formula: addition happens in probability space, qlogis/plogis is a no-op ---
+old_formula <- function(listener_guess, effective_weight, icon_ev) {
+  logits <- qlogis(clamp02(listener_guess + (effective_weight * icon_ev)))
+  probs <- plogis(logits)
+  probs
+}
+
+# --- NEW formula: addition happens in logit space ---
+new_formula <- function(listener_guess, effective_weight, icon_ev) {
+  logit_guess <- qlogis(pmax(1e-9, pmin(1 - 1e-9, listener_guess)))
+  logits <- logit_guess + (effective_weight * icon_ev)
+  probs <- clamp02(plogis(logits))
+  probs
+}
+
+# --- Sweep across the full range of inputs ---
+d.check <- expand.grid(
+  listener_guess   = seq(0.01, 0.99, by = 0.02),   # avoid exact 0/1 (qlogis undefined there)
+  icon_ev           = seq(-1, 1, by = 0.25),         # full range of signal_evidence()
+  effective_weight  = c(0, 0.2, 0.4, 0.8)            # a few realistic iconicity_weight values
+) %>%
+  mutate(
+    prob_old = old_formula(listener_guess, effective_weight, icon_ev),
+    prob_new = new_formula(listener_guess, effective_weight, icon_ev)
+  )
+
+# --- 1. Bounds check: are all probabilities within [0, 1]? ---
+cat("=== BOUNDS CHECK ===\n")
+cat("OLD formula -- min:", min(d.check$prob_old), " max:", max(d.check$prob_old), "\n")
+cat("NEW formula -- min:", min(d.check$prob_new), " max:", max(d.check$prob_new), "\n")
+cat("Any OLD values outside [0,1]?", any(d.check$prob_old < 0 | d.check$prob_old > 1), "\n")
+cat("Any NEW values outside [0,1]?", any(d.check$prob_new < 0 | d.check$prob_new > 1), "\n\n")
+
+# --- 2. Direct comparison at a few illustrative points ---
+cat("=== ILLUSTRATIVE COMPARISON (effective_weight = 0.4) ===\n")
+d.check %>%
+  filter(effective_weight == 0.4, icon_ev == -1,
+         listener_guess %in% c(0.05, 0.25, 0.5, 0.75, 0.95)) %>%
+  select(listener_guess, icon_ev, effective_weight, prob_old, prob_new) %>%
+  mutate(boost_old = prob_old - listener_guess,
+         boost_new = prob_new - listener_guess) %>%
+  print(digits = 3)
+
+# --- 3. Visualize: probability vs listener_guess, faceted by weight, colored by icon_ev, old vs new ---
+d.plot <- d.check %>%
+  filter(icon_ev %in% c(-1, -0.5,  0, 0.5, 1)) %>%
+  tidyr::pivot_longer(cols = c(prob_old, prob_new), names_to = "version", values_to = "prob") %>%
+  mutate(version = recode(version, prob_old = "Old (prob-space add)", prob_new = "New (logit-space add)"))
+
+ggplot(d.plot, aes(x = listener_guess, y = prob, color = factor(icon_ev))) +
+  geom_line(linewidth = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey60") +  # reference: no effect
+  facet_grid(version ~ effective_weight, labeller = label_both) +
+  scale_color_viridis_d(name = "icon_ev") +
+  coord_cartesian(ylim = c(0, 1)) +
+  theme_minimal() +
+  labs(x = "listener_guess (input)", y = "resulting probability",
+       title = "Old vs new listener_guess_probability formula",
+       subtitle = "Dashed line = no effect (prob equals input guess)")
+
+
 # PLOT ATTRACTORS------
 center_small <- c(0.15, 0.85)
 center_large <- c(0.85, 0.15)
