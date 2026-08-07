@@ -321,8 +321,7 @@ The iconicity recognition bias is governed by two parameters: signal evidence an
 
 ## Grid searches through the parameter space
 
-We conducted several grid searches of the parameter space to explore different combination of parameter values and their effect on the resulting iconicity. The initial grid searches explored larger ranges of parameter values but smaller number of simulations per parameter combination (n_sim = 20). The grid searches reported here focused on a smaller, more targeted range of values, but with larger number of simulations per combination (n_sim = 100). 
-Recognition bias and expressive probability were fit as separate grids but shared values for the other parameters. The following parameter values were explored: circle_radius = 0.275, 0.4; drift_sd = 0.125, 0.2, 0.275; center_sd = 0.03, 0.11, 0.24; learning_strength = 0, 0.018, 0.036, 0.054, 0.072, 0.09; iconicity_weight = 0, 0.429, 0.8571, 1.286, 1.714, 2.143, 2.571, 3, 3.429, 3.857, 4.286, 4.714, 5.143, 5.571, 6; expressive_probability = 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2.
+We conducted several grid searches of the parameter space to explore different combination of parameter values and their effect on the resulting iconicity. The initial grid searches explored larger ranges of parameter values but smaller number of simulations per parameter combination (n_sim = 20). The grid searches reported here focused on a smaller, more targeted range of values, but with larger number of simulations per combination (n_sim = 100). Recognition bias and expressive probability were fit as separate grids but shared values for the other parameters. The following parameter values were explored: circle_radius = 0.275, 0.4; drift_sd = 0.125, 0.2, 0.275; center_sd = 0.03, 0.11, 0.24; learning_strength = 0, 0.018, 0.036, 0.054, 0.072, 0.09; iconicity_weight = 0, 0.429, 0.8571, 1.286, 1.714, 2.143, 2.571, 3, 3.429, 3.857, 4.286, 4.714, 5.143, 5.571, 6; expressive_probability = 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2.
 
 ```{r}
 # GRID SEARCHES
@@ -351,8 +350,7 @@ d.nuisance_grid <- expand.grid(
   drift_sd          = c(0.125, 0.200, 0.275), #= seq(0.05, 0.35, length.out = 5),
   learning_strength = c(0, 0.018, 0.036, 0.054, 0.072, 0.090), # seq(0, 0.05, length.out = 5),
   circle_radius     = seq(0.15, 0.4, length.out = 3), 
-  center_sd_ratio   = c(0.2, 0.4, 0.6)   # c(0.2, 0.4, 0.6) proportion of circle_radius for grid search; since center_sd is dependent on radius (0.4 = 40% of the basin's radius is steady-state noise)
-) %>%
+  center_sd_ratio   = c(0.2, 0.4, 0.6)) %>%
   mutate(center_sd = circle_radius * center_sd_ratio)
 
 compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
@@ -626,8 +624,3 @@ plot_grid_eval(
 )
 
 ```
-
-
-
-
-
