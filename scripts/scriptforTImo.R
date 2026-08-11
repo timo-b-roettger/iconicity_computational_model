@@ -47,8 +47,11 @@ produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production,
     # subtract for fixed base sd, keeping this independent from the noise dep on associative strength
     attractor_reduction <- f_dist_max * exp_scale
   } 
-
-  final_sd <- max(baseline_sd - attractor_reduction, 0.001) # keep sd above 0
+  # floor at center_sd so that noise never drops below the attractor's minimum, regardless of speaker_guess. 
+  # Guess-dependence remains fully intact everywhere except at the exact center where center_sd is by definition
+  # the tightest the noise can ever get.
+  #final_sd <- max(baseline_sd - attractor_reduction, center_sd, 0.001)
+  final_sd <- max(baseline_sd - attractor_reduction, 0.001)
   
   # Generate the signal using the final calculated SD
   signal <- rnorm(
@@ -384,19 +387,106 @@ d_signal <- d.simulation %>%
 
 # calculate proportion of trials ending up in an attractor, in a semantic attractor, in the correct semantic attractor
 d.simulation %>%
+  mutate(across(c(in_attractor, is_semantic_attractor, is_correct_semantic_attractor), as.logical)) %>%
   group_by(model_type) %>%
   summarise(
     total_trials = n(),
-    n_in = sum(in_attractor == TRUE | in_attractor == "TRUE", na.rm = TRUE),
-    n_out = sum(in_attractor == FALSE | in_attractor == "FALSE", na.rm = TRUE),
-    n_sem = sum(is_semantic_attractor == TRUE | is_semantic_attractor == "TRUE", na.rm = TRUE),
-    n_corr_sem = sum(is_correct_semantic_attractor == TRUE | is_correct_semantic_attractor == "TRUE", na.rm = TRUE),
+    n_in = sum(in_attractor == TRUE, na.rm = TRUE),
+    n_out = sum(in_attractor == FALSE, na.rm = TRUE),
+    n_sem = sum(is_semantic_attractor == TRUE, na.rm = TRUE),
+    n_corr_sem = sum(is_correct_semantic_attractor == TRUE, na.rm = TRUE),
     pct_in_attractor = (n_in / total_trials) * 100,
     pct_out_attractor = (n_out / total_trials) * 100,
     pct_in_sem_attractor = (n_sem / n_in) * 100,           # Out of those IN an attractor
     pct_in_correct_sem_attractor = (n_corr_sem / n_sem) * 100,     # Out of those that are semantic
     .groups = "drop") %>%
   select(-n_in, -n_out, -n_sem, -n_corr_sem)
+
+# calculate trajectories; trial-by-trial in-out of attractor (based on produced signal, not stored)
+# helper functions: trials before first entry into an attractor (latency)
+get_latency <- function(capture_type_vec, target_type) {
+  first_entry <- match(target_type, capture_type_vec)
+  if (is.na(first_entry)) return(NA_integer_)
+  first_entry - 1 # Trials before entering
+}
+
+# mean consecutive trials spent in an attractor before exiting (bout length)
+get_bouts <- function(capture_type_vec) {
+  r <- rle(as.character(capture_type_vec))
+  tibble(
+    type = r$values,
+    bout_length = r$lengths,
+    censored = FALSE) %>%
+    # last bout is right-censored if the round ends while signal still inside attractor
+    mutate(censored = row_number() == n() & type == tail(as.character(capture_type_vec), 1))
+}
+
+d.simulation.trajectories <- d.simulation %>%
+  mutate(
+    across(c(in_attractor, is_semantic_attractor, is_correct_semantic_attractor), as.logical),
+    capture_type = case_when(
+      is.na(attractor_id)           ~ "none",
+      !is_semantic_attractor        ~ "neutral",
+      is_correct_semantic_attractor ~ "congruent",
+      TRUE                          ~ "anti"))
+
+d.bouts <- d.simulation.trajectories %>%
+  arrange(model_type, simulation, referent, round) %>% 
+  group_by(model_type, simulation, referent) %>%
+  reframe(get_bouts(capture_type)) %>%
+  ungroup() %>%
+  filter(type != "none")   # "none" bouts = stretches outside any attractor
+
+# Per model_type, mean bout length; 
+d.bouts %>%
+  group_by(model_type, type) %>%
+  summarise(
+    n_bouts = n(), #capture frequency
+    mean_bout_length = mean(bout_length),
+    median_bout_length = median(bout_length),
+    # flag if these are underestimates; % of bouts that were cut off by the end of sim
+    # high pct_censored= 'at least X' rather than 'exactly X'
+    pct_censored = mean(censored) * 100,
+    .groups = "drop")
+
+# of all trials coded as congruent, how many were forced by expressive override vs normal noise
+d.simulation.trajectories %>%
+  filter(model_type == "expressiveAgents", capture_type == "congruent") %>%
+  count(is_expressive_trial)
+
+# Or, more precisely: tag each bout by whether its FIRST trial was an expressive override
+d.bouts_tagged <- d.simulation.trajectories %>%
+  arrange(model_type, simulation, referent, round) %>%
+  group_by(model_type, simulation, referent) %>%
+  reframe(
+    bind_cols(
+      get_bouts(capture_type),
+      entry_was_expressive = {
+        r <- rle(as.character(capture_type))
+        starts <- cumsum(c(1, head(r$lengths, -1)))
+        is_expressive_trial[starts]
+      }
+    )
+  ) %>%
+  ungroup()
+# among all episodes (unbroken runs) of congruent capture, group by whether the first trial
+# was an expressive override or natural noise (expressive override signals gets teleported but also move out)
+d.bouts_tagged %>%
+  filter(model_type == "expressiveAgents", type == "congruent") %>%
+  group_by(entry_was_expressive) %>%
+  summarise(n = n(), mean_length = mean(bout_length), median_length = median(bout_length))
+
+# how many rounds before a referent's first congruent vs anti vs neutral capture
+d.simulation.trajectories %>%
+  arrange(model_type, simulation, referent, round) %>%
+  group_by(model_type, simulation, referent) %>%
+  summarise(
+    latency_congruent = get_latency(capture_type, "congruent"),
+    latency_anti      = get_latency(capture_type, "anti"),
+    latency_neutral   = get_latency(capture_type, "neutral"),
+    .groups = "drop") %>%
+  group_by(model_type) %>%
+  summarise(across(starts_with("latency_"), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
 
 # plot iconicity
 d.iconicity <- d.simulation %>%
