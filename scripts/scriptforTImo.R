@@ -6,7 +6,6 @@ library(patchwork)  # combining plots
 library(broom)      # for regression analysis
 library(ggdist)     # for plotting
 library(ggside) # for plotting densities on y-axis
-library(furrr)  # for parallelizing loop in grid search
 
 # HELPER FUNCTIONS CALLED IN SIMULATION LOOP
 clamp01 <- function(x) pmax(0, pmin(1, x))
@@ -197,10 +196,12 @@ run_interaction_sim <- function(
       # expressive_A <- runif(1) < expressive_prob
       # expressive_B <- runif(1) < expressive_prob
       
+      # draw independent initial recognition guesses for each agent from Beta(3, 9)
       agentA_guess <- rbeta(n_referents, 3, 9)
       agentB_guess <- rbeta(n_referents, 3, 9)
       
       for (round in 1:n_rounds) {
+        # randomize referent order and randomly pair speaker/listener roles for each trial
         referent_order <- sample(1:n_referents)
         roles <- sample(rep(c("A", "B"), length.out = n_referents))
         
@@ -210,6 +211,7 @@ run_interaction_sim <- function(
           speaker <- roles[trial]
           listener <- ifelse(speaker == "A", "B", "A")
           
+          # identify current speaker and listener guess vectors
           if (speaker == "A") {
             speaker_guess <- agentA_guess
             listener_guess <- agentB_guess
@@ -218,12 +220,14 @@ run_interaction_sim <- function(
             listener_guess <- agentA_guess
           }
           
+          # save pre-trial state for logging and speaker signal lookup
           old_guess_A <- agentA_guess[ref_id]
           old_guess_B <- agentB_guess[ref_id]
           old_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
           old_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
           old_stored_signal <- if (speaker == "A") old_stored_signal_A else old_stored_signal_B
           
+          # standard signal production based on speaker's individual stored signal and guess
           production_output <- produce_signal(
             stored_signal = old_stored_signal,
             speaker_guess = speaker_guess[ref_id],
@@ -249,6 +253,7 @@ run_interaction_sim <- function(
             target_center <- referents_info$size_prototypes[[ref_id]]
             signal <- clamp01(rnorm(2, mean = target_center, sd = expressive_noise_sd))
             
+            # measure distance to nearest attractor for expressive signal
             distances <- sapply(attractor_centers, function(center) sqrt(sum((signal - center)^2)))
             dist_to_nearest <- min(distances)
             nearest_id <- which.min(distances)
@@ -261,6 +266,7 @@ run_interaction_sim <- function(
             attractor_id    <- production_output$attractor_id
           }
           
+          # listener recognition probability given their own guess
           recognition <- listener_guess_probability(
             listener_guess[ref_id],
             signal,
@@ -270,15 +276,18 @@ run_interaction_sim <- function(
             k_perception = k_perception,
             circle_radius = circle_radius)
           
+          # sample binary success/failure outcome (Bernoulli trial)
           prob <- recognition$probs
           success <- rbinom(1, 1, prob)
           
+          # update the listener's guess based on trial outcome
           if (listener == "A") {
             agentA_guess[ref_id] <- update_logit(prob, learning_strength, success, success_scale, failure_scale)
           } else {
             agentB_guess[ref_id] <- update_logit(prob, learning_strength, success, success_scale, failure_scale)
           }
           
+          # update shared stored signal for both agents on successful trials
           if (success == 1) {
             referents_info$agentA_stored_signal[[ref_id]] <- 
               (signal + referents_info$agentA_stored_signal[[ref_id]]) / 2
@@ -286,11 +295,13 @@ run_interaction_sim <- function(
               (signal + referents_info$agentB_stored_signal[[ref_id]]) / 2
           }
           
+          # extract post-trial states for logging
           new_guess_A <- agentA_guess[ref_id]
           new_guess_B <- agentB_guess[ref_id]
           new_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
           new_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
           
+          # evaluate attractor properties for log entries
           has_semantic <- !is.na(attractor_id) && is_semantic_attractor[attractor_id]
           log_is_semantic <- if (is.na(attractor_id)) FALSE else is_semantic_attractor[attractor_id]
           is_correct_semantic_attractor <- if (has_semantic) {

@@ -15,10 +15,12 @@ This is the Supplementary Information (SI) for the XX paper. The SI contains mod
 ```{r load-libraries, echo=FALSE}
 library(dplyr)
 library(purrr)
+library(furrr)  # for parallelizing loop in grid search
 library(tibble)
 library(ggplot2)
 library(scales)
 library(tidyr)
+library(future)
 ```
 
 ### Attractor dimensions and mechanics: circle radius, sd of produced signal, sd of signal inside attractor
@@ -68,6 +70,8 @@ produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production,
 The circle radius of the attractors were set to 0.3, given the boundaries of the space (0-1 in both dimensions).
 
 The sd of the produced signal (drift_sd) was calibrated to 0.2, which corresponds to a \~43% chance of the signal wandering into any attractor in a single production step at the initial stages of the interaction—when the signal is neutral \[0.5, 0.5\], and the signal sender's associative strength (speaker_guess) is 0.3. The calibration was done using a function that generates single-step signal productions from the signal origin \[0.5, 0.5\] and calculates the probability of a signal landing within the defined boundary radius of any attractor basin (0.3).
+
+Signals are overall restricted within set limits--[0,1] in each dimension--so if noise modulation results in values outside of these bounds, the model truncates the signal to its boundaries.
 
 ```{r}
 test_single_step_capture <- function(attractor_centers = list(c(0.15, 0.85), c(0.85, 0.15), 
@@ -428,7 +432,7 @@ combined_range <- range(c(d.grid.recognitionBias$iconicity, d.grid.expressiveAge
 
 # adjust this to try different learning strength (0, .0125, .025...)
 ls_fixed <- 0.015
-ls_fixed <- unique(d.grid.recognitionBias.new$learning_strength)[5]
+ls_fixed <- unique(d.grid.recognitionBias$learning_strength)[1]
 
 plot_grid_faceted <- function(d.grid, x_var, x_lab, fixed_learning_strength, limits) {
   d.grid %>%
