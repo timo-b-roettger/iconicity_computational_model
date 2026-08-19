@@ -368,13 +368,18 @@ d.empty <- data.frame(
 # # save simulation data
 # write_csv(d.simulation, "scripts/temp_data/temp_data.csv")
 
-d.simulation <- read_csv("scripts/temp_data/temp_data.csv")
+# use "git lfs pull" in terminal to pull large data files
+#d.simulation <- read_csv("scripts/temp_data/temp_data.csv")
+d.simulation <- readRDS("scripts/temp_data/d_simulation.rds")
 
 
 # EVALUATE ICONICITY----
 # Signal space use across simulations
 d_signal_mean <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 50 + round) %>%
+  mutate(total_round = (generation - 1) * 50 + round,
+         produced_signal_x = sapply(produced_signal, function(x) x[1]),
+         produced_signal_y = sapply(produced_signal, function(x) x[2])
+         ) %>%
   group_by(model_type, total_round, type, generation) %>%
   summarise(
     mean_x = mean(produced_signal_x, na.rm = TRUE),
@@ -489,7 +494,7 @@ d.simulation.trajectories %>%
   summarise(across(starts_with("latency_"), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
 
 # plot iconicity
-d.iconicity <- d.simulation %>%
+d.iconicity <- d.simulation |> 
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias"),
@@ -547,7 +552,7 @@ timo_theme <- theme_classic() +
 
 
 ## plot: average iconicity over time----
-average_iconicity_interactions <- 
+average_iconicity_interactions_long <- 
   d.iconicity |> 
   ggplot(aes(x = total_round, y = evidence, group = interaction(model_type, simulation),
              color = evidence)) +
@@ -573,20 +578,20 @@ average_iconicity_interactions <-
                      labels = seq(0, max(d.iconicity$total_round), by = 25)) +
   guides(x = guide_axis(cap = "both"),
          y = guide_axis(cap = "both")) +
-  labs(title = "Iconicity evolves via both\nexpressive speakers and recognition bias",
-       subtitle = "above 0 = iconic, below zero = anti-iconic",
-       y = "Iconicity\n", 
+  labs(title = "Iconicity evolves via both expressive\nspeakers and recognition bias",
+       subtitle = "Iconicity, iconic > 0 > anti-iconic",
+       y = "", 
        x = "\nInteraction rounds") +
-  facet_wrap(~model_type) +
+  facet_wrap(model_type ~ ., ncol = 1) +
   # marginal distribution per facet (y-axis)
-  geom_ysidedensity(
-    data = d.iconicity,
-    aes(y = evidence, group = model_type),
-    inherit.aes = FALSE,
-    color = NA,
-    fill = "black",
-    alpha = 0.5) +
-  scale_ysidex_continuous() +
+  # geom_ysidedensity(
+  #   data = d.iconicity |> filter(total_round == 50),
+  #   aes(y = evidence, group = model_type),
+  #   inherit.aes = FALSE,
+  #   color = NA,
+  #   fill = "black",
+  #   alpha = 0.5) +
+  #scale_ysidex_continuous() +
   timo_theme +
   # Apply theme changes ONLY to the y-side panel
   theme(
@@ -599,17 +604,78 @@ average_iconicity_interactions <-
     ggside.panel.scale.y = 0.25
   )
 
-ggsave("figures/average_iconicity_interactions.png",
-       average_iconicity_interactions,
+average_iconicity_interactions_wide <- 
+  d.iconicity |> 
+  ggplot(aes(x = total_round, y = evidence, group = interaction(model_type, simulation),
+             color = evidence)) +
+  geom_path(linewidth = 0.5, alpha = 0.05,
+            color = "black") +
+  geom_hline(yintercept = 0,
+             color = "white",
+             lty = "dashed") +
+  geom_path(data = d.iconicity.mean, 
+            aes(group = 1), linewidth = 3,
+            color = "white") +
+  geom_path(data = d.iconicity.mean, 
+            aes(group = 1), linewidth = 1.5) +  
+  # # Add lines at generational overturn
+  # geom_vline(xintercept = seq(0, max(d.iconicity$total_round), by = 50), 
+  #            color = "grey", 
+  #            lty = "dotted") +
+  scale_color_viridis_c(begin = 0,
+                        end = 1,
+                        values = seq(0,1,0.1))+
+  scale_y_continuous(limits = c(-0.6,0.8), breaks = seq(-1,1,0.25)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 25),
+                     labels = seq(0, max(d.iconicity$total_round), by = 25)) +
+  guides(x = guide_axis(cap = "both"),
+         y = guide_axis(cap = "both")) +
+  labs(title = "Iconicity evolves via both expressive\nspeakers and recognition bias",
+       subtitle = "Iconicity, iconic > 0 > anti-iconic",
+       y = "", 
+       x = "\nInteraction rounds") +
+  facet_wrap(model_type ~ .) +
+  # marginal distribution per facet (y-axis)
+  # geom_ysidedensity(
+  #   data = d.iconicity |> filter(total_round == 50),
+  #   aes(y = evidence, group = model_type),
+  #   inherit.aes = FALSE,
+  #   color = NA,
+  #   fill = "black",
+  #   alpha = 0.5) +
+  #scale_ysidex_continuous() +
+  timo_theme +
+  # Apply theme changes ONLY to the y-side panel
+  theme(
+    legend.position = "none",
+    ggside.panel.grid.major = element_blank(),
+    ggside.panel.grid.minor = element_blank(),
+    ggside.axis.text = element_blank(),
+    ggside.axis.line = element_blank(),
+    ggside.axis.ticks = element_blank(),
+    ggside.panel.scale.y = 0.25
+  )
+
+ggsave("figures/average_iconicity_interactions_long.png",
+       average_iconicity_interactions_long,
        device = "png",
        bg = "white",
-       width = 180, 
-       height = 120, 
+       width = 120, 
+       height = 280, 
+       units = "mm", 
+       dpi = 300) 
+
+ggsave("figures/average_iconicity_interactions_wide.png",
+       average_iconicity_interactions_wide,
+       device = "png",
+       bg = "white",
+       width = 130, 
+       height = 100, 
        units = "mm", 
        dpi = 300) 
 
 
-## plot: guess rate over time----
+ ## plot: guess rate over time----
 guess_rate <- d.simulation |> 
   mutate(model_type = factor(
     model_type, 
