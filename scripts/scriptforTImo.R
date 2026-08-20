@@ -391,7 +391,7 @@ d_signal_mean <- d.simulation %>%
 d_signal <- d.simulation %>%
   mutate(total_round = (generation - 1) * 50 + round)
 
-# calculate proportion of trials ending up in an attractor, in a semantic attractor, in the correct semantic attractor
+# calculate proportion of trials in an attractor, in a semantic attractor, in the correct semantic attractor
 d.simulation %>%
   mutate(across(c(in_attractor, is_semantic_attractor, is_correct_semantic_attractor), as.logical)) %>%
   group_by(model_type) %>%
@@ -407,6 +407,25 @@ d.simulation %>%
     pct_in_correct_sem_attractor = (n_corr_sem / n_sem) * 100,     # Out of those that are semantic
     .groups = "drop") %>%
   select(-n_in, -n_out, -n_sem, -n_corr_sem)
+
+# calculate proportion of trials ENDING UP in an attractor, in a semantic attractor, in the correct semantic attractor
+d.simulation %>%
+  mutate(across(c(in_attractor, is_semantic_attractor, is_correct_semantic_attractor), as.logical)) %>%
+  filter(round %in% c(50)) |> 
+  group_by(model_type, round) %>%
+  summarise(
+    total_trials = n(),
+    n_in = sum(in_attractor == TRUE, na.rm = TRUE),
+    n_out = sum(in_attractor == FALSE, na.rm = TRUE),
+    n_sem = sum(is_semantic_attractor == TRUE, na.rm = TRUE),
+    n_corr_sem = sum(is_correct_semantic_attractor == TRUE, na.rm = TRUE),
+    pct_in_attractor = (n_in / total_trials) * 100,
+    pct_out_attractor = (n_out / total_trials) * 100,
+    pct_in_sem_attractor = (n_sem / n_in) * 100,           # Out of those IN an attractor
+    pct_in_correct_sem_attractor = (n_corr_sem / n_sem) * 100,     # Out of those that are semantic
+    .groups = "drop") %>%
+  select(-n_in, -n_out, -n_sem, -n_corr_sem)
+
 
 # calculate trajectories; trial-by-trial in-out of attractor (based on produced signal, not stored)
 # helper functions: trials before first entry into an attractor (latency)
@@ -1195,20 +1214,50 @@ ggsave("figures/signal_space_map.png",
        dpi = 300) 
 
 
- # take last plot and create a GIF
+
+
+# take last plot and create a GIF and track proportions as bar plot underneath
+
+# --- define the four attractor centers and shared radius ---
+attractors <- tibble(
+  target_attractor_id = c("distractor-A", "iconic", "anti-iconic", "distractor-B"),
+  target_attractor_x  = c(0.15, 0.15, 0.85, 0.85),
+  target_attractor_y  = c(0.15, 0.85, 0.15, 0.85)
+)
+radius <- 0.3
+
 # --- prep data once, outside the loop ---
 signal_space_data <- d_signal |>
   mutate(
     model_type = factor(
       model_type,
-      levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
-      labels = c("baseline", "expressive agents", "recognition bias", "recognition bias and expressive agents"),
+      levels = c("baseline", "expressiveAgents", "recognitionBias"),
+      labels = c("baseline", "expressive agents", "recognition bias"),
       ordered = TRUE
     ),
     produced_signal_x = sapply(produced_signal, function(x) x[1]),
     produced_signal_y = sapply(produced_signal, function(x) x[2])
   ) |>
   filter(type == "small")
+
+# --- helper: compute proportion of points within each attractor circle ---
+# for a given round's data, grouped by model_type
+compute_attractor_props <- function(round_data) {
+  round_data |>
+    tidyr::crossing(attractors) |>
+    mutate(
+      dist = sqrt((produced_signal_x - target_attractor_x)^2 + (produced_signal_y - target_attractor_y)^2),
+      in_attractor = dist <= radius
+    ) |>
+    group_by(model_type, target_attractor_id, target_attractor_x, target_attractor_y) |>
+    summarise(
+      n_total = n(),  # undo the crossing-induced 4x row inflation for the denominator
+      n_in    = sum(in_attractor),
+      prop    = n_in / n_total,
+      .groups = "drop"
+    ) |>
+    mutate(label = scales::percent(prop, accuracy = 1))
+}
 
 # --- set up output directory for frames ---
 frame_dir <- here::here("figures","gif_frames")
@@ -1217,17 +1266,29 @@ dir.create(frame_dir, showWarnings = FALSE)
 # --- get sorted unique rounds ---
 rounds <- sort(unique(signal_space_data$round))
 
+# --- compute a shared y-axis max for the barplot across all rounds ---
+# (so the barplot scale doesn't jump around frame to frame)
+all_props <- map_dfr(rounds, function(r) {
+  compute_attractor_props(signal_space_data |> filter(round == r)) |> 
+    mutate(round = r)
+})
+barplot_ymax <- max(all_props$prop) * 1.1
+
+
 # --- loop: one png per round ---
 frame_paths <- map_chr(rounds, function(r) {
   
-  p <- signal_space_data |>
-    filter(round == r) |>
+  round_data <- signal_space_data |> filter(round == r)
+  attractor_props <- compute_attractor_props(round_data)
+  
+  # --- main hexbin map ---
+  p_main <- round_data |>
     ggplot(aes(x = produced_signal_x, y = produced_signal_y)) +
     stat_binhex() +
     scale_fill_gradientn(
       colors = c("#f7f7f7", "#fe9e2a", "#d7191c"),
       values = scales::rescale(c(0.0, 0.2, 1.0)),
-      limits = c(0, NA)  # keep fill scale comparable across frames; adjust as needed
+      limits = c(0, NA)
     ) +
     theme_minimal() +
     labs(
@@ -1238,11 +1299,9 @@ frame_paths <- map_chr(rounds, function(r) {
       fill = "Count"
     ) +
     facet_grid(~model_type) +
-    scale_x_continuous(limits = c(0, 1),
-                       breaks = seq(0, 1, 1/3),
+    scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 1/3),
                        labels = c(0, "1/3", "2/3", 1)) +
-    scale_y_continuous(limits = c(0, 1),
-                       breaks = seq(0, 1, 1/3),
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 1/3),
                        labels = c(0, "1/3", "2/3", 1)) +
     timo_theme +
     theme(
@@ -1255,8 +1314,30 @@ frame_paths <- map_chr(rounds, function(r) {
       plot.title = element_text(face = "bold")
     )
   
+  # --- barplot underneath: proportion per attractor, faceted by model_type ---
+  p_bar <- attractor_props |>
+    ggplot(aes(x = target_attractor_id, y = prop, fill = target_attractor_id)) +
+    geom_col(width = 0.7) +
+    geom_text(aes(label = scales::percent(prop, accuracy = 1)),
+              vjust = -0.3, size = 2.8) +
+    scale_y_continuous(limits = c(0, barplot_ymax),
+                       labels = scales::percent_format(accuracy = 1)) +
+    scale_fill_brewer(palette = "Set2") +
+    facet_grid(~model_type) +
+    labs(x = NULL, y = "% signals\nin attractor") +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      strip.text = element_blank(),   # avoid repeating model_type labels twice
+      axis.text.x = element_text(size = 7, angle = 30, hjust = 1),
+      panel.grid.minor = element_blank()
+    )
+  
+  # --- stack main plot on top of barplot ---
+  p_combined <- (p_main / p_bar) + plot_layout(heights = c(3, 1))  
+  
   out_path <- file.path(frame_dir, sprintf("round_%03d.png", r))
-  ggsave(out_path, p, width = 10, height = 4, dpi = 150)
+  ggsave(out_path, p_combined, width = 140, height = 100, units = "mm", dpi = 150)
   out_path
 })
 
