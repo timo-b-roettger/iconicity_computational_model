@@ -6,6 +6,8 @@ library(patchwork)  # combining plots
 library(broom)      # for regression analysis
 library(ggdist)     # for plotting
 library(ggside) # for plotting densities on y-axis
+library(furrr)  # for parallelizing loop in grid search
+library(magick) # for stitching a GIF together
 
 # HELPER FUNCTIONS CALLED IN SIMULATION LOOP
 clamp01 <- function(x) pmax(0, pmin(1, x))
@@ -196,12 +198,10 @@ run_interaction_sim <- function(
       # expressive_A <- runif(1) < expressive_prob
       # expressive_B <- runif(1) < expressive_prob
       
-      # draw independent initial recognition guesses for each agent from Beta(3, 9)
       agentA_guess <- rbeta(n_referents, 3, 9)
       agentB_guess <- rbeta(n_referents, 3, 9)
       
       for (round in 1:n_rounds) {
-        # randomize referent order and randomly pair speaker/listener roles for each trial
         referent_order <- sample(1:n_referents)
         roles <- sample(rep(c("A", "B"), length.out = n_referents))
         
@@ -211,7 +211,6 @@ run_interaction_sim <- function(
           speaker <- roles[trial]
           listener <- ifelse(speaker == "A", "B", "A")
           
-          # identify current speaker and listener guess vectors
           if (speaker == "A") {
             speaker_guess <- agentA_guess
             listener_guess <- agentB_guess
@@ -220,14 +219,12 @@ run_interaction_sim <- function(
             listener_guess <- agentA_guess
           }
           
-          # save pre-trial state for logging and speaker signal lookup
           old_guess_A <- agentA_guess[ref_id]
           old_guess_B <- agentB_guess[ref_id]
           old_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
           old_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
           old_stored_signal <- if (speaker == "A") old_stored_signal_A else old_stored_signal_B
           
-          # standard signal production based on speaker's individual stored signal and guess
           production_output <- produce_signal(
             stored_signal = old_stored_signal,
             speaker_guess = speaker_guess[ref_id],
@@ -253,7 +250,6 @@ run_interaction_sim <- function(
             target_center <- referents_info$size_prototypes[[ref_id]]
             signal <- clamp01(rnorm(2, mean = target_center, sd = expressive_noise_sd))
             
-            # measure distance to nearest attractor for expressive signal
             distances <- sapply(attractor_centers, function(center) sqrt(sum((signal - center)^2)))
             dist_to_nearest <- min(distances)
             nearest_id <- which.min(distances)
@@ -266,7 +262,6 @@ run_interaction_sim <- function(
             attractor_id    <- production_output$attractor_id
           }
           
-          # listener recognition probability given their own guess
           recognition <- listener_guess_probability(
             listener_guess[ref_id],
             signal,
@@ -276,18 +271,15 @@ run_interaction_sim <- function(
             k_perception = k_perception,
             circle_radius = circle_radius)
           
-          # sample binary success/failure outcome (Bernoulli trial)
           prob <- recognition$probs
           success <- rbinom(1, 1, prob)
           
-          # update the listener's guess based on trial outcome
           if (listener == "A") {
             agentA_guess[ref_id] <- update_logit(prob, learning_strength, success, success_scale, failure_scale)
           } else {
             agentB_guess[ref_id] <- update_logit(prob, learning_strength, success, success_scale, failure_scale)
           }
           
-          # update shared stored signal for both agents on successful trials
           if (success == 1) {
             referents_info$agentA_stored_signal[[ref_id]] <- 
               (signal + referents_info$agentA_stored_signal[[ref_id]]) / 2
@@ -295,13 +287,11 @@ run_interaction_sim <- function(
               (signal + referents_info$agentB_stored_signal[[ref_id]]) / 2
           }
           
-          # extract post-trial states for logging
           new_guess_A <- agentA_guess[ref_id]
           new_guess_B <- agentB_guess[ref_id]
           new_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
           new_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
           
-          # evaluate attractor properties for log entries
           has_semantic <- !is.na(attractor_id) && is_semantic_attractor[attractor_id]
           log_is_semantic <- if (is.na(attractor_id)) FALSE else is_semantic_attractor[attractor_id]
           is_correct_semantic_attractor <- if (has_semantic) {
@@ -1123,7 +1113,10 @@ signal_space_map <-
     model_type, 
     levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
     labels = c("baseline", "expressive agents", "recognition bias", "recognition bias and expressive agents"),
-    ordered = TRUE)) |> 
+    ordered = TRUE),
+    produced_signal_x = sapply(produced_signal, function(x) x[1]),
+    produced_signal_y = sapply(produced_signal, function(x) x[2])
+  ) |> 
   filter(type == "small") |> 
   mutate(bins = cut(round, 
                     breaks = seq(0, 50, by = 10),
@@ -1149,7 +1142,7 @@ signal_space_map <-
     
     # Step B: Map those colors to specific numeric points along the data range
     # Rescale your target numbers between 0.0 (min) and 1.0 (max)
-    values = scales::rescale(c(0.0, 0.2, 1.0)),
+    values = scales::rescale(c(0.0, 0.1, 1.0)),
     
     # Step C: Customize the legend appearance
     #guide = guide_colorbar(barwidth = 1, barheight = 15)
@@ -1187,6 +1180,7 @@ signal_space_map <-
     axis.ticks = element_blank(),
     panel.grid.minor = element_blank(),
     axis.text = element_blank(),
+    strip.text.x = element_text(size = 8),
     strip.text.y = element_text(angle = 0),
     plot.title = element_text(face = "bold")
   ) 
@@ -1195,8 +1189,90 @@ ggsave("figures/signal_space_map.png",
        signal_space_map,
        device = "png",
        bg = "white",
-       width = 140, 
-       height = 180, 
+       width = 110, 
+       height = 150, 
        units = "mm", 
        dpi = 300) 
+
+
+ # take last plot and create a GIF
+# --- prep data once, outside the loop ---
+signal_space_data <- d_signal |>
+  mutate(
+    model_type = factor(
+      model_type,
+      levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
+      labels = c("baseline", "expressive agents", "recognition bias", "recognition bias and expressive agents"),
+      ordered = TRUE
+    ),
+    produced_signal_x = sapply(produced_signal, function(x) x[1]),
+    produced_signal_y = sapply(produced_signal, function(x) x[2])
+  ) |>
+  filter(type == "small")
+
+# --- set up output directory for frames ---
+frame_dir <- here::here("figures","gif_frames")
+dir.create(frame_dir, showWarnings = FALSE)
+
+# --- get sorted unique rounds ---
+rounds <- sort(unique(signal_space_data$round))
+
+# --- loop: one png per round ---
+frame_paths <- map_chr(rounds, function(r) {
+  
+  p <- signal_space_data |>
+    filter(round == r) |>
+    ggplot(aes(x = produced_signal_x, y = produced_signal_y)) +
+    stat_binhex() +
+    scale_fill_gradientn(
+      colors = c("#f7f7f7", "#fe9e2a", "#d7191c"),
+      values = scales::rescale(c(0.0, 0.2, 1.0)),
+      limits = c(0, NA)  # keep fill scale comparable across frames; adjust as needed
+    ) +
+    theme_minimal() +
+    labs(
+      title = "The evolution of the signal\nfor small referents over time",
+      subtitle = paste("Round:", r),
+      x = "",
+      y = "",
+      fill = "Count"
+    ) +
+    facet_grid(~model_type) +
+    scale_x_continuous(limits = c(0, 1),
+                       breaks = seq(0, 1, 1/3),
+                       labels = c(0, "1/3", "2/3", 1)) +
+    scale_y_continuous(limits = c(0, 1),
+                       breaks = seq(0, 1, 1/3),
+                       labels = c(0, "1/3", "2/3", 1)) +
+    timo_theme +
+    theme(
+      legend.position = "none",
+      axis.line = element_blank(),
+      axis.ticks = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.text = element_blank(),
+      strip.text.y = element_text(angle = 0),
+      plot.title = element_text(face = "bold")
+    )
+  
+  out_path <- file.path(frame_dir, sprintf("round_%03d.png", r))
+  ggsave(out_path, p, width = 10, height = 4, dpi = 150)
+  out_path
+})
+
+# control speed
+n <- length(frame_paths)
+
+# --- build a graduated delay vector (in centiseconds, i.e. 1/100 sec) ---
+# start fast, end slow -- tune these bounds to taste
+delay_vector <- round(seq(10, 50, length.out = n))  # 10 = fast (0.1s/frame), 50 = slow (0.5s/frame)
+
+# --- hold the very last frame for 10 seconds ---
+delay_vector[n] <- 1000  # 1000 centiseconds = 10 seconds
+
+# --- read all frames and animate with the explicit delay vector ---
+imgs <- image_read(frame_paths)
+gif <- image_animate(imgs, delay = delay_vector, loop = 0)
+
+image_write(gif, here::here("figures","signal_space_evolution.gif"), format = "gif")
 
