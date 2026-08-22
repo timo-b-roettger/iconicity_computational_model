@@ -1130,8 +1130,8 @@ signal_space_map <-
   d_signal  |>
   mutate(model_type = factor(
     model_type, 
-    levels = c("baseline", "expressiveAgents", "recognitionBias", "recognitionBias_expressiveAgents"),
-    labels = c("baseline", "expressive agents", "recognition bias", "recognition bias and expressive agents"),
+    levels = c("baseline", "expressiveAgents", "recognitionBias"),
+    labels = c("baseline", "expressive agents", "recognition bias"),
     ordered = TRUE),
     produced_signal_x = sapply(produced_signal, function(x) x[1]),
     produced_signal_y = sapply(produced_signal, function(x) x[2])
@@ -1214,8 +1214,7 @@ ggsave("figures/signal_space_map.png",
        dpi = 300) 
 
 
-
-
+## GIF ----
 # take last plot and create a GIF and track proportions as bar plot underneath
 
 # --- define the four attractor centers and shared radius ---
@@ -1240,7 +1239,7 @@ signal_space_data <- d_signal |>
   ) |>
   filter(type == "small")
 
-# --- helper: compute proportion of points within each attractor circle ---
+# --- helper: compute proportion of points within each attractor circle 
 # for a given round's data, grouped by model_type
 compute_attractor_props <- function(round_data) {
   round_data |>
@@ -1274,6 +1273,10 @@ all_props <- map_dfr(rounds, function(r) {
 })
 barplot_ymax <- max(all_props$prop) * 1.1
 
+my_colors <- c("distractor-A" = "grey",
+               "iconic" = "#d7191c", 
+               "anti-iconic" = "#1A9494", 
+               "distractor-B" = "grey")
 
 # --- loop: one png per round ---
 frame_paths <- map_chr(rounds, function(r) {
@@ -1319,19 +1322,27 @@ frame_paths <- map_chr(rounds, function(r) {
     ggplot(aes(x = target_attractor_id, y = prop, fill = target_attractor_id)) +
     geom_col(width = 0.7) +
     geom_text(aes(label = scales::percent(prop, accuracy = 1)),
-              vjust = -0.3, size = 2.8) +
-    scale_y_continuous(limits = c(0, barplot_ymax),
+              hjust = -0.3, size = 2.8) +
+    coord_flip() +
+    scale_y_continuous(limits = c(0, barplot_ymax+0.1),
                        labels = scales::percent_format(accuracy = 1)) +
-    scale_fill_brewer(palette = "Set2") +
+    scale_fill_manual(values = my_colors) +
     facet_grid(~model_type) +
-    labs(x = NULL, y = "% signals\nin attractor") +
+    labs(x = NULL, y = NULL) +
     theme_minimal() +
     theme(
       legend.position = "none",
       strip.text = element_blank(),   # avoid repeating model_type labels twice
-      axis.text.x = element_text(size = 7, angle = 30, hjust = 1),
+      axis.text.y = element_text(size = 7, hjust = 1),
+      axis.text.x = element_blank(),
       panel.grid.minor = element_blank()
     )
+  
+  p_main <- p_main +
+    theme(plot.margin = margin(t = 5, r = 5, b = 0, l = 5))  # b = 0 removes bottom gap
+  
+  p_bar <- p_bar +
+    theme(plot.margin = margin(t = 0, r = 5, b = 5, l = 5))  # t = 0 removes top gap
   
   # --- stack main plot on top of barplot ---
   p_combined <- (p_main / p_bar) + plot_layout(heights = c(3, 1))  
@@ -1357,3 +1368,147 @@ gif <- image_animate(imgs, delay = delay_vector, loop = 0)
 
 image_write(gif, here::here("figures","signal_space_evolution.gif"), format = "gif")
 
+
+#---- # double facet version
+  
+  # --- define attractor centers, now type-specific since "iconic" flips position by referent type ---
+  attractors_by_type <- tribble(
+    ~type,    ~target_attractor_id, ~target_attractor_x, ~target_attractor_y,
+    "small",  "distractor-A",        0.15,                0.15,
+    "small",  "iconic",              0.15,                0.85,
+    "small",  "anti-iconic",         0.85,                0.15,
+    "small",  "distractor-B",        0.85,                0.85,
+    "large",  "distractor-A",        0.15,                0.15,
+    "large",  "iconic",              0.85,                0.15,
+    "large",  "anti-iconic",         0.15,                0.85,
+    "large",  "distractor-B",        0.85,                0.85
+  )
+radius <- 0.3
+
+# --- prep data once, outside the loop (dropped the type filter, added type factor) ---
+signal_space_data <- d_signal |>
+  mutate(
+    model_type = factor(
+      model_type,
+      levels = c("baseline", "expressiveAgents", "recognitionBias"),
+      labels = c("baseline", "expressive agents", "recognition bias"),
+      ordered = TRUE
+    ),
+    type = factor(type, levels = c("small", "large"), ordered = TRUE),  # small = top row, large = bottom row
+    produced_signal_x = sapply(produced_signal, function(x) x[1]),
+    produced_signal_y = sapply(produced_signal, function(x) x[2])
+  )
+
+# --- helper: compute proportion of points within each attractor circle, now joined by type ---
+compute_attractor_props <- function(round_data) {
+  round_data |>
+    left_join(attractors_by_type, by = "type", relationship = "many-to-many") |>
+    mutate(
+      dist = sqrt((produced_signal_x - target_attractor_x)^2 + (produced_signal_y - target_attractor_y)^2),
+      in_attractor = dist <= radius
+    ) |>
+    group_by(model_type, target_attractor_id) |>
+    summarise(
+      n_total = n(),
+      n_in    = sum(in_attractor),
+      prop    = n_in / n_total,
+      .groups = "drop"
+    ) |>
+    mutate(label = scales::percent(prop, accuracy = 1))
+}
+
+# --- output directory ---
+frame_dir <- here::here("figures", "gif_frames")
+dir.create(frame_dir, showWarnings = FALSE)
+
+rounds <- sort(unique(signal_space_data$round))
+
+# --- shared y-axis max for barplot across all rounds ---
+all_props <- map_dfr(rounds, function(r) {
+  compute_attractor_props(signal_space_data |> filter(round == r)) |> mutate(round = r)
+})
+barplot_ymax <- max(all_props$prop) * 1.1
+
+my_colors <- c("distractor-A" = "grey",
+               "iconic"       = "#d7191c",
+               "anti-iconic"  = "#1A9494",
+               "distractor-B" = "grey")
+
+# --- loop: one png per round ---
+frame_paths <- map_chr(rounds, function(r) {
+  
+  round_data <- signal_space_data |> filter(round == r)
+  attractor_props <- compute_attractor_props(round_data)
+  
+  # --- main hexbin map, now faceted by type (rows) x model_type (columns) ---
+  p_main <- round_data |>
+    ggplot(aes(x = produced_signal_x, y = produced_signal_y)) +
+    stat_binhex() +
+    scale_fill_gradientn(
+      colors = c("#f7f7f7", "#fe9e2a", "#d7191c"),
+      values = scales::rescale(c(0.0, 0.2, 1.0)),
+      limits = c(0, NA)
+    ) +
+    theme_minimal() +
+    labs(
+      title = "The evolution of the signal over time",
+      subtitle = paste("Round:", r),
+      x = "", y = "", fill = "Count"
+    ) +
+    facet_grid(type ~ model_type) +
+    scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 1/3),
+                       labels = c(0, "1/3", "2/3", 1)) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 1/3),
+                       labels = c(0, "1/3", "2/3", 1)) +
+    timo_theme +
+    theme(
+      legend.position = "none",
+      axis.line = element_blank(),
+      axis.ticks = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.text = element_blank(),
+      strip.text.y = element_text(angle = 0),
+      plot.title = element_text(face = "bold")
+    )
+  
+  # --- barplot underneath, also faceted by type x model_type ---
+  p_bar <- attractor_props |>
+    ggplot(aes(x = target_attractor_id, y = prop, fill = target_attractor_id)) +
+    geom_col(width = 0.7) +
+    geom_text(aes(label = scales::percent(prop, accuracy = 1)),
+              hjust = -0.3, size = 2.8) +
+    coord_flip() +
+    scale_y_continuous(limits = c(0, barplot_ymax + 0.1),
+                       labels = scales::percent_format(accuracy = 1)) +
+    scale_fill_manual(values = my_colors) +
+    facet_grid(~model_type) +               # back to one row, matching p_main's columns only
+    labs(x = NULL, y = NULL) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      strip.text = element_blank(),
+      axis.text.y = element_text(size = 7, hjust = 1),
+      axis.text.x = element_blank(),
+      panel.grid.minor = element_blank()
+    )
+  
+  p_main <- p_main + theme(plot.margin = margin(t = 5, r = 5, b = 0, l = 5))
+  p_bar  <- p_bar  + theme(plot.margin = margin(t = 0, r = 5, b = 5, l = 5))
+  
+  p_combined <- (p_main / p_bar) + plot_layout(heights = c(3, 1))  # back to original ratio
+  
+  out_path <- file.path(frame_dir, sprintf("round_%03d.png", r))
+  ggsave(out_path, p_combined, width = 140, height = 130, units = "mm", dpi = 150)  
+  
+  out_path
+})
+
+# --- gif stitching (unchanged) ---
+n <- length(frame_paths)
+delay_vector <- round(seq(10, 50, length.out = n))
+delay_vector[n] <- 1000
+
+imgs <- image_read(frame_paths)
+gif <- image_animate(imgs, delay = delay_vector, loop = 0)
+
+image_write(gif, here::here("figures", "signal_space_evolution.gif"), format = "gif")
