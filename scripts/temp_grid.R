@@ -346,7 +346,7 @@ empty_df <- data.frame(
 # Shared "nuisance" grid, coarse, reused for both mechanisms
 d.nuisance_grid <- expand.grid(
   drift_sd          = c(0.125, 0.200, 0.275), #= seq(0.05, 0.35, length.out = 5),
-  learning_strength = c(0, 0.018, 0.036, 0.054, 0.072, 0.090), # seq(0, 0.05, length.out = 5),
+  learning_strength = c(0.015, 0.030, 0.045, 0.060, 0.075, 0.090), # seq(0, 0.05, length.out = 5),
   circle_radius     = seq(0.15, 0.4, length.out = 3), 
   center_sd_ratio   = c(0.2, 0.4, 0.6)) %>%
   mutate(center_sd = circle_radius * center_sd_ratio)
@@ -396,7 +396,7 @@ if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
 if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
   
   d.grid.expressiveAgents <- d.nuisance_grid %>%
-    tidyr::crossing(expressive_probability = seq(0.02, 0.20, by = 0.02)) %>%
+    tidyr::crossing(expressive_probability = seq(0.02, 0.22, by = 0.04)) %>%
     mutate(iconicity = NA_real_, history = vector("list", n()))
   
   for (i in seq_len(nrow(d.grid.expressiveAgents))) {
