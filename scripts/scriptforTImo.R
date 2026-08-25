@@ -132,7 +132,7 @@ run_interaction_sim <- function(
     n_rounds = 50,
     # motor/production noise; equivalent to approx. 48% chance of wandering into any attractor in a single production step
     # when the signal is at .5, .5 and speaker_guess = 0.5
-    drift_sd = 0.19,
+    drift_sd = 0.2,
     k_attractor_production = 2.5,
     neutral_attractor_centers = list(c(0.15, 0.15), c(0.85, 0.85)),
     # set as a plausible basin size relative to the unit signal space (not independently calibrated ag a spec target)
@@ -514,13 +514,13 @@ d.simulation.trajectories %>%
   summarise(across(starts_with("latency_"), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
 
 # plot iconicity
-d.iconicity <- d.simulation |> 
+d.iconicity <- d.simulation.500rounds |> 
   mutate(model_type = factor(
     model_type, 
-    levels = c("baseline", "expressiveAgents", "recognitionBias"),
-    labels = c("baseline", "expressive agents", "recognition bias"),
+    levels = c("baseline", "recognitionBias", "expressiveAgents"),
+    labels = c("baseline", "recognition bias", "expressive agents"),
     ordered = TRUE),
-    total_round = (generation - 1) * 50 + round,
+    total_round = (generation - 1) * 500 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
   summarise(
@@ -565,7 +565,7 @@ timo_theme <- theme_classic() +
                                     color = "#555555"),
         axis.line = element_line(color = "#555555"),
         axis.ticks = element_line(color = "#555555"),
-        axis.text = element_text(size = 12,
+        axis.text = element_text(size = 9,
                                  color = "#555555"),
         plot.margin = unit(c(0.5,0.5,0.5,0.5),
                            "cm"))
@@ -594,8 +594,8 @@ average_iconicity_interactions_long <-
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-0.6,0.8), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 25),
-                     labels = seq(0, max(d.iconicity$total_round), by = 25)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 100),
+                     labels = seq(0, max(d.iconicity$total_round), by = 100)) +
   guides(x = guide_axis(cap = "both"),
          y = guide_axis(cap = "both")) +
   labs(title = "Iconicity evolves via both expressive\nspeakers and recognition bias",
@@ -646,8 +646,8 @@ average_iconicity_interactions_wide <-
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-0.6,0.8), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 25),
-                     labels = seq(0, max(d.iconicity$total_round), by = 25)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 100),
+                     labels = seq(0, max(d.iconicity$total_round), by = 100)) +
   guides(x = guide_axis(cap = "both"),
          y = guide_axis(cap = "both")) +
   labs(title = "Iconicity evolves via both expressive\nspeakers and recognition bias",
@@ -1130,8 +1130,8 @@ signal_space_map <-
   d_signal  |>
   mutate(model_type = factor(
     model_type, 
-    levels = c("baseline", "expressiveAgents", "recognitionBias"),
-    labels = c("baseline", "expressive agents", "recognition bias"),
+    levels = c("baseline", "recognitionBias", "expressiveAgents"),
+    labels = c("baseline", "recognition bias", "expressive agents"),
     ordered = TRUE),
     produced_signal_x = sapply(produced_signal, function(x) x[1]),
     produced_signal_y = sapply(produced_signal, function(x) x[2])
