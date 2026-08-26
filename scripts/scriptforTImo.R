@@ -159,8 +159,8 @@ run_interaction_sim <- function(
     # expressive_prob_per_agent = 0.10, # per-generation probability an agent is expressive
     # expressive_trial_prob = 0.20,     # per-trial probability of override, conditional on being that type
     # --- simplified single-parameter version ---
-    # flat per-trial probability of an expressive override, no agent-level persistence
-    expressive_probability = 0.1
+    # flat per-trial probability of an expressive override, no agent-level persistence; 1 expressive signal in 40 interactions
+    expressive_probability = 0.025
 ) {
   
   referents_blueprint <- tibble(
@@ -343,35 +343,34 @@ d.empty <- data.frame(
 # set.seed(2534)
 # d.simulation <- rbind(
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
 #     mutate(model_type = "baseline"),
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
 #     mutate(model_type = "expressiveAgents"),
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 50, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
-#     mutate(model_type = "recognitionBias")) %>%
-#   # split signal cols for easier processing and saving
-#   mutate(
-#     produced_signal_x = map_dbl(produced_signal, 1),
-#     produced_signal_y = map_dbl(produced_signal, 2),
-#     old_stored_signal_A_x = map_dbl(old_stored_signal_A, 1),
-#     old_stored_signal_A_y = map_dbl(old_stored_signal_A, 2),
-#     old_stored_signal_B_x = map_dbl(old_stored_signal_B, 1),
-#     old_stored_signal_B_y = map_dbl(old_stored_signal_B, 2),
-#     new_stored_signal_A_x = map_dbl(new_stored_signal_A, 1),
-#     new_stored_signal_A_y = map_dbl(new_stored_signal_A, 2),
-#     new_stored_signal_B_x = map_dbl(new_stored_signal_B, 1),
-#     new_stored_signal_B_y = map_dbl(new_stored_signal_B, 2)) %>%
-#   select(-produced_signal, -old_stored_signal_A, -old_stored_signal_B,
-#          -new_stored_signal_A, -new_stored_signal_B)
+#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
+#     mutate(model_type = "recognitionBias"))
 
 # # save simulation data
-# write_csv(d.simulation, "scripts/temp_data/temp_data.csv")
+# saveRDS(d.simulation, file = "scripts/temp_data/d_simulation.rds", compress = TRUE)
 
 # use "git lfs pull" in terminal to pull large data files
-#d.simulation <- read_csv("scripts/temp_data/temp_data.csv")
-d.simulation <- readRDS("scripts/temp_data/d_simulation.rds")
+d.simulation <- readRDS("scripts/temp_data/d_simulation.rds") %>%
+  # split signal cols for easier processing
+  mutate(
+    produced_signal_x = map_dbl(produced_signal, 1),
+    produced_signal_y = map_dbl(produced_signal, 2),
+    old_stored_signal_A_x = map_dbl(old_stored_signal_A, 1),
+    old_stored_signal_A_y = map_dbl(old_stored_signal_A, 2),
+    old_stored_signal_B_x = map_dbl(old_stored_signal_B, 1),
+    old_stored_signal_B_y = map_dbl(old_stored_signal_B, 2),
+    new_stored_signal_A_x = map_dbl(new_stored_signal_A, 1),
+    new_stored_signal_A_y = map_dbl(new_stored_signal_A, 2),
+    new_stored_signal_B_x = map_dbl(new_stored_signal_B, 1),
+    new_stored_signal_B_y = map_dbl(new_stored_signal_B, 2)) %>%
+  select(-produced_signal, -old_stored_signal_A, -old_stored_signal_B,
+         -new_stored_signal_A, -new_stored_signal_B)
 
 
 # EVALUATE ICONICITY----
