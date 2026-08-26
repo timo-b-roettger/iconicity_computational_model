@@ -325,7 +325,7 @@ The iconicity recognition bias is governed by two parameters: signal evidence an
 
 ## Grid searches through the parameter space
 
-We conducted several grid searches of the parameter space to explore different combination of parameter values and their effect on the resulting iconicity. The initial grid searches explored larger ranges of parameter values but smaller number of simulations per parameter combination (n_sim = 20). The grid searches reported here focused on a smaller, more targeted range of values, but with larger number of simulations per combination (n_sim = 100). Recognition bias and expressive probability were fit as separate grids but shared values for the other parameters. The following parameter values were explored: circle_radius = 0.275, 0.4; drift_sd = 0.125, 0.2, 0.275; center_sd = 0.03, 0.11, 0.24; learning_strength = 0, 0.018, 0.036, 0.054, 0.072, 0.09; iconicity_weight = 0, 0.429, 0.8571, 1.286, 1.714, 2.143, 2.571, 3, 3.429, 3.857, 4.286, 4.714, 5.143, 5.571, 6; expressive_probability = 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2.
+We conducted several grid searches of the parameter space to explore different combination of parameter values and their effect on the resulting iconicity. The initial grid searches explored larger ranges of parameter values but smaller number of simulations per parameter combination (n_sim = 20). The grid searches reported here focused on a smaller, more targeted range of values, but with larger number of simulations per combination (n_sim = 100). Recognition bias and expressive probability were fit as separate grids but shared values for the other parameters. The following parameter values were explored: drift_sd = 0.05, 0.1, 0.2; center_sd = 0.06, 0.12, 0.24; learning_strength = 0.015, 0.03, 0.06; iconicity_weight = 1.5, 3, 6; expressive_probability = 0.01, 0.025, 0.05.
 
 ```{r}
 # GRID SEARCHES
@@ -333,7 +333,7 @@ RESET_MODELS <- FALSE  # set TRUE to force a rerun
 
 plan(multisession, workers = parallel::detectCores() - 1)
 
-N_ROUNDS <- 50
+N_ROUNDS <- 300
 
 empty_df <- data.frame(
   sim = integer(), gen = integer(), round = integer(), trial = integer(),
@@ -351,11 +351,10 @@ empty_df <- data.frame(
 
 # Shared "nuisance" grid, coarse, reused for both mechanisms
 d.nuisance_grid <- expand.grid(
-  drift_sd          = c(0.125, 0.200, 0.275), #= seq(0.05, 0.35, length.out = 5),
-  learning_strength = c(0, 0.018, 0.036, 0.054, 0.072, 0.090), # seq(0, 0.05, length.out = 5),
-  circle_radius     = seq(0.15, 0.4, length.out = 3), 
-  center_sd_ratio   = c(0.2, 0.4, 0.6)) %>%
-  mutate(center_sd = circle_radius * center_sd_ratio)
+  drift_sd          = c(0.05, 0.1, 0.2),
+  learning_strength = c(0.015, 0.03, 0.06),
+  circle_radius     = 0.3, 
+  center_sd   = c(0.06, 0.12, 0.24))
 
 compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
   d.iconicity <- history %>%
@@ -372,11 +371,37 @@ compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
     pull(mean_iconicity)
 }
 
-## GRID 1: recognitionBias
+## GRID 1: baseline
+if (RESET_MODELS || !file.exists("models/grid-search-baseline.rds")) {
+  
+  d.grid.baseline <- d.nuisance_grid %>%
+    mutate(iconicity = NA_real_, history = vector("list", n()))
+  
+  for (i in seq_len(nrow(d.grid.baseline))) {
+    p <- d.grid.baseline[i, ]
+    history <- run_interaction_sim(
+      data = empty_df, n_sim = 100, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
+      drift_sd = p$drift_sd, learning_strength = p$learning_strength,
+      recognition_bias = FALSE, iconicity_weight = 0,
+      circle_radius = p$circle_radius, trap_center_sd = p$center_sd,
+      expressive_agents = FALSE,
+      success_scale = 7.5, failure_scale = 1
+    )
+    d.grid.baseline$history[[i]] <- history
+    d.grid.baseline$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
+    if (i %% 50 == 0) message("baseline: ", i, " / ", nrow(d.grid.baseline))
+  }
+  saveRDS(d.grid.baseline, "models/grid-search-baseline.rds", compress = TRUE)
+} else {
+  d.grid.baseline <- readRDS("models/grid-search-baseline.rds")
+}
+
+
+## GRID 2: recognitionBias
 if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
   
   d.grid.recognitionBias <- d.nuisance_grid %>%
-    tidyr::crossing(iconicity_weight = seq(0, 6, length.out = 15)) %>% #seq(0, 0.8, length.out = 10)
+    tidyr::crossing(iconicity_weight = c(1.5, 3, 6)) %>%
     mutate(iconicity = NA_real_, history = vector("list", n()))
   
   for (i in seq_len(nrow(d.grid.recognitionBias))) {
@@ -398,17 +423,17 @@ if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
   d.grid.recognitionBias <- readRDS("models/grid-search-recognitionBias.rds")
 }
 
-## GRID 2: expressiveAgents
+## GRID 3: expressiveAgents
 if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
   
   d.grid.expressiveAgents <- d.nuisance_grid %>%
-    tidyr::crossing(expressive_probability = seq(0.02, 0.20, by = 0.02)) %>%
+    tidyr::crossing(expressive_probability = c(0.01, 0.025, 0.05)) %>%
     mutate(iconicity = NA_real_, history = vector("list", n()))
   
   for (i in seq_len(nrow(d.grid.expressiveAgents))) {
     p <- d.grid.expressiveAgents[i, ]
     history <- run_interaction_sim(
-      data = empty_df, n_sim = 20, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
+      data = empty_df, n_sim = 100, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
       drift_sd = p$drift_sd, learning_strength = p$learning_strength,
       recognition_bias = FALSE, iconicity_weight = 0,
       circle_radius = p$circle_radius, trap_center_sd = p$center_sd,
@@ -491,7 +516,62 @@ p.expressiveAgents <- plot_grid_faceted(d.grid.expressiveAgents, "expressive_pro
 ```
 
 ```{r}
-# Metric for evaluating parameter combinations; identify the proportion of stored signals within the iconic category circle 
+# Metric to assess parameter combinations
+# Calculate the baseline proportion of iconic signals; in baseline model
+d.baseline.proportion <- d.grid.baseline %>%
+  mutate(
+    history = map(history, function(sim_df) {
+      sim_df %>%
+        group_by(simulation) %>%
+        # select only the 10 final rounds per sim
+        slice_max(order_by = trial_counter, n = 10, with_ties = FALSE) %>%
+        ungroup()
+    }),
+    # proportion of signals in correct semantic attractor during the 10 final rounds
+    prop_correct = map_dbl(history, function(sim_df) {
+      mean(sim_df$is_correct_semantic_attractor == TRUE, na.rm = TRUE)
+    })
+  ) %>%
+  summarise(overall_baseline_prop = mean(prop_correct, na.rm = TRUE)) %>%
+  pull(overall_baseline_prop)
+
+# function to evaluate models against this baseline
+evaluate_against_baseline <- function(grid_df, benchmark = baseline_benchmark, n_trials = 10, threshold = 0.95) {
+  grid_df %>%
+    mutate(
+      # calculate final 10 trials proportion for each sim
+      sim_proportions = map(history, function(sim_df) {
+        sim_df %>%
+          group_by(simulation) %>%
+          slice_max(order_by = trial_counter, n = n_trials, with_ties = FALSE) %>%
+          summarise(
+            sim_prop = mean(is_correct_semantic_attractor == TRUE, na.rm = TRUE),
+            .groups = "drop"
+          )
+      }),
+      # add info on proportion of simulations in a given parameter combination that exceed baseline benchmark
+      prop_sims_above_baseline = map_dbl(sim_proportions, function(df) {
+        mean(df$sim_prop > benchmark, na.rm = TRUE)
+      }),
+      
+      # set to TRUE if >= 95% of simulations are above baseline
+      meets_95_criterion = prop_sims_above_baseline >= threshold
+    )
+}
+
+# call function to evaluate grids
+d.recognitionBias.eval  <- evaluate_against_baseline(d.grid.recognitionBias)
+d.expressiveAgents.eval <- evaluate_against_baseline(d.grid.expressiveAgents)
+
+# filter parameter combinations where 95%+ of simulations beat the baseline benchmark
+winning_recognition_params <- d.recognitionBias.eval %>%
+  filter(meets_95_criterion == TRUE)
+
+```
+
+
+```{r}
+# Another metric for evaluating parameter combinations; identify the proportion of stored signals within the iconic category circle 
 # in the last 5 interactions
 d.grid.eval.Bias <- d.grid.recognitionBias %>%
   select(-center_sd_ratio) %>%
