@@ -159,7 +159,7 @@ run_interaction_sim <- function(
     # expressive_trial_prob = 0.20,     # per-trial probability of override, conditional on being that type
     # --- simplified single-parameter version ---
     # flat per-trial probability of an expressive override, no agent-level persistence
-    expressive_probability = 0.1
+    expressive_probability = 0.025
 ) {
   
   referents_blueprint <- tibble(
@@ -327,7 +327,7 @@ run_interaction_sim <- function(
 
 plan(multisession, workers = parallel::detectCores() - 1)
 
-N_ROUNDS <- 50
+N_ROUNDS <- 300
 
 empty_df <- data.frame(
   sim = integer(), gen = integer(), round = integer(), trial = integer(),
@@ -345,11 +345,10 @@ empty_df <- data.frame(
 
 # Shared "nuisance" grid, coarse, reused for both mechanisms
 d.nuisance_grid <- expand.grid(
-  drift_sd          = c(0.125, 0.200, 0.275), #= seq(0.05, 0.35, length.out = 5),
-  learning_strength = c(0.015, 0.030, 0.045, 0.060, 0.075, 0.090), # seq(0, 0.05, length.out = 5),
-  circle_radius     = seq(0.15, 0.4, length.out = 3), 
-  center_sd_ratio   = c(0.2, 0.4, 0.6)) %>%
-  mutate(center_sd = circle_radius * center_sd_ratio)
+  drift_sd = c(0.05, 0.1, 0.2), #= seq(0.05, 0.35, length.out = 5),
+  learning_strength = c(0.015, 0.03, 0.06), # seq(0, 0.05, length.out = 5),
+  circle_radius = 0.3, #seq(0.15, 0.4, length.out = 3), 
+  center_sd = c(0.06, 0.12, 0.24))
 
 compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
   d.iconicity <- history %>%
@@ -366,11 +365,35 @@ compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
     pull(mean_iconicity)
 }
 
+# for keeping all info around but average across sims
+#compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
+#  # 1. Compress agent history to one average per total_round
+#  d_trajectory <- history %>%
+#    mutate(total_round = (generation - 1) * n_rounds + round) %>%
+#    group_by(total_round) %>%
+#    summarise(evidence = mean(evidence, na.rm = TRUE), .groups = "drop")
+#  
+#  # 2. Compute threshold and calculate end-state iconicity
+#  max_round <- max(d_trajectory$total_round)
+#  threshold <- max_round * cutoff
+#  
+#  mean_iconicity <- d_trajectory %>%
+#    filter(total_round >= threshold) %>%
+#    summarise(val = mean(evidence, na.rm = TRUE)) %>%
+#    pull(val)
+#  
+#  # 3. Return both the final score and full trajectory
+#  list(
+#    mean_iconicity = mean_iconicity,
+#    trajectory = d_trajectory
+#  )
+#}
+
 ## GRID 1: recognitionBias
 if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
   
   d.grid.recognitionBias <- d.nuisance_grid %>%
-    tidyr::crossing(iconicity_weight = seq(0, 6, length.out = 15)) %>% #seq(0, 0.8, length.out = 10)
+    tidyr::crossing(iconicity_weight = c(1.5, 3, 6)) %>% #seq(0, 0.8, length.out = 10)
     mutate(iconicity = NA_real_, history = vector("list", n()))
   
   for (i in seq_len(nrow(d.grid.recognitionBias))) {
@@ -396,13 +419,13 @@ if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
 if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
   
   d.grid.expressiveAgents <- d.nuisance_grid %>%
-    tidyr::crossing(expressive_probability = seq(0.02, 0.22, by = 0.04)) %>%
+    tidyr::crossing(expressive_probability = c(0.01, 0.025, 0.05)) %>%
     mutate(iconicity = NA_real_, history = vector("list", n()))
   
   for (i in seq_len(nrow(d.grid.expressiveAgents))) {
     p <- d.grid.expressiveAgents[i, ]
     history <- run_interaction_sim(
-      data = empty_df, n_sim = 20, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
+      data = empty_df, n_sim = 100, n_referents = 4, n_generations = 1, n_rounds = N_ROUNDS,
       drift_sd = p$drift_sd, learning_strength = p$learning_strength,
       recognition_bias = FALSE, iconicity_weight = 0,
       circle_radius = p$circle_radius, trap_center_sd = p$center_sd,
