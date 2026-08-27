@@ -23,49 +23,327 @@ library(tidyr)
 library(future)
 ```
 
-### Attractor dimensions and mechanics: circle radius, sd of produced signal, sd of signal inside attractor
-
-The attractor dynamics is defined by three parameters: the circle radius, the standard deviation of the two-dimensional signal that is being produced, and the standard deviation of a signal once inside an attractor.
-
-```{r functions, echo=FALSE}
-# core helpers from main simulation function
+```{r main-sim-function}
+# TODO: add link to functions.R to read in main sim function
+# HELPER FUNCTIONS CALLED IN SIMULATION LOOP
 clamp01 <- function(x) pmax(0, pmin(1, x))
 clamp02 <- function(x) pmax(0, pmin(0.95, x))
 
-produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production,
-                           attractor_centers, circle_radius, center_sd,
-                           k_attractor_production) {
+normalize_01 <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
+# At signal production, amount of noise is dependent on guess rate AND distance to attractor centres
+# k controls how strongly sd react to speaker_guess; mindful that if p = 1 and k >2, it will return negative sd's
+produce_signal <- function(stored_signal, speaker_guess, drift_sd, k_production, 
+                           attractor_centers, circle_radius, center_sd, k_attractor_production) {
+  # Calculate baseline trial-specific SD based on speaker's guess
   baseline_sd <- drift_sd * (1 + k_production * (0.5 - speaker_guess))
+  # Dynamically calculate Euclidean distance to every defined attractor center
   distances <- sapply(attractor_centers, function(center) sqrt(sum((stored_signal - center)^2)))
   dist_to_nearest <- min(distances)
   nearest_id <- which.min(distances)
+  # Find if the signal is inside any attractor, and locate the closest one
   inside_attractor <- distances < circle_radius
   is_inside <- any(inside_attractor)
-  
+  # noise f(dist) is calibrated against the worst-case (most inflated) baseline_sd (for when speaker_guess = 0), so the attractor pull is guaranteed strong enough;
+  # keeping this noise a pure function of distance -- independent of guess on any given trial.
   max_possible_baseline_sd <- drift_sd * (1 + k_production * 0.5)
   f_dist_max <- max_possible_baseline_sd - center_sd
   attractor_reduction <- 0
   
   if (is_inside) {
+    # Target the closest attractor that the signal is currently inside
     closest_attractor_dist <- min(distances[inside_attractor])
     rel_dist <- closest_attractor_dist / circle_radius
+    # scale distance dynamically; as with signal evidence
     magnitude <- exp(-k_attractor_production * rel_dist)
     max_mag <- exp(-k_attractor_production * 0)
     min_mag <- exp(-k_attractor_production * 1)
     exp_scale <- (magnitude - min_mag) / (max_mag - min_mag)
+    # subtract for fixed base sd, keeping this independent from the noise dep on associative strength
     attractor_reduction <- f_dist_max * exp_scale
-  }
-  
+  } 
+  # floor at center_sd so that noise never drops below the attractor's minimum, regardless of speaker_guess. 
+  # Guess-dependence remains fully intact everywhere except at the exact center where center_sd is by definition
+  # the tightest the noise can ever get.
+  #final_sd <- max(baseline_sd - attractor_reduction, center_sd, 0.001)
   final_sd <- max(baseline_sd - attractor_reduction, 0.001)
-  signal <- rnorm(length(stored_signal), mean = stored_signal, sd = final_sd)
   
-  list(signal = clamp01(signal),
-       inside_attractor = is_inside,       # renamed to match main script
-       dist_to_nearest = dist_to_nearest,  # added, was missing
-       attractor_id = if (is_inside) nearest_id else NA_integer_)
+  # Generate the signal using the final calculated SD
+  signal <- rnorm(
+    length(stored_signal),
+    mean = stored_signal,
+    sd = final_sd)
+  
+  # Return both the produced signal and the boolean status flag
+  return(list(signal = clamp01(signal), 
+              inside_attractor = is_inside,
+              dist_to_nearest = dist_to_nearest,
+              attractor_id = if (is_inside) nearest_id else NA_integer_))
+}
+
+# Signal evidence for iconicity bias
+# Measures proximity of Y to its size prototype
+signal_evidence <- function(produced_signal, center_target, k_perception, circle_radius) {
+  # Calculate eucledian distance to target_center and to the opposite attractor
+  dist_to_target <- sqrt(sum((produced_signal - center_target)^2))
+  opposite_center <- c(1 - center_target[1], 1 - center_target[2])
+  dist_to_opposite <- sqrt(sum((produced_signal - opposite_center)^2))
+  # If signal is inside the circle, calculate evidence
+  if (dist_to_target < circle_radius) {
+    # Calculate distance to targer center from edge of attractor, independent of circle size; 0 at center, 1 at edge
+    rel_dist <- dist_to_target / circle_radius 
+    # as relative dist grows, magnitude shrinks as a function of k_perception
+    magnitude <- exp(-k_perception * rel_dist) 
+    # Simple normalization: center = 1, edge = 0
+    max_mag <- exp(-k_perception * 0)
+    min_mag <- exp(-k_perception * 1) 
+    evidence <- (magnitude - min_mag) / (max_mag - min_mag)
+    return(evidence)
+    # Punish anti-iconic behavior: if signal instead is inside the opposite attractor, return negative evidence of the same magnitude
+  } else if (dist_to_opposite < circle_radius) {
+    rel_dist <- dist_to_opposite / circle_radius
+    magnitude <- exp(-k_perception * rel_dist)
+    max_mag <- exp(-k_perception * 0)
+    min_mag <- exp(-k_perception * 1)
+    
+    evidence <- (magnitude - min_mag) / (max_mag - min_mag)
+    return(-evidence)
+    
+  } else {
+    return(0)
+  }
+}
+
+# LISTENER RECOGNITION PROBABILITY UPDATED
+listener_guess_probability <- function(listener_guess, produced_signal, size_prototypes,
+                                       recognition_bias, iconicity_weight, k_perception, circle_radius) {
+  icon_ev <- signal_evidence(produced_signal, size_prototypes, k_perception = k_perception, circle_radius = circle_radius)
+  effective_weight <- if (recognition_bias) iconicity_weight else 0
+  
+  # qlogis() is undefined at exactly 0 or 1 (-Inf/Inf), we clamp listener_guess minimally from those exact bounds before converting to 
+  # logits (listener_guess should already be within (0, 0.95) after update_logit() which applies 0.95 lapse-rate clamp, so this is 
+  # purely a numerical safety net, not where the lapse rate is enforced).
+  logit_guess <- qlogis(pmax(1e-9, pmin(1 - 1e-9, listener_guess)))
+  logits <- logit_guess + (effective_weight * icon_ev)
+  probs <- clamp02(plogis(logits))
+
+  return(list(probs = probs, evidence = icon_ev))
+}
+
+# Update learning as dependent on success
+update_logit <- function(x, learning_strength, success, success_scale, failure_scale) {
+  delta <- learning_strength * ifelse(success == 1, success_scale, failure_scale)
+  plogis(qlogis(clamp02(x)) + delta)
+}
+
+
+# MAIN SIM FUNCTION----
+run_interaction_sim <- function(
+    data,
+    n_sim = 1,
+    n_referents = 4,
+    n_generations = 1,
+    n_rounds = 50,
+    # motor/production noise; equivalent to approx. 48% chance of wandering into any attractor in a single production step
+    # when the signal is at .5, .5 and speaker_guess = 0.5
+    drift_sd = 0.2,
+    k_attractor_production = 2.5,
+    neutral_attractor_centers = list(c(0.15, 0.15), c(0.85, 0.85)),
+    # set as a plausible basin size relative to the unit signal space (not independently calibrated ag a spec target)
+    circle_radius = 0.3,
+    # sd at attractor centers; a signal at the exact centre has ~5% single-step escape probability from the attractor
+    # (ratio of 0.4 of circle_radius)
+    trap_center_sd = 0.12,
+    k_perception = 2.5,
+    recognition_bias = FALSE,
+    # multiplicator for iconicity; corresponding to ~10% absolute increase for a listener_guess of 0.5 
+    # (for the perfectly iconic signal; icon_ev = 1)
+    iconicity_weight = 3,
+    # amount of added memory strengthening per exposure, dependent on trial success/failure
+    learning_strength = 0.015,
+    # substantially faster learning for success than failure; from p=0.3, 10 pure-success updates reach ~0.57,
+    # 10 pure-failure reach ~0.33; no real referent is reinforced purely by success/failure since updates depend on
+    # current associative strength
+    success_scale = 7.5,
+    failure_scale = 1,
+    expressive_agents = TRUE,
+    # expressive productions land inside the target attractor w very high probability
+    expressive_noise_sd = circle_radius / 4.8,
+    # --- two-level hierarchical expressiveness (kept for generational-overturn work) ---
+    # expressive_prob_per_agent = 0.10, # per-generation probability an agent is expressive
+    # expressive_trial_prob = 0.20,     # per-trial probability of override, conditional on being that type
+    # --- simplified single-parameter version ---
+    # flat per-trial probability of an expressive override, no agent-level persistence; 1 expressive signal in 40 interactions
+    expressive_probability = 0.025
+) {
+  
+  referents_blueprint <- tibble(
+    id = seq_len(n_referents),
+    type = rep(c("small", "large"), length.out = n_referents),
+    size_prototypes = if_else(type == "small",
+                              list(c(0.15, 0.85)),
+                              list(c(0.85, 0.15))))
+  
+  semantic_attractor_centers <- unique(referents_blueprint$size_prototypes)
+  attractor_centers <- c(semantic_attractor_centers, neutral_attractor_centers)
+  is_semantic_attractor <- c(
+    rep(TRUE, length(semantic_attractor_centers)),
+    rep(FALSE, length(neutral_attractor_centers))
+  )
+  
+  # --- OLD: probability of expressive speakers (agent-level trait) ---
+  # expressive_prob <- if (expressive_agents) expressive_prob_per_agent else 0
+  # --- NEW: flat per-trial probability, no agent-level draw needed ---
+  trial_expressive_prob <- if (expressive_agents) expressive_probability else 0
+  
+  simulation_log <- list()
+  
+  for (sim in 1:n_sim) {
+    
+    referents_info <- referents_blueprint %>%
+      mutate(
+        agentA_stored_signal = rep(list(c(0.5, 0.5)), n_referents),
+        agentB_stored_signal = rep(list(c(0.5, 0.5)), n_referents))
+    
+    for (gen in 1:n_generations) {
+      trial_counter <- 0
+      
+      # --- agent-level expressive assignment, drawn once per generation ---
+      # expressive_A <- runif(1) < expressive_prob
+      # expressive_B <- runif(1) < expressive_prob
+      
+      agentA_guess <- rbeta(n_referents, 3, 9)
+      agentB_guess <- rbeta(n_referents, 3, 9)
+      
+      for (round in 1:n_rounds) {
+        referent_order <- sample(1:n_referents)
+        roles <- sample(rep(c("A", "B"), length.out = n_referents))
+        
+        for (trial in 1:n_referents) {
+          trial_counter <- trial_counter + 1
+          ref_id <- referent_order[trial]
+          speaker <- roles[trial]
+          listener <- ifelse(speaker == "A", "B", "A")
+          
+          if (speaker == "A") {
+            speaker_guess <- agentA_guess
+            listener_guess <- agentB_guess
+          } else {
+            speaker_guess <- agentB_guess
+            listener_guess <- agentA_guess
+          }
+          
+          old_guess_A <- agentA_guess[ref_id]
+          old_guess_B <- agentB_guess[ref_id]
+          old_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
+          old_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
+          old_stored_signal <- if (speaker == "A") old_stored_signal_A else old_stored_signal_B
+          
+          production_output <- produce_signal(
+            stored_signal = old_stored_signal,
+            speaker_guess = speaker_guess[ref_id],
+            drift_sd = drift_sd,
+            k_production = 1.5,
+            attractor_centers = attractor_centers,
+            circle_radius = circle_radius,
+            center_sd = trap_center_sd,
+            k_attractor_production = k_attractor_production)
+          
+          is_expressive_trial <- FALSE
+          
+          # --- override only if speaker is the pre-assigned expressive agent for this generation ---
+          # if (
+          #   ((speaker == "A" && expressive_A) ||
+          #    (speaker == "B" && expressive_B)) &&
+          #   runif(1) < expressive_trial_prob
+          # ) {
+          
+          # --- flat per-trial draw, no agent identity involved ---
+          if (runif(1) < trial_expressive_prob) {
+            is_expressive_trial <- TRUE
+            target_center <- referents_info$size_prototypes[[ref_id]]
+            signal <- clamp01(rnorm(2, mean = target_center, sd = expressive_noise_sd))
+            
+            distances <- sapply(attractor_centers, function(center) sqrt(sum((signal - center)^2)))
+            dist_to_nearest <- min(distances)
+            nearest_id <- which.min(distances)
+            in_attractor <- dist_to_nearest < circle_radius
+            attractor_id <- if (in_attractor) nearest_id else NA_integer_
+          } else {
+            signal <- production_output$signal
+            in_attractor <- production_output$inside_attractor
+            dist_to_nearest <- production_output$dist_to_nearest
+            attractor_id    <- production_output$attractor_id
+          }
+          
+          recognition <- listener_guess_probability(
+            listener_guess[ref_id],
+            signal,
+            referents_info$size_prototypes[[ref_id]],
+            recognition_bias = recognition_bias,
+            iconicity_weight = iconicity_weight,
+            k_perception = k_perception,
+            circle_radius = circle_radius)
+          
+          prob <- recognition$probs
+          success <- rbinom(1, 1, prob)
+          
+          if (listener == "A") {
+            agentA_guess[ref_id] <- update_logit(prob, learning_strength, success, success_scale, failure_scale)
+          } else {
+            agentB_guess[ref_id] <- update_logit(prob, learning_strength, success, success_scale, failure_scale)
+          }
+          
+          if (success == 1) {
+            referents_info$agentA_stored_signal[[ref_id]] <- 
+              (signal + referents_info$agentA_stored_signal[[ref_id]]) / 2
+            referents_info$agentB_stored_signal[[ref_id]] <- 
+              (signal + referents_info$agentB_stored_signal[[ref_id]]) / 2
+          }
+          
+          new_guess_A <- agentA_guess[ref_id]
+          new_guess_B <- agentB_guess[ref_id]
+          new_stored_signal_A <- referents_info$agentA_stored_signal[[ref_id]]
+          new_stored_signal_B <- referents_info$agentB_stored_signal[[ref_id]]
+          
+          has_semantic <- !is.na(attractor_id) && is_semantic_attractor[attractor_id]
+          log_is_semantic <- if (is.na(attractor_id)) FALSE else is_semantic_attractor[attractor_id]
+          is_correct_semantic_attractor <- if (has_semantic) {
+            identical(attractor_centers[[attractor_id]], referents_info$size_prototypes[[ref_id]])
+          } else {
+            FALSE
+          }
+          
+          simulation_log[[length(simulation_log) + 1]] <- tibble(
+            simulation = sim, generation = gen, round = round, trial = trial, trial_counter = trial_counter,
+            referent = ref_id, speaker = speaker, listener = listener, type = referents_info$type[ref_id],
+            produced_signal = list(signal), dist_to_nearest = dist_to_nearest, in_attractor = in_attractor,
+            attractor_id = attractor_id, is_semantic_attractor = log_is_semantic,
+            is_correct_semantic_attractor = is_correct_semantic_attractor,
+            prob = prob, evidence = recognition$evidence, success = success,
+            # --- agent-level expressive flags, no longer meaningful under flat design ---
+            # expressive_A = expressive_A, expressive_B = expressive_B,
+            is_expressive_trial = is_expressive_trial,
+            old_guess_A = old_guess_A, new_guess_A = new_guess_A,
+            old_guess_B = old_guess_B, new_guess_B = new_guess_B,
+            old_stored_signal_A = list(old_stored_signal_A), old_stored_signal_B = list(old_stored_signal_B),
+            new_stored_signal_A = list(new_stored_signal_A), new_stored_signal_B = list(new_stored_signal_B)
+          )
+        }
+      }
+    }
+  }
+  full_history <- bind_rows(simulation_log)
+  return(full_history)
 }
 
 ```
+
+### Attractor dimensions and mechanics: circle radius, sd of produced signal, sd of signal inside attractor
+
+The attractor dynamics is defined by three parameters: the circle radius, the standard deviation of the two-dimensional signal that is being produced, and the standard deviation of a signal once inside an attractor.
 
 The circle radius of the attractors were set to 0.3, given the boundaries of the space (0-1 in both dimensions).
 
@@ -356,6 +634,7 @@ d.nuisance_grid <- expand.grid(
   circle_radius     = 0.3, 
   center_sd   = c(0.06, 0.12, 0.24))
 
+# compute iconicity inside grid search
 compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
   d.iconicity <- history %>%
     mutate(total_round = (generation - 1) * n_rounds + round) %>%
@@ -366,13 +645,15 @@ compute_iconicity <- function(history, n_rounds, cutoff = 0.8) {
   threshold <- max_round * cutoff
   
   d.iconicity %>%
+    # select only final 20% of rounds to settle on smth closer to set value after randomly walking
     filter(total_round >= threshold) %>%
+    # collapse across all simulations
     summarise(mean_iconicity = mean(evidence, na.rm = TRUE)) %>%
     pull(mean_iconicity)
 }
 
 ## GRID 1: baseline
-if (RESET_MODELS || !file.exists("models/grid-search-baseline.rds")) {
+if (RESET_MODELS || !file.exists("../models/grid-search-baseline.rds")) {
   
   d.grid.baseline <- d.nuisance_grid %>%
     mutate(iconicity = NA_real_, history = vector("list", n()))
@@ -391,14 +672,14 @@ if (RESET_MODELS || !file.exists("models/grid-search-baseline.rds")) {
     d.grid.baseline$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
     if (i %% 50 == 0) message("baseline: ", i, " / ", nrow(d.grid.baseline))
   }
-  saveRDS(d.grid.baseline, "models/grid-search-baseline.rds", compress = TRUE)
+  saveRDS(d.grid.baseline, "../models/grid-search-baseline.rds", compress = TRUE)
 } else {
-  d.grid.baseline <- readRDS("models/grid-search-baseline.rds")
+  d.grid.baseline <- readRDS("../models/grid-search-baseline.rds")
 }
 
 
 ## GRID 2: recognitionBias
-if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
+if (RESET_MODELS || !file.exists("../models/grid-search-recognitionBias.rds")) {
   
   d.grid.recognitionBias <- d.nuisance_grid %>%
     tidyr::crossing(iconicity_weight = c(1.5, 3, 6)) %>%
@@ -418,13 +699,13 @@ if (RESET_MODELS || !file.exists("models/grid-search-recognitionBias.rds")) {
     d.grid.recognitionBias$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
     if (i %% 50 == 0) message("recognitionBias: ", i, " / ", nrow(d.grid.recognitionBias))
   }
-  saveRDS(d.grid.recognitionBias, "models/grid-search-recognitionBias.rds", compress = TRUE)
+  saveRDS(d.grid.recognitionBias, "../models/grid-search-recognitionBias.rds", compress = TRUE)
 } else {
-  d.grid.recognitionBias <- readRDS("models/grid-search-recognitionBias.rds")
+  d.grid.recognitionBias <- readRDS("../models/grid-search-recognitionBias.rds")
 }
 
 ## GRID 3: expressiveAgents
-if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
+if (RESET_MODELS || !file.exists("../models/grid-search-expressiveAgents.rds")) {
   
   d.grid.expressiveAgents <- d.nuisance_grid %>%
     tidyr::crossing(expressive_probability = c(0.01, 0.025, 0.05)) %>%
@@ -444,25 +725,19 @@ if (RESET_MODELS || !file.exists("models/grid-search-expressiveAgents.rds")) {
     d.grid.expressiveAgents$iconicity[i] <- compute_iconicity(history, n_rounds = N_ROUNDS)
     if (i %% 50 == 0) message("expressiveAgents: ", i, " / ", nrow(d.grid.expressiveAgents))
   }
-  saveRDS(d.grid.expressiveAgents, "models/grid-search-expressiveAgents.rds", compress = TRUE)
+  saveRDS(d.grid.expressiveAgents, "../models/grid-search-expressiveAgents.rds", compress = TRUE)
 } else {
-  d.grid.expressiveAgents <- readRDS("models/grid-search-expressiveAgents.rds")
+  d.grid.expressiveAgents <- readRDS("../models/grid-search-expressiveAgents.rds")
 }
 
 ```
 
 ```{r plot-grid}
+combined_range <- range(c(d.grid.baseline$iconicity, d.grid.recognitionBias$iconicity, d.grid.expressiveAgents$iconicity), na.rm = TRUE)
 
-combined_range <- range(c(d.grid.recognitionBias$iconicity, d.grid.expressiveAgents$iconicity), na.rm = TRUE)
-
-# adjust this to try different learning strength (0, .0125, .025...)
-ls_fixed <- 0.015
-ls_fixed <- unique(d.grid.recognitionBias$learning_strength)[1]
-
-plot_grid_faceted <- function(d.grid, x_var, x_lab, fixed_learning_strength, limits) {
+plot_grid_faceted <- function(d.grid, facet_var, limits) {
   d.grid %>%
-    filter(learning_strength == fixed_learning_strength) %>%
-    ggplot(aes(x = factor(round(.data[[x_var]], 3)),
+    ggplot(aes(x = factor(round(center_sd, 3)),
                y = factor(round(drift_sd, 3)),
                fill = iconicity)) +
     geom_tile() +
@@ -471,24 +746,15 @@ plot_grid_faceted <- function(d.grid, x_var, x_lab, fixed_learning_strength, lim
                          limits = limits,
                          rescaler = ~ scales::rescale_mid(.x, mid = 0, to = c(0, 1),
                                                           from = limits)) +
-    facet_grid(center_sd_ratio ~ circle_radius, labeller = label_both) +
-    #facet_grid(learning_strength ~ center_sd_ratio + circle_radius, labeller = label_both) +
+    facet_grid(as.formula(paste(facet_var, "~ learning_strength")),
+               labeller = labeller(.default = label_both)) +
     theme_minimal() +
-    labs(x = x_lab, y = "Drift SD", fill = "Iconicity",
-         title = paste0("Learning strength = ", round(fixed_learning_strength, 3)))
+    labs(x = "Attractor stickiness", y = "Production noise", fill = "Iconicity")
 }
 
-p.recognitionBias <- plot_grid_faceted(d.grid.recognitionBias, "iconicity_weight",
-                                       "Iconicity weight", ls_fixed, combined_range)
-p.expressiveAgents <- plot_grid_faceted(d.grid.expressiveAgents, "expressive_probability",
-                                        "Expressive probability", ls_fixed, combined_range)
-
-# #to derive a radius value for a given center_sd_ratio in the plot, do this:
-# d.nuisance_grid %>%
-#   filter(center_sd_ratio == 0.2) %>%
-#   select(circle_radius, center_sd_ratio, center_sd) %>%
-#   distinct() %>%
-#   arrange(circle_radius)
+p.baseline <- plot_grid_faceted(d.grid.baseline, "circle_radius", combined_range)
+p.recognitionBias <- plot_grid_faceted(d.grid.recognitionBias, "iconicity_weight", combined_range)
+p.expressiveAgents <- plot_grid_faceted(d.grid.expressiveAgents, "expressive_probability", combined_range)
 
 # # Compare where the grids peak in iconicity for a given drift_sd
 # d.grid.compare <- bind_rows(
@@ -518,7 +784,7 @@ p.expressiveAgents <- plot_grid_faceted(d.grid.expressiveAgents, "expressive_pro
 ```{r}
 # Metric to assess parameter combinations
 # Calculate the baseline proportion of iconic signals; in baseline model
-d.baseline.proportion <- d.grid.baseline %>%
+baseline.proportion <- d.grid.baseline %>%
   mutate(
     history = map(history, function(sim_df) {
       sim_df %>%
@@ -535,176 +801,109 @@ d.baseline.proportion <- d.grid.baseline %>%
   summarise(overall_baseline_prop = mean(prop_correct, na.rm = TRUE)) %>%
   pull(overall_baseline_prop)
 
-# function to evaluate models against this baseline
-evaluate_against_baseline <- function(grid_df, benchmark = baseline_benchmark, n_trials = 10, threshold = 0.95) {
-  grid_df %>%
+# Given one simulation's full trial-level history (already filtered to one parameter combination), compute a trailing rolling proportion of correct-semantic-attractor trials, evaluated once per trial (dyad interaction), using a trailing window of `window_size` trials
+compute_rolling_prop <- function(sim_df, window_size = 10) {
+  sim_df <- sim_df %>% arrange(trial_counter)
+  x <- as.numeric(sim_df$is_correct_semantic_attractor)
+  n <- length(x)
+  cs <- c(0, cumsum(x))  # cumulative sum, prepended with 0 for easy windowed differencing
+  rolling_prop <- rep(NA_real_, n)
+  for (i in seq(window_size, n)) {
+    rolling_prop[i] <- (cs[i + 1] - cs[i - window_size + 1]) / window_size
+  }
+  # rolling_prop[i] = proportion correct among trials (i - window_size + 1) .. i
+  # NA for the first (window_size - 1) trials, since there isn't a full window yet
+  tibble(trial_counter = sim_df$trial_counter, round = sim_df$round, rolling_prop = rolling_prop)
+}
+
+# Given that rolling-proportion series, find the first point at which rolling_prop > benchmark holds for `persistence` consecutive trials in a row. Returns NA if this never happens within the simulated run.
+find_onset <- function(rolling_df, benchmark, persistence = 10) {
+  flag <- rolling_df$rolling_prop > benchmark
+  flag[is.na(flag)] <- FALSE   # can't evaluate before the rolling window has filled
+  
+  r <- rle(flag)
+  run_starts <- cumsum(c(1, head(r$lengths, -1)))
+  long_true_runs <- which(r$values & r$lengths >= persistence)
+  
+  if (length(long_true_runs) == 0) {
+    return(tibble(onset_trial = NA_integer_, criterion_met_trial = NA_integer_))
+  }
+  
+  first_run <- long_true_runs[1]
+  onset_idx <- run_starts[first_run]                # first trial of the sustained run
+  met_idx   <- onset_idx + persistence - 1           # trial at which "sustained for `persistence`" is confirmed
+  
+  tibble(
+    onset_trial          = rolling_df$trial_counter[onset_idx],
+    onset_round           = rolling_df$round[onset_idx],
+    criterion_met_trial  = rolling_df$trial_counter[met_idx],
+    criterion_met_round   = rolling_df$round[met_idx]
+  )
+}
+
+# Evaluate both proportion of trials that meet criterion + when that happens (per simulation, per parameter combination)
+evaluate_parameter_combinations <- function(grid_df, benchmark = baseline.proportion,
+                                n_trials = 10, threshold = 0.95,
+                                window_size = 10, persistence = 10,
+                                keep_details = FALSE) {
+  out <- grid_df %>%
     mutate(
       # calculate final 10 trials proportion for each sim
-      sim_proportions = map(history, function(sim_df) {
+      sim_final_proportions = map(history, function(sim_df) {
         sim_df %>%
           group_by(simulation) %>%
           slice_max(order_by = trial_counter, n = n_trials, with_ties = FALSE) %>%
-          summarise(
-            sim_prop = mean(is_correct_semantic_attractor == TRUE, na.rm = TRUE),
-            .groups = "drop"
-          )
+          summarise(sim_prop = mean(is_correct_semantic_attractor, na.rm = TRUE), .groups = "drop")
       }),
-      # add info on proportion of simulations in a given parameter combination that exceed baseline benchmark
-      prop_sims_above_baseline = map_dbl(sim_proportions, function(df) {
-        mean(df$sim_prop > benchmark, na.rm = TRUE)
-      }),
-      
+       # add info on proportion of simulations in a given parameter combination that exceed baseline benchmark
+      prop_sims_above_baseline = map_dbl(sim_final_proportions, ~ mean(.x$sim_prop > benchmark, na.rm = TRUE)),
       # set to TRUE if >= 95% of simulations are above baseline
-      meets_95_criterion = prop_sims_above_baseline >= threshold
+      meets_95_criterion = prop_sims_above_baseline >= threshold,
+      
+      # onset of a sustained (persistence-trial) run above baseline
+      onset_results = map(history, function(sim_df) {
+        sim_df %>%
+          group_by(simulation) %>%
+          group_modify(~ find_onset(compute_rolling_prop(.x, window_size = window_size),
+                                    benchmark = benchmark, persistence = persistence)) %>%
+          ungroup()
+      }),
+      # proportion of trials where baseline criterion is met for 10 consecutive trials
+      prop_sims_ever_sustained    = map_dbl(onset_results, ~ mean(!is.na(.x$criterion_met_trial))),
+      # at what trial does this 10-trial-run start
+      median_onset_trial          = map_dbl(onset_results, ~ median(.x$onset_trial, na.rm = TRUE)),
+      # when is this 10-trial-run finished
+      median_criterion_met_trial  = map_dbl(onset_results, ~ median(.x$criterion_met_trial, na.rm = TRUE))
     )
+  
+  if (!keep_details) {
+    out <- out %>% select(-history, -sim_final_proportions, -onset_results)
+  }
+  out
 }
 
-# call function to evaluate grids
-d.recognitionBias.eval  <- evaluate_against_baseline(d.grid.recognitionBias)
-d.expressiveAgents.eval <- evaluate_against_baseline(d.grid.expressiveAgents)
+d.recognitionBias.evaluated  <- evaluate_parameter_combinations(d.grid.recognitionBias)
+d.expressiveAgents.evaluated <- evaluate_parameter_combinations(d.grid.expressiveAgents)
 
-# filter parameter combinations where 95%+ of simulations beat the baseline benchmark
-winning_recognition_params <- d.recognitionBias.eval %>%
-  filter(meets_95_criterion == TRUE)
+d.recognitionBias.evaluated.toPlot <- d.recognitionBias.evaluated %>%
+  filter(meets_95_criterion) %>%
+  arrange(median_criterion_met_trial)
 
+d.expressiveAgents.evaluated.toPlot <- d.expressiveAgents.evaluated %>%
+  filter(meets_95_criterion) %>%
+  arrange(median_criterion_met_trial)
+
+p.recognitionBias +
+  geom_point(data = d.recognitionBias.evaluated.toPlot,
+             size = 8, color = "red", shape = 0)
+
+p.expressiveAgents +
+  geom_point(data = d.expressiveAgents.evaluated.toPlot,
+             size = 8, color = "red", shape = 0)
 ```
 
 
 ```{r}
-# Another metric for evaluating parameter combinations; identify the proportion of stored signals within the iconic category circle 
-# in the last 5 interactions
-d.grid.eval.Bias <- d.grid.recognitionBias %>%
-  select(-center_sd_ratio) %>%
-  mutate(
-    history = map(history, function(sim_df) {
-      sim_df %>%
-        group_by(simulation) %>%
-        # Keep only the top 5 highest trial_counter values per simulation
-        slice_max(order_by = trial_counter, n = 5) %>%
-        ungroup()
-    }),
-    # Calculate the overall proportion of correct signals across those extracted trials
-    prop_correct_semantic = map_dbl(history, function(sim_df) {
-      mean(sim_df$is_correct_semantic_attractor == TRUE, na.rm = TRUE)
-    }))
 
-d.grid.eval.expr <- d.grid.expressiveAgents %>%
-  select(-center_sd_ratio) %>%
-  mutate(
-    history = map(history, function(sim_df) {
-      sim_df %>%
-        group_by(simulation) %>%
-        # Keep only the top 5 highest trial_counter values per simulation
-        slice_max(order_by = trial_counter, n = 5) %>%
-        ungroup()
-    }),
-    # Calculate the overall proportion of correct signals across those extracted trials
-    prop_correct_semantic = map_dbl(history, function(sim_df) {
-      mean(sim_df$is_correct_semantic_attractor == TRUE, na.rm = TRUE)
-    }))  
-
-# plotting function for evaluating grids
-plot_grid_eval <- function(
-    data,
-    x_param,
-    y_param,
-    facet_row = NULL,
-    facet_col1 = NULL,
-    facet_col2 = NULL,
-    prop_col = "prop_correct_semantic",
-    title = "Semantic Attractor Convergence Landscape",
-    subtitle = "Proportion of last 5 trials in correct semantic attractor"
-) {
-  
-  # identify all mapped parameter columns
-  mapped_params <- c(x_param, y_param, facet_row, facet_col1, facet_col2)
-  mapped_params <- mapped_params[!is.null(mapped_params)]
-  
-  # Check if columns exist in dataframe
-  missing_cols <- setdiff(c(mapped_params, prop_col), colnames(data))
-  if (length(missing_cols) > 0) {
-    stop("Column(s) not found in dataframe: ", paste(missing_cols, collapse = ", "))
-  }
-  
-  # group & aggregate (averages over any unmapped background parameters)
-  plot_df <- data %>%
-    group_by(across(all_of(mapped_params))) %>%
-    summarise(
-      mean_prop = mean(.data[[prop_col]], na.rm = TRUE),
-      .groups = "drop") %>%
-    mutate(
-      x_var = factor(.data[[x_param]]),
-      y_var = factor(.data[[y_param]]))
-  
-  # base Plot
-  p <- ggplot(plot_df, aes(x = x_var, y = y_var, fill = mean_prop)) +
-    geom_tile(color = "white", linewidth = 0.4) +
-    scale_fill_viridis_c(
-      option = "viridis",
-      labels = percent_format(accuracy = 1),
-      limits = c(0, 1),
-      name = "Convergence\nProportion") +
-    geom_text(
-      aes(
-        label = percent(mean_prop, accuracy = 1),
-        color = mean_prop > 0.5),
-      size = 3,
-      fontface = "bold",
-      show.legend = FALSE) +
-    scale_color_manual(values = c("TRUE" = "black", "FALSE" = "white")) +
-    labs(
-      title = title,
-      subtitle = subtitle,
-      x = x_param,
-      y = y_param) +
-    theme_minimal(base_size = 12) +
-    theme(
-      panel.grid = element_blank(),
-      strip.background = element_rect(fill = "grey92", color = NA),
-      strip.text = element_text(face = "bold", size = 9),
-      axis.title = element_text(face = "bold"),
-      axis.text = element_text(size = 9),
-      plot.title = element_text(face = "bold"),
-      legend.position = "right")
-  
-  # dynamic Facetting Logic (Supports param3 ~ param4 + param5)
-  if (!is.null(facet_row) && !is.null(facet_col1) && !is.null(facet_col2)) {
-    # 5-parameter grid: facet_row ~ facet_col1 + facet_col2
-    p <- p + facet_grid(
-      rows = vars(.data[[facet_row]]),
-      cols = vars(.data[[facet_col1]], .data[[facet_col2]]),
-      labeller = label_both)
-  } else if (!is.null(facet_row) && !is.null(facet_col1)) {
-    # 4-parameter grid: facet_row ~ facet_col1
-    p <- p + facet_grid(
-      rows = vars(.data[[facet_row]]),
-      cols = vars(.data[[facet_col1]]),
-      labeller = label_both)
-  } else if (!is.null(facet_col1)) {
-    # 3-parameter grid: ~ facet_col1
-    p <- p + facet_wrap(vars(.data[[facet_col1]]), labeller = label_both)
-  }
-  
-  return(p)
-}
-
-
-plot_grid_eval(
-  data = d.grid.eval.expr,
-  x_param = "expressive_probability",      # Param 1 (X axis)
-  y_param = "drift_sd",       # Param 2 (Y axis)
-  facet_row = "learning_strength",             # Param 3 (Facet Rows)
-  facet_col1 = "center_sd",        # Param 4 (Facet Col 1)
-  facet_col2 = "circle_radius"# Param 5 (Facet Col 2)
-)
-
-plot_grid_eval(
-  data = d.grid.eval.Bias,
-  x_param = "iconicity_weight",      # Param 1 (X axis)
-  y_param = "drift_sd",       # Param 2 (Y axis)
-  facet_row = "learning_strength",             # Param 3 (Facet Rows)
-  facet_col1 = "center_sd",        # Param 4 (Facet Col 1)
-  facet_col2 = "circle_radius"# Param 5 (Facet Col 2)
-)
 
 ```
