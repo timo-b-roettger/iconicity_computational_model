@@ -343,17 +343,17 @@ d.empty <- data.frame(
 # set.seed(2534)
 # d.simulation <- rbind(
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 400, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
 #     mutate(model_type = "baseline"),
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 400, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
 #     mutate(model_type = "expressiveAgents"),
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 400, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
 #     mutate(model_type = "recognitionBias"))
 
 # # save simulation data
-# saveRDS(d.simulation, file = "scripts/temp_data/d_simulation.rds", compress = TRUE)
+#saveRDS(d.simulation, file = "scripts/temp_data/d_simulation.rds", compress = TRUE)
 
 # use "git lfs pull" in terminal to pull large data files
 d.simulation <- readRDS("scripts/temp_data/d_simulation.rds") %>%
@@ -376,10 +376,7 @@ d.simulation <- readRDS("scripts/temp_data/d_simulation.rds") %>%
 # EVALUATE ICONICITY----
 # Signal space use across simulations
 d_signal_mean <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 50 + round,
-         produced_signal_x = sapply(produced_signal, function(x) x[1]),
-         produced_signal_y = sapply(produced_signal, function(x) x[2])
-         ) %>%
+  mutate(total_round = (generation - 1) * 400 + round) %>%
   group_by(model_type, total_round, type, generation) %>%
   summarise(
     mean_x = mean(produced_signal_x, na.rm = TRUE),
@@ -388,7 +385,7 @@ d_signal_mean <- d.simulation %>%
 
 # Signal space use across simulations
 d_signal <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 50 + round)
+  mutate(total_round = (generation - 1) * 400 + round)
 
 # calculate proportion of trials in an attractor, in a semantic attractor, in the correct semantic attractor
 d.simulation %>%
@@ -410,7 +407,7 @@ d.simulation %>%
 # calculate proportion of trials ENDING UP in an attractor, in a semantic attractor, in the correct semantic attractor
 d.simulation %>%
   mutate(across(c(in_attractor, is_semantic_attractor, is_correct_semantic_attractor), as.logical)) %>%
-  filter(round %in% c(50)) |> 
+  filter(round %in% c(400)) |> 
   group_by(model_type, round) %>%
   summarise(
     total_trials = n(),
@@ -425,101 +422,14 @@ d.simulation %>%
     .groups = "drop") %>%
   select(-n_in, -n_out, -n_sem, -n_corr_sem)
 
-
-# calculate trajectories; trial-by-trial in-out of attractor (based on produced signal, not stored)
-# helper functions: trials before first entry into an attractor (latency)
-get_latency <- function(capture_type_vec, target_type) {
-  first_entry <- match(target_type, capture_type_vec)
-  if (is.na(first_entry)) return(NA_integer_)
-  first_entry - 1 # Trials before entering
-}
-
-# mean consecutive trials spent in an attractor before exiting (bout length)
-get_bouts <- function(capture_type_vec) {
-  r <- rle(as.character(capture_type_vec))
-  tibble(
-    type = r$values,
-    bout_length = r$lengths,
-    censored = FALSE) %>%
-    # last bout is right-censored if the round ends while signal still inside attractor
-    mutate(censored = row_number() == n() & type == tail(as.character(capture_type_vec), 1))
-}
-
-d.simulation.trajectories <- d.simulation %>%
-  mutate(
-    across(c(in_attractor, is_semantic_attractor, is_correct_semantic_attractor), as.logical),
-    capture_type = case_when(
-      is.na(attractor_id)           ~ "none",
-      !is_semantic_attractor        ~ "neutral",
-      is_correct_semantic_attractor ~ "congruent",
-      TRUE                          ~ "anti"))
-
-d.bouts <- d.simulation.trajectories %>%
-  arrange(model_type, simulation, referent, round) %>% 
-  group_by(model_type, simulation, referent) %>%
-  reframe(get_bouts(capture_type)) %>%
-  ungroup() %>%
-  filter(type != "none")   # "none" bouts = stretches outside any attractor
-
-# Per model_type, mean bout length; 
-d.bouts %>%
-  group_by(model_type, type) %>%
-  summarise(
-    n_bouts = n(), #capture frequency
-    mean_bout_length = mean(bout_length),
-    median_bout_length = median(bout_length),
-    # flag if these are underestimates; % of bouts that were cut off by the end of sim
-    # high pct_censored= 'at least X' rather than 'exactly X'
-    pct_censored = mean(censored) * 100,
-    .groups = "drop")
-
-# of all trials coded as congruent, how many were forced by expressive override vs normal noise
-d.simulation.trajectories %>%
-  filter(model_type == "expressiveAgents", capture_type == "congruent") %>%
-  count(is_expressive_trial)
-
-# Or, more precisely: tag each bout by whether its FIRST trial was an expressive override
-d.bouts_tagged <- d.simulation.trajectories %>%
-  arrange(model_type, simulation, referent, round) %>%
-  group_by(model_type, simulation, referent) %>%
-  reframe(
-    bind_cols(
-      get_bouts(capture_type),
-      entry_was_expressive = {
-        r <- rle(as.character(capture_type))
-        starts <- cumsum(c(1, head(r$lengths, -1)))
-        is_expressive_trial[starts]
-      }
-    )
-  ) %>%
-  ungroup()
-# among all episodes (unbroken runs) of congruent capture, group by whether the first trial
-# was an expressive override or natural noise (expressive override signals gets teleported but also move out)
-d.bouts_tagged %>%
-  filter(model_type == "expressiveAgents", type == "congruent") %>%
-  group_by(entry_was_expressive) %>%
-  summarise(n = n(), mean_length = mean(bout_length), median_length = median(bout_length))
-
-# how many rounds before a referent's first congruent vs anti vs neutral capture
-d.simulation.trajectories %>%
-  arrange(model_type, simulation, referent, round) %>%
-  group_by(model_type, simulation, referent) %>%
-  summarise(
-    latency_congruent = get_latency(capture_type, "congruent"),
-    latency_anti      = get_latency(capture_type, "anti"),
-    latency_neutral   = get_latency(capture_type, "neutral"),
-    .groups = "drop") %>%
-  group_by(model_type) %>%
-  summarise(across(starts_with("latency_"), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
-
 # plot iconicity
-d.iconicity <- d.simulation.500rounds |> 
+d.iconicity <- d.simulation |> 
   mutate(model_type = factor(
     model_type, 
     levels = c("baseline", "recognitionBias", "expressiveAgents"),
     labels = c("baseline", "recognition bias", "expressive agents"),
     ordered = TRUE),
-    total_round = (generation - 1) * 500 + round,
+    total_round = (generation - 1) * 400 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
   summarise(
@@ -593,8 +503,8 @@ average_iconicity_interactions_long <-
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-0.6,0.8), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 100),
-                     labels = seq(0, max(d.iconicity$total_round), by = 100)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 80),
+                     labels = seq(0, max(d.iconicity$total_round), by = 80)) +
   guides(x = guide_axis(cap = "both"),
          y = guide_axis(cap = "both")) +
   labs(title = "Iconicity evolves via both expressive\nspeakers and recognition bias",
@@ -645,8 +555,8 @@ average_iconicity_interactions_wide <-
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-0.6,0.8), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 100),
-                     labels = seq(0, max(d.iconicity$total_round), by = 100)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 80),
+                     labels = seq(0, max(d.iconicity$total_round), by = 80)) +
   guides(x = guide_axis(cap = "both"),
          y = guide_axis(cap = "both")) +
   labs(title = "Iconicity evolves via both expressive\nspeakers and recognition bias",
@@ -694,7 +604,7 @@ ggsave("figures/average_iconicity_interactions_wide.png",
        dpi = 300) 
 
 
- ## plot: guess rate over time----
+## plot: guess rate over time----
 guess_rate <- d.simulation |> 
   mutate(model_type = factor(
     model_type, 
