@@ -159,8 +159,8 @@ run_interaction_sim <- function(
     # expressive_prob_per_agent = 0.10, # per-generation probability an agent is expressive
     # expressive_trial_prob = 0.20,     # per-trial probability of override, conditional on being that type
     # --- simplified single-parameter version ---
-    # flat per-trial probability of an expressive override, no agent-level persistence; 1 expressive signal in 40 interactions
-    expressive_probability = 0.025
+    # flat per-trial probability of an expressive override, no agent-level persistence; 1 expressive signal in 100 interactions
+    expressive_probability = 0.01
 ) {
   
   referents_blueprint <- tibble(
@@ -343,17 +343,17 @@ d.empty <- data.frame(
 # set.seed(2534)
 # d.simulation <- rbind(
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 400, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = FALSE, expressive_agents = FALSE) %>%
 #     mutate(model_type = "baseline"),
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 400, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = FALSE, expressive_agents = TRUE) %>%
 #     mutate(model_type = "expressiveAgents"),
 #   d.empty %>%
-#     run_interaction_sim(n_sim = 1000, n_rounds = 400, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
+#     run_interaction_sim(n_sim = 1000, n_rounds = 300, n_generations = 1, recognition_bias = TRUE, expressive_agents = FALSE) %>%
 #     mutate(model_type = "recognitionBias"))
 
 # # save simulation data
-#saveRDS(d.simulation, file = "scripts/temp_data/d_simulation.rds", compress = TRUE)
+saveRDS(d.simulation, file = "scripts/temp_data/d_simulation.rds", compress = TRUE)
 
 # use "git lfs pull" in terminal to pull large data files
 d.simulation <- readRDS("scripts/temp_data/d_simulation.rds") %>%
@@ -385,7 +385,7 @@ d_signal_mean <- d.simulation %>%
 
 # Signal space use across simulations
 d_signal <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 400 + round)
+  mutate(total_round = (generation - 1) * 300 + round)
 
 # calculate proportion of trials in an attractor, in a semantic attractor, in the correct semantic attractor
 d.simulation %>%
@@ -429,7 +429,7 @@ d.iconicity <- d.simulation |>
     levels = c("baseline", "recognitionBias", "expressiveAgents"),
     labels = c("baseline", "recognition bias", "expressive agents"),
     ordered = TRUE),
-    total_round = (generation - 1) * 400 + round,
+    total_round = (generation - 1) * 300 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
   summarise(
@@ -503,8 +503,8 @@ average_iconicity_interactions_long <-
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-0.6,0.8), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 80),
-                     labels = seq(0, max(d.iconicity$total_round), by = 80)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 50),
+                     labels = seq(0, max(d.iconicity$total_round), by = 50)) +
   guides(x = guide_axis(cap = "both"),
          y = guide_axis(cap = "both")) +
   labs(title = "Iconicity evolves via both expressive\nspeakers and recognition bias",
@@ -555,8 +555,8 @@ average_iconicity_interactions_wide <-
                         end = 1,
                         values = seq(0,1,0.1))+
   scale_y_continuous(limits = c(-0.6,0.8), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 80),
-                     labels = seq(0, max(d.iconicity$total_round), by = 80)) +
+  scale_x_continuous(breaks = seq(0, max(d.iconicity$total_round), by = 50),
+                     labels = seq(0, max(d.iconicity$total_round), by = 50)) +
   guides(x = guide_axis(cap = "both"),
          y = guide_axis(cap = "both")) +
   labs(title = "Iconicity evolves via both expressive\nspeakers and recognition bias",
