@@ -733,13 +733,15 @@ if (RESET_MODELS || !file.exists("../models/grid-search-expressiveAgents.rds")) 
 ```
 
 ```{r plot-grid}
+# Plot grid searches by average proportion of signals in iconic attractor during the 10 final rounds
 d.grid.baseline.forPlot <- d.grid.baseline %>%
     mutate(
-      baseline_prop = map_dbl(history, function(sim_df) {
+      iconic_signals_prop = map_dbl(history, function(sim_df) {
         sim_df %>%
           group_by(simulation) %>%
           # select end state, so only 10 final rounds
           filter(round > max(round) - 10) %>%
+          # calculate proportion of signals in semantic attractor
           summarise(sim_prop = mean(is_correct_semantic_attractor, na.rm = TRUE), .groups = "drop") %>%
           summarise(mean_prop = mean(sim_prop, na.rm = TRUE)) %>%
           pull(mean_prop)
@@ -747,7 +749,7 @@ d.grid.baseline.forPlot <- d.grid.baseline %>%
 
 d.grid.recognitionBias.forPlot <- d.grid.recognitionBias %>%
     mutate(
-      baseline_prop = map_dbl(history, function(sim_df) {
+      iconic_signals_prop = map_dbl(history, function(sim_df) {
         sim_df %>%
           group_by(simulation) %>%
           # select end state, so only 10 final rounds
@@ -759,7 +761,7 @@ d.grid.recognitionBias.forPlot <- d.grid.recognitionBias %>%
 
 d.grid.expressiveAgents.forPlot <- d.grid.expressiveAgents %>%
     mutate(
-      baseline_prop = map_dbl(history, function(sim_df) {
+      iconic_signals_prop = map_dbl(history, function(sim_df) {
         sim_df %>%
           group_by(simulation) %>%
           # select end state, so only 10 final rounds
@@ -769,204 +771,51 @@ d.grid.expressiveAgents.forPlot <- d.grid.expressiveAgents %>%
           pull(mean_prop)
       }))
 
-combined_range <- range(c(d.grid.baseline.forPlot$baseline_prop, d.grid.recognitionBias.forPlot$baseline_prop, d.grid.expressiveAgents.forPlot$baseline_prop), na.rm = TRUE)
-
+combined_range <- range(c(d.grid.baseline.forPlot$iconic_signals_prop, d.grid.recognitionBias.forPlot$iconic_signals_prop, d.grid.expressiveAgents.forPlot$iconic_signals_prop), na.rm = TRUE)
 
 plot_grid_faceted <- function(d.grid, facet_var, limits) {
+  # Custom labeller
+  clean_labeller <- function(df) {
+    names(df) <- gsub("_", " ", names(df))
+    df[] <- lapply(df, function(col) gsub("_", " ", col))
+    label_both(df)
+  }
   d.grid %>%
     ggplot(aes(x = factor(round(center_sd, 3)),
                y = factor(round(drift_sd, 3)),
-               fill = baseline_prop)) +
+               fill = iconic_signals_prop)) +
     geom_tile() +
-    geom_text(aes(label = round(baseline_prop, 2)), size = 2.5, color = "black") +
+    geom_text(aes(label = round(iconic_signals_prop, 2)), size = 4, color = "black") +
     scale_fill_distiller(palette = "RdBu", direction = -1,
                          limits = limits,
                          rescaler = ~ scales::rescale_mid(.x, mid = 0, to = c(0, 1),
-                                                          from = limits)) +
-    facet_grid(as.formula(paste(facet_var, "~ learning_strength")),
-               labeller = labeller(.default = label_both)) +
-    theme_minimal() +
-    labs(x = "Attractor stickiness", y = "Production noise", fill = "Proportion of signals \nin iconic attractor")
-}
+                                                         from = limits)) +
+    facet_grid(
+      as.formula(paste(facet_var, "~ learning_strength")), labeller = clean_labeller) +
+    theme(
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 10),
+      strip.text = element_text(size = 10),
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.background = element_rect(fill = "white", color = NA),
+      strip.background = element_rect(fill = "white", color = NA)) +
+    labs(
+      x = "Attractor stickiness", 
+      y = "Production noise", 
+      fill = "Proportion of signals \nin iconic attractor \nat final 10 rounds")
+  }
 
 p.baseline <- plot_grid_faceted(d.grid.baseline.forPlot, "circle_radius", combined_range) + theme(strip.text.y = element_blank())
 p.recognitionBias <- plot_grid_faceted(d.grid.recognitionBias.forPlot, "iconicity_weight", combined_range)
 p.expressiveAgents <- plot_grid_faceted(d.grid.expressiveAgents.forPlot, "expressive_probability", combined_range)
 
-# # Compare where the grids peak in iconicity for a given drift_sd
-# d.grid.compare <- bind_rows(
-#   d.grid.recognitionBias %>%
-#     group_by(drift_sd) %>%
-#     summarise(peak_iconicity = max(iconicity, na.rm = TRUE), .groups = "drop") %>%
-#     mutate(mechanism = "Iconicity recognition bias"),
-#   d.grid.expressiveAgents %>%
-#     group_by(drift_sd) %>%
-#     summarise(peak_iconicity = max(iconicity, na.rm = TRUE), .groups = "drop") %>%
-#     mutate(mechanism = "Expressive agents"))
-# 
-# ggplot(d.grid.compare, 
-#        aes(x = drift_sd, 
-#            y = peak_iconicity, 
-#            color = mechanism)) +
-#   geom_line(linewidth = 1) + 
-#   geom_point() +
-#   scale_y_continuous(limits = c(-1, 1)) + 
-#   theme_minimal() +
-#   labs(x = "Drift SD", 
-#        y = "Peak iconicity (best combo of all other params)", 
-#        color = "Mechanism")
-```
-
-```{r}
-# Metric to assess parameter combinations
-# Which columns define a "matching" parameter combination between baseline
-# and the mechanism grids -- i.e. everything EXCEPT the mechanism-specific
-# parameter (iconicity_weight / expressive_probability), which baseline
-# doesn't have at all.
-shared_structural_cols <- c("drift_sd", "learning_strength", "circle_radius", "center_sd")
-
-# Proportion of trials in the correct semantic attractor, averaged over the
-# LAST 10 ROUNDS of each simulation, then averaged across sims --
-# computed separately for EACH parameter combination in the baseline grid.
-compute_baseline_by_combo <- function(grid_df, n_rounds_window = 10) {
-  grid_df %>%
-    mutate(
-      baseline_prop = map_dbl(history, function(sim_df) {
-        sim_df %>%
-          group_by(simulation) %>%
-          filter(round > max(round) - n_rounds_window) %>%
-          summarise(sim_prop = mean(is_correct_semantic_attractor, na.rm = TRUE), .groups = "drop") %>%
-          summarise(mean_prop = mean(sim_prop, na.rm = TRUE)) %>%
-          pull(mean_prop)
-      })
-    ) %>%
-    select(all_of(shared_structural_cols), baseline_prop)
-}
-
-d.baseline_benchmarks <- compute_baseline_by_combo(d.grid.baseline)
-
-# Rolling proportion of correct-semantic-attractor trials, computed at each round, using a trailing window of `window_rounds` rounds (i.e. window_rounds * n_referents trials). Evaluated once per round.
-compute_round_rolling_prop <- function(sim_df, window_rounds = 10) {
-  by_round <- sim_df %>%
-    group_by(round) %>%
-    summarise(n_correct = sum(is_correct_semantic_attractor, na.rm = TRUE),
-              n_total   = n(),
-              .groups   = "drop") %>%
-    arrange(round)
-  
-  n <- nrow(by_round)
-  cs_correct <- c(0, cumsum(by_round$n_correct))
-  cs_total   <- c(0, cumsum(by_round$n_total))
-  
-  rolling_prop <- rep(NA_real_, n)
-  for (i in seq(window_rounds, n)) {
-    correct_in_window <- cs_correct[i + 1] - cs_correct[i - window_rounds + 1]
-    total_in_window    <- cs_total[i + 1] - cs_total[i - window_rounds + 1]
-    rolling_prop[i] <- correct_in_window / total_in_window
-  }
-  
-  tibble(round = by_round$round, rolling_prop = rolling_prop)
-}
-
-# Level 2: at each round position, what fraction of simulations are currently
-# above baseline (using each sim's own trailing rolling proportion)?
-compute_aggregate_prop_above_by_round <- function(sim_df, benchmark, window_rounds = 10) {
-  sim_df %>%
-    group_by(simulation) %>%
-    group_modify(~ compute_round_rolling_prop(.x, window_rounds = window_rounds)) %>%
-    ungroup() %>%
-    group_by(round) %>%
-    summarise(
-      prop_above = mean(rolling_prop > benchmark, na.rm = TRUE),
-      n_valid    = sum(!is.na(rolling_prop)), # sims that have a full window yet at this point
-      .groups    = "drop"
-    ) %>%
-    arrange(round)
-}
-
-# Find the first point where prop_above >= threshold (0.95) and stays there for `persistence` consecutive trial positions
-find_aggregate_onset_round <- function(agg_df, threshold = 0.95, persistence_rounds = 10) {
-  flag <- agg_df$prop_above >= threshold
-  flag[is.na(flag)] <- FALSE
-  
-  r <- rle(flag)
-  run_starts <- cumsum(c(1, head(r$lengths, -1)))
-  long_true_runs <- which(r$values & r$lengths >= persistence_rounds)
-  
-  if (length(long_true_runs) == 0) {
-    return(tibble(onset_round = NA_integer_, criterion_met_round = NA_integer_))
-  }
-  
-  first_run <- long_true_runs[1]
-  onset_idx <- run_starts[first_run]
-  met_idx   <- onset_idx + persistence_rounds - 1
-  
-  tibble(
-    onset_round          = agg_df$round[onset_idx],
-    criterion_met_round  = agg_df$round[met_idx]
-  )
-}
-
-# Evaluate both proportion of trials that meet criterion + when that happens (per simulation, per parameter combination)
-evaluate_parameter_combinations <- function(grid_df, baseline_benchmarks,
-                                            n_rounds_window = 10, threshold = 0.95,
-                                            persistence_rounds = 10, keep_details = FALSE) {
-  out <- grid_df %>%
-    left_join(baseline_benchmarks, by = shared_structural_cols) %>%
-    mutate(
-      # one aggregate (population-level) time series per parameter combination
-      aggregate_series = map2(history, baseline_prop, ~ compute_aggregate_prop_above_by_round(
-        .x, benchmark = .y, window_rounds = n_rounds_window)),
-      
-      # --- criterion (a): final point of the aggregate series; info on proportion of simulations in a given parameter combination that exceed baseline benchmark
-      prop_sims_above_baseline = map_dbl(aggregate_series, ~ tail(.x$prop_above, 1)),
-      # set to TRUE if >= 95% of simulations are above baseline
-      meets_95_criterion       = prop_sims_above_baseline >= threshold,
-      
-      # --- criterion (b): first point the aggregate series sustains >= threshold for persistence_rounds
-      onset_result         = map(aggregate_series, ~ find_aggregate_onset_round(
-        .x, threshold = threshold, persistence_rounds = persistence_rounds)),
-      # at what round does this 10-round-run start
-      onset_round           = map_dbl(onset_result, ~ .x$onset_round),
-      # when is this 10-round-run finished
-      criterion_met_round  = map_dbl(onset_result, ~ .x$criterion_met_round),
-      # proportion of rounds where baseline criterion is met for 10 consecutive rounds
-      ever_sustained_95    = !is.na(criterion_met_round)
-    )
-  
-  if (!is.null(out$baseline_prop) && any(is.na(out$baseline_prop))) {
-    warning("Some rows have NA baseline_prop -- structural parameters didn't match any baseline grid cell. Check shared_structural_cols alignment.")
-  }
-  
-  if (!keep_details) {
-    out <- out %>% select(-history, -aggregate_series, -onset_result)
-  }
-  out
-}
-
-d.recognitionBias.evaluated  <- evaluate_parameter_combinations(d.grid.recognitionBias, d.baseline_benchmarks)
-d.expressiveAgents.evaluated <- evaluate_parameter_combinations(d.grid.expressiveAgents, d.baseline_benchmarks)
-
-# select parameter combinations that meet criterion
-d.recognitionBias.evaluated.toPlot <- d.recognitionBias.evaluated %>%
-  filter(meets_95_criterion)
-
-# select parameter combinations that meet criterion
-d.expressiveAgents.evaluated.toPlot <- d.expressiveAgents.evaluated %>%
-  filter(meets_95_criterion)
-
 layout_areas <- c(
-  area(t = 1, l = 1, b = 1, r = 1), # p.baseline (Top-Left)
-  area(t = 1, l = 2, b = 2, r = 2), # p.recognitionBias (Full Height, Col 2)
-  area(t = 1, l = 3, b = 2, r = 3), # p.expressiveAgents (Full Height, Col 3)
-  area(t = 2, l = 1, b = 2, r = 1)  # guide_area() (Bottom-Left, under baseline)
-)
+  area(t = 1, l = 1, b = 1, r = 1),
+  area(t = 1, l = 2, b = 2, r = 2),
+  area(t = 1, l = 3, b = 2, r = 3),
+  area(t = 2, l = 1, b = 2, r = 1))
 
-p.baseline + p.recognitionBias +
-  geom_point(data = d.recognitionBias.evaluated.toPlot,
-             size = 8, color = "black", shape = 0) + p.expressiveAgents +
-  geom_point(data = d.expressiveAgents.evaluated.toPlot,
-             size = 8, color = "black", shape = 0) + guide_area() +
+p.baseline + p.recognitionBias + p.expressiveAgents + guide_area() +
   plot_layout(
     design = layout_areas, 
     guides = "collect", 
@@ -975,8 +824,253 @@ p.baseline + p.recognitionBias +
 
 ```
 
-
-```{r}
-
+```{r prop-iconic-signals-against-baseline-threshold}
+# # Metric to assess parameter combinations--using a THRESHOLD MEASURE based on baseline
+# 
+# # First identify the columns that match between models=joint parameter combination across models
+# shared_structural_cols <- c("drift_sd", "learning_strength", "circle_radius", "center_sd")
+# 
+# # Proportion of trials in the correct semantic attractor, averaged over the
+# # LAST 10 ROUNDS of each simulation, then averaged across sims --
+# # computed separately for EACH parameter combination in the baseline grid.
+# compute_baseline_by_combo <- function(grid_df, n_rounds_window = 10) {
+#   grid_df %>%
+#     mutate(
+#       baseline_prop = map_dbl(history, function(sim_df) {
+#         sim_df %>%
+#           group_by(simulation) %>%
+#           filter(round > max(round) - n_rounds_window) %>%
+#           summarise(sim_prop = mean(is_correct_semantic_attractor, na.rm = TRUE), .groups = "drop") %>%
+#           summarise(mean_prop = mean(sim_prop, na.rm = TRUE)) %>%
+#           pull(mean_prop)
+#       })
+#     ) %>%
+#     select(all_of(shared_structural_cols), baseline_prop)
+# }
+# 
+# # This is the defined baseline benchmarks (thresholds) for each parameter combination
+# d.baseline_benchmarks <- compute_baseline_by_combo(d.grid.baseline)
+# 
+# # Also compute when baseline benchmark is reached for 10 consecutive rounds for each parameter combination and model
+# # Rolling proportion of correct-semantic-attractor trials, computed at each round, using a trailing window of `window_rounds` rounds (i.e. window_rounds * n_referents trials). Evaluated once per round.
+# compute_round_rolling_prop <- function(sim_df, window_rounds = 10) {
+#   by_round <- sim_df %>%
+#     group_by(round) %>%
+#     summarise(n_correct = sum(is_correct_semantic_attractor, na.rm = TRUE),
+#               n_total   = n(),
+#               .groups   = "drop") %>%
+#     arrange(round)
+#   
+#   n <- nrow(by_round)
+#   cs_correct <- c(0, cumsum(by_round$n_correct))
+#   cs_total   <- c(0, cumsum(by_round$n_total))
+#   
+#   rolling_prop <- rep(NA_real_, n)
+#   for (i in seq(window_rounds, n)) {
+#     correct_in_window <- cs_correct[i + 1] - cs_correct[i - window_rounds + 1]
+#     total_in_window    <- cs_total[i + 1] - cs_total[i - window_rounds + 1]
+#     rolling_prop[i] <- correct_in_window / total_in_window
+#   }
+#   
+#   tibble(round = by_round$round, rolling_prop = rolling_prop)
+# }
+# 
+# # At each round position, what fraction of simulations are currently above baseline (using each sim's own trailing rolling proportion)?
+# compute_aggregate_prop_above_by_round <- function(sim_df, benchmark, window_rounds = 10) {
+#   sim_df %>%
+#     group_by(simulation) %>%
+#     group_modify(~ compute_round_rolling_prop(.x, window_rounds = window_rounds)) %>%
+#     ungroup() %>%
+#     group_by(round) %>%
+#     summarise(
+#       prop_above = mean(rolling_prop > benchmark, na.rm = TRUE),
+#       n_valid    = sum(!is.na(rolling_prop)), # sims that have a full window yet at this point
+#       .groups    = "drop"
+#     ) %>%
+#     arrange(round)
+# }
+# 
+# # Find the first point where prop_above >= threshold (0.95) and stays there for `persistence` consecutive trial positions
+# find_aggregate_onset_round <- function(agg_df, threshold = 0.95, persistence_rounds = 10) {
+#   flag <- agg_df$prop_above >= threshold
+#   flag[is.na(flag)] <- FALSE
+#   
+#   r <- rle(flag)
+#   run_starts <- cumsum(c(1, head(r$lengths, -1)))
+#   long_true_runs <- which(r$values & r$lengths >= persistence_rounds)
+#   
+#   if (length(long_true_runs) == 0) {
+#     return(tibble(onset_round = NA_integer_, criterion_met_round = NA_integer_))
+#   }
+#   
+#   first_run <- long_true_runs[1]
+#   onset_idx <- run_starts[first_run]
+#   met_idx   <- onset_idx + persistence_rounds - 1
+#   
+#   tibble(
+#     onset_round          = agg_df$round[onset_idx],
+#     criterion_met_round  = agg_df$round[met_idx]
+#   )
+# }
+# 
+# 
+# # Evaluate both proportion of trials that meet criterion + when that happens (per simulation, per parameter combination)
+# evaluate_parameter_combinations <- function(grid_df, baseline_benchmarks,
+#                                             n_rounds_window = 10, threshold = 0.95,
+#                                             persistence_rounds = 10, keep_details = FALSE) {
+#   out <- grid_df %>%
+#     left_join(baseline_benchmarks, by = shared_structural_cols) %>%
+#     mutate(
+#       # one aggregate (population-level) time series per parameter combination
+#       aggregate_series = map2(history, baseline_prop, ~ compute_aggregate_prop_above_by_round(
+#         .x, benchmark = .y, window_rounds = n_rounds_window)),
+#       
+#       # --- criterion (a): final point of the aggregate series; info on proportion of simulations in a given parameter combination that exceed baseline benchmark
+#       prop_sims_above_baseline = map_dbl(aggregate_series, ~ tail(.x$prop_above, 1)),
+#       # set to TRUE if >= 95% of simulations are above baseline
+#       meets_95_criterion       = prop_sims_above_baseline >= threshold,
+#       
+#       # --- criterion (b): first point the aggregate series sustains >= threshold for persistence_rounds
+#       onset_result         = map(aggregate_series, ~ find_aggregate_onset_round(
+#         .x, threshold = threshold, persistence_rounds = persistence_rounds)),
+#       # at what round does this 10-round-run start
+#       onset_round           = map_dbl(onset_result, ~ .x$onset_round),
+#       # when is this 10-round-run finished
+#       criterion_met_round  = map_dbl(onset_result, ~ .x$criterion_met_round),
+#       # proportion of rounds where baseline criterion is met for 10 consecutive rounds
+#       ever_sustained_95    = !is.na(criterion_met_round))
+#     
+#   
+#   if (!is.null(out$baseline_prop) && any(is.na(out$baseline_prop))) {
+#     warning("Some rows have NA baseline_prop -- structural parameters didn't match any baseline grid cell. Check shared_structural_cols alignment.")
+#   }
+#   
+#   if (!keep_details) {
+#     out <- out %>% select(-history, -aggregate_series, -onset_result)
+#   }
+#   out
+# }
+# 
+# d.recognitionBias.evaluated  <- evaluate_parameter_combinations(d.grid.recognitionBias, d.baseline_benchmarks)
+# d.expressiveAgents.evaluated <- evaluate_parameter_combinations(d.grid.expressiveAgents, d.baseline_benchmarks)
+# 
+# # select parameter combinations that meet criterion
+# d.recognitionBias.evaluated.toPlot <- d.recognitionBias.evaluated %>%
+#   filter(meets_95_criterion)
+# 
+# # select parameter combinations that meet criterion
+# d.expressiveAgents.evaluated.toPlot <- d.expressiveAgents.evaluated %>%
+#   filter(meets_95_criterion)
+# 
+# p.baseline + p.recognitionBias +
+#   geom_point(data = d.recognitionBias.evaluated.toPlot,
+#              size = 8, color = "black", shape = 0) + p.expressiveAgents +
+#   geom_point(data = d.expressiveAgents.evaluated.toPlot,
+#              size = 8, color = "black", shape = 0) + guide_area() +
+#   plot_layout(
+#     design = layout_areas, 
+#     guides = "collect", 
+#     axes = "collect") &
+#   theme(legend.position = "bottom")
 
 ```
+
+
+```{r prop-ratio-iconic-antiiconic-signals}
+# # Categorize each trial's capture type: correct semantic ("congruent"),
+# # incorrect semantic ("anti"), neutral/distractor attractor ("neutral"),
+# # or not captured by any attractor at all ("none").
+# categorize_capture_type <- function(sim_df) {
+#   sim_df %>%
+#     mutate(
+#       capture_type = case_when(
+#         is.na(attractor_id)           ~ "none",
+#         !is_semantic_attractor        ~ "neutral",
+#         is_correct_semantic_attractor ~ "congruent",
+#         TRUE                          ~ "anti"))
+# }
+# 
+# # Proportion of each capture_type in the FINAL n_rounds_window rounds,
+# # computed per simulation, then averaged ACROSS simulations -- returns a
+# # single-row tibble (one row per call), ready to unnest onto a grid_df.
+# compute_final_capture_proportions <- function(sim_df, n_rounds_window = 10) {
+#   sim_df %>%
+#     categorize_capture_type() %>%
+#     group_by(simulation) %>%
+#     filter(round > max(round) - n_rounds_window) %>%
+#     summarise(
+#       prop_congruent = mean(capture_type == "congruent"),
+#       prop_anti      = mean(capture_type == "anti"),
+#       prop_neutral   = mean(capture_type == "neutral"),
+#       prop_none      = mean(capture_type == "none"),
+#       .groups = "drop") %>%
+#     summarise(
+#       prop_congruent = mean(prop_congruent, na.rm = TRUE),
+#       prop_anti      = mean(prop_anti, na.rm = TRUE),
+#       prop_neutral   = mean(prop_neutral, na.rm = TRUE),
+#       prop_none      = mean(prop_none, na.rm = TRUE))
+# }
+# 
+# evaluate_parameter_combinations_iconic_antiiconic <- function(grid_df, n_rounds_window = 10, persistence_rounds = 10, keep_details = FALSE, epsilon = 1e-4) {
+#   out <- grid_df %>%
+#     mutate(
+#       # final-window capture-type breakdown ---
+#       capture_props = map(history, ~ compute_final_capture_proportions(.x, n_rounds_window = n_rounds_window))) %>%
+#     unnest(capture_props) %>%   # expands into prop_congruent, prop_anti, prop_neutral, prop_none columns
+#     mutate(
+#       # Difference: bounded in [-1, 1], well-defined even when prop_anti = 0.
+#       # Positive = more congruent than anti-iconic captures; negative = reverse.
+#       # Good default summary measure -- always finite, easy to interpret magnitude.
+#       # e.g., 0.15-0=0.15 --> 15% points more often iconic than anti-iconic
+#       congruent_minus_anti = prop_congruent - prop_anti,
+#       # Ratio: directly answers "how many times more often" -- but undefined/
+#       # infinite when prop_anti = 0, which will happen for any strong parameter
+#       # combination that produces zero anti-iconic captures in the final window.
+#       # A small additive constant (Haldane-type correction) avoids Inf/NaN;
+#       # treat this as a secondary, supporting measure rather than primary,
+#       # since its exact value is sensitive to the choice of epsilon whenever
+#       # either proportion is at or near zero.
+#       congruent_to_anti_ratio = (prop_congruent + epsilon) / (prop_anti + epsilon))
+#     
+#   if (!keep_details) {
+#     out <- out %>% select(-history)
+#   }
+#   out
+# }
+# 
+# d.baseline.evaluated.signals <- evaluate_parameter_combinations_iconic_antiiconic(d.grid.baseline)
+# d.recognitionBias.evaluated.signals  <- evaluate_parameter_combinations_iconic_antiiconic(d.grid.recognitionBias)
+# d.expressiveAgents.evaluated.signals <- evaluate_parameter_combinations_iconic_antiiconic(d.grid.expressiveAgents)
+# 
+# plot_grid_faceted_evalSign <- function(d.grid, facet_var) {
+#   d.grid %>%
+#     ggplot(aes(x = factor(round(center_sd, 3)),
+#                y = factor(round(drift_sd, 3)),
+#                #fill = congruent_minus_anti)) +
+#                fill = prop_congruent)) +
+#     geom_tile() +
+#     geom_text(aes(label = round(prop_congruent, 2)), size = 2.5, color = "black") +
+#     #geom_text(aes(label = round(congruent_minus_anti, 2)), size = 2.5, color = "black") +
+#     scale_fill_viridis_c(limits = c(-1,1)) +
+#     facet_grid(as.formula(paste(facet_var, "~ learning_strength")),
+#                labeller = labeller(.default = label_both)) +
+#     theme_minimal() +
+#     labs(x = "Attractor stickiness", y = "Production noise", fill = "Proportion of \niconic signlas \n(final 10 rounds)")
+#     #labs(x = "Attractor stickiness", y = "Production noise", fill = "Iconic advantage \n(proportion difference \niconic-antiiconic)")
+# }
+# 
+# p.baseline.sign <- plot_grid_faceted_evalSign(d.baseline.evaluated.signals, "circle_radius") + theme(strip.text.y = element_blank())
+# p.recognitionBias.sign <- plot_grid_faceted_evalSign(d.recognitionBias.evaluated.signals, "iconicity_weight")
+# p.expressiveAgents.sign <- plot_grid_faceted_evalSign(d.expressiveAgents.evaluated.signals, "expressive_probability")
+# 
+# p.baseline.sign + p.recognitionBias.sign + p.expressiveAgents.sign + guide_area() +
+#   plot_layout(
+#     design = layout_areas, 
+#     guides = "collect", 
+#     axes = "collect") &
+#   theme(legend.position = "bottom")
+
+```
+
+
+
