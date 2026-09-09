@@ -129,15 +129,15 @@ run_interaction_sim <- function(
     n_sim = 1,
     n_referents = 4,
     n_generations = 1,
-    n_rounds = 50,
-    # motor/production noise; equivalent to approx. 48% chance of wandering into any attractor in a single production step
-    # when the signal is at .5, .5 and speaker_guess = 0.5
+    n_rounds = 300,
+    # motor/production noise; equivalent to approx. 43% chance of wandering into any attractor in a single production step
+    # when the signal is at .5, .5 and speaker_guess ~ 0.3
     drift_sd = 0.2,
     k_attractor_production = 2.5,
     neutral_attractor_centers = list(c(0.15, 0.15), c(0.85, 0.85)),
     # set as a plausible basin size relative to the unit signal space (not independently calibrated ag a spec target)
     circle_radius = 0.3,
-    # sd at attractor centers; a signal at the exact centre has ~5% single-step escape probability from the attractor
+    # sd at attractor centers; a signal at the dead centre has ~2% single-step escape probability from the attractor
     # (ratio of 0.4 of circle_radius)
     trap_center_sd = 0.12,
     k_perception = 2.5,
@@ -353,7 +353,7 @@ d.empty <- data.frame(
 #     mutate(model_type = "recognitionBias"))
 
 # # save simulation data
-saveRDS(d.simulation, file = "scripts/temp_data/d_simulation.rds", compress = TRUE)
+# saveRDS(d.simulation, file = "scripts/temp_data/d_simulation.rds", compress = TRUE)
 
 # use "git lfs pull" in terminal to pull large data files
 d.simulation <- readRDS("scripts/temp_data/d_simulation.rds") %>%
@@ -376,7 +376,7 @@ d.simulation <- readRDS("scripts/temp_data/d_simulation.rds") %>%
 # EVALUATE ICONICITY----
 # Signal space use across simulations
 d_signal_mean <- d.simulation %>%
-  mutate(total_round = (generation - 1) * 400 + round) %>%
+  mutate(total_round = (generation - 1) * 300 + round) %>%
   group_by(model_type, total_round, type, generation) %>%
   summarise(
     mean_x = mean(produced_signal_x, na.rm = TRUE),
@@ -407,7 +407,7 @@ d.simulation %>%
 # calculate proportion of trials ENDING UP in an attractor, in a semantic attractor, in the correct semantic attractor
 d.simulation %>%
   mutate(across(c(in_attractor, is_semantic_attractor, is_correct_semantic_attractor), as.logical)) %>%
-  filter(round %in% c(400)) |> 
+  filter(round %in% c(300)) |> 
   group_by(model_type, round) %>%
   summarise(
     total_trials = n(),
@@ -608,10 +608,10 @@ ggsave("figures/average_iconicity_interactions_wide.png",
 guess_rate <- d.simulation |> 
   mutate(model_type = factor(
     model_type, 
-    levels = c("baseline", "expressiveAgents", "recognitionBias"),
-    labels = c("baseline", "expressive agents", "recognition bias"),
+    levels = c("baseline", "recognitionBias", "expressiveAgents"),
+    labels = c("baseline", "recognition bias", "expressive agents"),
     ordered = TRUE),
-    total_round = (generation - 1) * 50 + round,
+    total_round = (generation - 1) * 300 + round,
     strength = abs(evidence)) %>%
   group_by(model_type, simulation, generation, total_round, type, referent) %>%
   summarise(
@@ -679,7 +679,7 @@ plot_attractor_centers <- list(center_small, center_large,
                                neutral_attractors[[1]], neutral_attractors[[2]])
 
 circle_radius <- 0.3
-drift_sd <- 0.19
+drift_sd <- 0.2
 k_production <- 1.5
 speaker_guess_fixed <- 0.5
 center_sd <- 0.12
