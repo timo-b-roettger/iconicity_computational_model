@@ -1,53 +1,34 @@
 ---
 title: "Modelling the emergence of iconicity in interactive language learning"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
-output:
-  bookdown::pdf_document2: default
-  bookdown::html_document2: default
+format: 
+  pdf:
+    pdf-engine: xelatex
+mainfont: "Times New Roman"
+fontsize: 12pt
 bibliography: latex-stuff/iconicity_lit.bib
 ---
 
-```{r setup, include=FALSE}
-library(knitr)
-
-# Set knit defaults for code chunks
-opts_chunk$set(
-  dev = 'png', # default format of figures
-  dpi = 300,
-  comment="",
-  echo=FALSE, warning=TRUE, message=FALSE,
-  cache=FALSE)
-
-# some useful formatting functions for output of knitting
-def.chunk.hook  <- knitr::knit_hooks$get("chunk")
-knitr::knit_hooks$set(chunk = function(x, options) {
-  x <- def.chunk.hook(x, options)
-  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
-})
-
-color_block = function(color) {
-  function(x, options) sprintf('\\color{%s}\\begin{verbatim}%s\\end{verbatim}\\color{black}',
-                               color, x)
-}
-knitr::knit_hooks$set(error = color_block('red'))
-knitr::knit_hooks$set(warning = color_block('orange'))
-
-base.width = 2.5
-base.height = 2.5
-
+```{r}
+#| label: load-libraries
+#| echo: false
+#| message: false
+library(dplyr)
+library(purrr)
+library(furrr)  # for parallelizing loop in grid search
+library(tibble)
+library(ggplot2)
+library(scales)
+library(tidyr)
+library(future)
+library(patchwork)
+library(here) # relative pathing
+library(magrittr) # for all pipes
 ```
 
-```{r libraries, include=FALSE}
-library(tidyverse)  # data wrangling and plotting
-library(magrittr)   # for all pipes
-library(ggplot2)    # for plotting
-library(patchwork)  # combining plots
-library(broom)      # for regression analysis
-library(ggdist)     # for plotting
-
-```
-
-```{r functions, include=FALSE}
+```{r}
+#| echo: false
+#| message: false
 source("functions.R")
 ```
 
@@ -56,8 +37,10 @@ source("functions.R")
   * Lapse rate?
   * Edit overview figure
   * Revisit the question of linear noise in a bounded system
-
-```{r global-options, include=FALSE}
+  
+```{r}
+#| label: global-options
+#| include: false
 RESET_MODELS = F        # switch on/off whether model is re-run
 ```
 
@@ -129,17 +112,24 @@ The population of each generation consists of one dyad; agent A and agent B.<!--
 
 ## Implementation of suggested mechanisms
 
-The suggested mechanisms are implemented at different stages of the interaction round accounted for above. Figure \@ref(fig:overview-figure) visualizes a single trial and highlights at what stages the mechanisms are assumed to operate.
+The suggested mechanisms are implemented at different stages of the interaction round accounted for above. @fig-overview-figure visualizes a single trial and highlights at what stages the mechanisms are assumed to operate.
 
-(ref:overview-figure) Graphic representation of the iconicity model. The figure shows one trial ($_t$) of the experiment where agents are taking turn as speaker (circles) and listener (squares); from producing a signal ($\tilde{X}_{r,t} = [x_{r,t}, y_{r,t}]$), to referent recognition and update of associative strength ($P_{r,t}$), and finally update of stored representations ($S_{r} = [x_{r}, y_{r}]$) before proceeding to the next trial. The three mechanisms are implemented at different steps of the trial: the general articulatory bias at signal production, the interpretation bias at recognition, and the adaptive communication bias at signal update. Grey circles represent mechanisms and their parameters, callout text show formulas.
+```{r}
+#| label: fig-overview-figure
+#| fig-cap: "Graphic representation of the iconicity model. The figure shows one trial ($_t$) of the experiment where agents are taking turn as speaker (circles) and listener (squares); from producing a signal ($\tilde{X}_{r,t} = [x_{r,t}, y_{r,t}]$), to referent recognition and update of associative strength ($P_{r,t}$), and finally update of stored representations ($S_{r} = [x_{r}, y_{r}]$) before proceeding to the next trial. The three mechanisms are implemented at different steps of the trial: the general articulatory bias at signal production, the interpretation bias at recognition, and the adaptive communication bias at signal update. Grey circles represent mechanisms and their parameters, callout text show formulas."
+#| fig-align: "center"
+#| fig-height: 6
+#| fig-width: 6
+#| out-width: "90%"
+#| message: false
+#| echo: false
 
-```{r overview-figure, fig.width=base.width*3, fig.height=base.height*5, fig.align='center', out.width='90%', fig.cap="(ref:overview-figure)"}
 knitr::include_graphics("p.overview.fig.pdf")
 ```
 
 ### Producing a signal
 
-Beginning at the bottom of Figure \@ref(fig:overview-figure), the signal sender is given a referent ($_r$) at random and retrieves the stored signal values, $S_{r} = (x_{r}, y_{r})$, for the referent. Each referent is associated with 4 pieces of information: a lexeme, a referent identity (represented by a unique image), a semantic property (size: small or large), and a signal value along the iconic dimension. The image uniquely identifies the referent and simultaneously conveys its semantic property (size).
+Beginning at the bottom of @fig-overview-figure, the signal sender is given a referent ($_r$) at random and retrieves the stored signal values, $S_{r} = (x_{r}, y_{r})$, for the referent. Each referent is associated with 4 pieces of information: a lexeme, a referent identity (represented by a unique image), a semantic property (size: small or large), and a signal value along the iconic dimension. The image uniquely identifies the referent and simultaneously conveys its semantic property (size).
 
 Signals are represented in a two-dimensional space $[x, y]$, but the two dimensions serve distinct functional roles. The x-dimension encodes lexical identity: it is a phonologically distinctive dimension that differentiates lexical items. Each lexeme occupies a fixed prototype location along this dimension<!--Remove:, and lexical categorization is based on proximity to these prototypes ($\mu_{l}$).--> The y-dimension encodes iconicity: it is a continuous acoustic dimension ranging from $[0,1]$ that align with semantic size. Small referents are associated with a prototype at $\pi_{small} = 0$, and large referents with a prototype at $\pi_{large} = 1$. This dimension can be considered a simplified abstraction over multiple correlated acoustic dimensions (e.g., vowel quality, duration, pitch) that jointly can encode size-related meaning. The dimension does not correspond to specific acoustic parameters but captures the idea that signals vary continuously along multi-dimensional perceptual dimensions relevant for iconic mapping. These prototypes represent perceptually transparent signal–meaning correspondences and can be thought of e.g. a formant vowel space in which high front vowels are correlated with small referents and low back vowels are correlated with large referents.
 
@@ -152,7 +142,10 @@ Signals are restricted within the set limits ([0,1] in each dimension), so if mo
  
 At generational overturn, the initial learning state of the agents at the first trial is on average a probability of $~.33$. This probability is established by drawing random values from a Beta distribution with a $\alpha = 2$ and $\beta = 4$. As the interaction proceeds, the associative strengths of each agent are carried over across trials.
 
-```{r echo=TRUE, eval=FALSE}
+
+```{r}
+#| echo: true
+#| eval: false
 produce_signal <- function(stored_y, lex_prototypes, size_prototypes, speaker_guess, k_production) {
     x <- rnorm(1, mean = lex_prototypes, sd = drift_sd_x)
     y <- rnorm(1, mean = stored_y,
@@ -163,16 +156,24 @@ produce_signal <- function(stored_y, lex_prototypes, size_prototypes, speaker_gu
 
 ### Recognizing the signal
 
-Moving up in Figure \@ref(fig:overview-figure), the signal is then presented to the receiver that identifies the intended referent through a combination of previous associative strength and signal-driven evidence along the y-dimension. The resulting recognition probability represents the strength of the form-meaning mapping, where the signal's representation of the semantic prototype is weighted against the receiver's initial guess in log-odds space. Higher previous associative strength generate higher probability of success on subsequent trials, thus reinforcing existing mappings and accelerating learning trajectories.
+Moving up in @fig-overview-figure, the signal is then presented to the receiver that identifies the intended referent through a combination of previous associative strength and signal-driven evidence along the y-dimension. The resulting recognition probability represents the strength of the form-meaning mapping, where the signal's representation of the semantic prototype is weighted against the receiver's initial guess in log-odds space. Higher previous associative strength generate higher probability of success on subsequent trials, thus reinforcing existing mappings and accelerating learning trajectories.
 
 Iconicity influences recognition through the *interpretation bias* acting on the y-dimension. For each referent, the model computes *signal evidence* as a three-tiered distance between the produced y-value and that referent's prototype. Signals with a moderate distance from the prototype---between $0.2$ and $0.8$---are considered iconically uninformative, returning 0 evidence. Signals close to their iconic prototype ($< 0.2$ distance for small referents, $> 0.8$ distance for large referents) generate positive evidence, scaled exponentially and normalized to a $[0, 1]$ range. Signals far away from the prototype are considered anti-iconic and thus generate negative evidence ($> 0.8$ distance for small referents, $< 0.2$ distance for large referents). The sensitivity parameter ($k$) determines the curvature of this evidence; higher values of $k$ generate a steeper distinction between prototypical 'matches' and the neutral zone, representing a receiver with stricter categorical boundaries.
 
-This evidence is scaled by the *iconicity parameter* ($\omega$), which modulates how strongly proximity to prototypes affects inference. The iconicity parameter is set to $0.043$ which corresponds to a 1% absolute increase for an associative strength of 0.5 for a perfectly iconic signal. Together, these parameters determine the magnitude and sharpness of the iconicity effect on recognition, making form-meaning pairs easier or more difficult to perceive, encode, and retrieve, depending on their spatial proximity to iconic prototypes. Iconicity therefore favors signals that are more closely located to their prototypical target in the two-dimensional space, and punishes signals that are anti-iconic. Figure \@ref(fig:signal-ease) illustrates signal evidence relative to the signal space, with higher ease for more prototypical values.
+This evidence is scaled by the *iconicity parameter* ($\omega$), which modulates how strongly proximity to prototypes affects inference. The iconicity parameter is set to $0.043$ which corresponds to a 1% absolute increase for an associative strength of 0.5 for a perfectly iconic signal. Together, these parameters determine the magnitude and sharpness of the iconicity effect on recognition, making form-meaning pairs easier or more difficult to perceive, encode, and retrieve, depending on their spatial proximity to iconic prototypes. Iconicity therefore favors signals that are more closely located to their prototypical target in the two-dimensional space, and punishes signals that are anti-iconic. @fig-signal-ease illustrates signal evidence relative to the signal space, with higher ease for more prototypical values.
 <!--Recognition proceeds in two stages that are formally integrated in log-odds space. First, the listener computes a lexical likelihood based on the distance between the perceived x-value and each lexical prototype. This yields a probability distribution over possible lexemes, reflecting perceptual uncertainty along the lexical dimension. Second, this likelihood is combined with the listener's existing associative strengths (prior guessing probabilities) linking lexemes to referents. Higher previous guessing probabilities generate higher probability of success on subsequent trials, thus reinforcing existing mappings and accelerating learning trajectories.-->
 
-(ref:signal-ease) Illustration of signal evidence in the two-dimensional signal space, for small and large referents, for when $k=5$.
 
-```{r signal-ease, fig.width=base.width*4, fig.height=base.height*2, out.width='90%', fig.align='center', fig.pos='ht', fig.cap="(ref:signal-ease)"}
+```{r}
+#| label: fig-signal-ease
+#| fig-cap: "Illustration of signal evidence in the two-dimensional signal space, for small and large referents, for when $k=5$."
+#| fig-align: "center"
+#| fig-height: 10
+#| fig-width: 12
+#| out-width: "90%"
+#| message: false
+#| echo: false
+
 signal_y <- seq(0,1,0.01)
 signal_x <- seq(0,1,0.01)
 target <- c(0,1)
@@ -239,7 +240,9 @@ ggplot(df, aes(y = signal_y, x = signal_x, fill = evidence)) +
 
 ```
 
-```{r echo=TRUE, eval=FALSE}
+```{r}
+#| echo: true
+#| eval: false
 signal_evidence <- function(produced_y, target, k_perception = 2) {
     dist <- abs(produced_y - target)
     if (dist >= 0.2 & dist <= 0.8) {
@@ -260,7 +263,9 @@ Prior associative strength and iconicity-weighted signal evidence are combined a
 
 Guessing involves uncertainty which leads to imperfect learning. This uncertainty reflects both perceptual noise (variability in processing the acoustic signal) and attentional lapses (uninformed responses that ignore the signal). A soft lapse mechanism ($\epsilon = .05$) is applied by mixing the model-derived probability distribution with a small proportion of uniform responding. This lapse parameter models the fact that agents are not perfectly attentive or rational on every trial, and prevents probabilities from collapsing to 0 or 1.-->
 
-```{r echo=TRUE, eval=FALSE}
+```{r}
+#| echo: true
+#| eval: false
 listener_guess_probability <- function(listener_guess, produced_y, type, size_prototypes) {
     icon_ev <- signal_evidence(produced_y, size_prototypes)
     logits <- qlogis(clamp02(listener_guess + (iconicity_weight * icon_ev)))
@@ -282,7 +287,9 @@ The final outcome of the trial, success or failure, is implemented as random sam
 
 After calculating success or failure, learning is reinforced for both sender and receiver by implementing the *associative learning bias* mechanism. This is a learning mechanism and not an iconicity mechanism. It is parameterized as applying a baseline *learning strength* ($\Delta$) to the sender's and receiver's associative strengths. Successful trials receive a larger update (scaled by $7.5$), while successful trials receive smaller update (scaled by $1$), reflecting incremental strengthening of form-meaning mappings across interactions, with stronger learning on successful interactions. The learning strength parameter is set to $0.015$ corresponding to 1% absolute increase for an associative strength of 0.5 on failed interactions, and a 9% absolute increase on successful interactions.<!--[see e.g., work on error-driven learning and artificial language learning, where learning slows down as certainty increases making successes less impactful over time while negative feedback signal remains impactful throughout learning, @holroyd-coles2002; @opitz2011].-->
 
-```{r echo=TRUE, eval=FALSE}
+```{r}
+#| echo: true
+#| eval: false
 success <- rbinom(1 ,1, prob)
 
 update_logit <- function(x, learning_strength, success, success_scale = 7.5, failure_scale = 1) {
@@ -297,7 +304,9 @@ After the agents have received feedback on the interaction, the stored y-represe
 
 When communication succeeds, the listener retrieves the signal for the referent and the stored y-value is updated by a weighted average of the previous y-value and the speaker's production, with weight given by the reinforcement rate ($\rho$). When communication fails, the stored y-value takes a proportional step toward the referent's iconic prototype, scaled by a corrective rate ($\kappa$) and perturbed by small drift noise ($\sigma_{y} = .05/2$) to capture variability in updating failed signals.-->
 
-```{r echo=TRUE, eval=FALSE}
+```{r}
+#| echo: true
+#| eval: false
 reinforce_Y <- function(stored_y, produced_y) {
   ((1 - reinforcement_rate) * stored_y + reinforcement_rate * produced_y)
 }
@@ -320,7 +329,9 @@ Finally, the agents' associative strengths ($P_{r}$) are updated based on their 
 
 Next, we compare the different mechanisms and assess their relative importance for the emergence of iconicity.
 
-```{r parameters}
+```{r}
+#| label: parameters
+#| echo: false
 set.seed(666)
 
 # Generate empty dataframe for simulation
@@ -350,9 +361,9 @@ d.empty <- data.frame(
   new_stored_y = integer(), 
   stringsAsFactors = FALSE)
 
-# Run simulation function
-d.simulation <- d.empty %>% 
-  run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.266, iconicity_weight = 0.4, learning_strength = 0.015)
+# # Run simulation function
+# d.simulation <- d.empty %>% 
+#   run_interaction_sim(n_sim = 10, n_rounds = 10, n_generations = 10, drift_sd_y = 0.266, iconicity_weight = 0.4, learning_strength = 0.015)
 
 # # Generate one data frame with different simulations where params are switched on/off
 # n_sim = 5
@@ -374,7 +385,24 @@ d.simulation <- d.empty %>%
 #     mutate(parameter_space = "onlyLearning"))
 
 # store
-write_csv(d.simulation, "temp_data/temp_data.csv")
+#write_csv(d.simulation, "temp_data/temp_data.csv")
+
+# read data
+d.simulation <- readRDS(here::here("scripts", "temp_data", "d_simulation.rds")) %>%
+  # split signal cols for easier processing
+  mutate(
+    produced_signal_x = map_dbl(produced_signal, 1),
+    produced_signal_y = map_dbl(produced_signal, 2),
+    old_stored_signal_A_x = map_dbl(old_stored_signal_A, 1),
+    old_stored_signal_A_y = map_dbl(old_stored_signal_A, 2),
+    old_stored_signal_B_x = map_dbl(old_stored_signal_B, 1),
+    old_stored_signal_B_y = map_dbl(old_stored_signal_B, 2),
+    new_stored_signal_A_x = map_dbl(new_stored_signal_A, 1),
+    new_stored_signal_A_y = map_dbl(new_stored_signal_A, 2),
+    new_stored_signal_B_x = map_dbl(new_stored_signal_B, 1),
+    new_stored_signal_B_y = map_dbl(new_stored_signal_B, 2)) %>%
+  select(-produced_signal, -old_stored_signal_A, -old_stored_signal_B,
+         -new_stored_signal_A, -new_stored_signal_B)
 
 ```
 
@@ -387,14 +415,12 @@ The simulations used the following parameter settings: learning strength ($.005$
 
 We generated 6 types of models. The main model included all of the above described parameters set at their intialization values, as described above. The remaining 5 models were generated by switching off one of the parameters at a time by setting their value to 0.
 
-Figure \@ref(fig:iconicity-plot) illustrates the emergence of iconicity over trials for each of these 6 models. All models display similar patterns of iconicity emergence over time, besides the model for which corrective rate is switched off. This highlights the importance of pushing produced signals on failed interactions toward more prototypical values. Iconicity might thus not be a by-product of communicative success, but requires specific signal-space dynamics. Whereas most of the models have a rather steep increase in iconicity that then levels out, the model where no learning strength is added to the updated speaker and listener guess rates reaches higher iconicity but with a slower increase.
+@fig-iconicity-plot illustrates the emergence of iconicity over trials for each of these 6 models. All models display similar patterns of iconicity emergence over time, besides the model for which corrective rate is switched off. This highlights the importance of pushing produced signals on failed interactions toward more prototypical values. Iconicity might thus not be a by-product of communicative success, but requires specific signal-space dynamics. Whereas most of the models have a rather steep increase in iconicity that then levels out, the model where no learning strength is added to the updated speaker and listener guess rates reaches higher iconicity but with a slower increase.
 
-(ref:iconicity-plot) Evolution of iconicity for stored tokens across simulation time. Iconicity is averaged in bins of 100 rounds and showed separately for each parameter setting (facets). Light lines trace individual simulations, the bold line denotes the average across simulations. The dashed horizontal line represents baseline iconicity expected from random signals without structure or learning.
 
-```{r iconicity}
-# read data
-d.simulation <- read_csv("temp_data/temp_data.csv")
-
+```{r}
+#| label: iconicity
+#| echo: false
 # Calculate iconicity
 d.iconicity <- d.simulation %>%
   mutate(
@@ -420,7 +446,7 @@ d.iconicity.mean <- d.iconicity |>
 
 # Check expressive agents
 d.expressive.agents <- d.simulation %>%
-  filter(expressive_A == TRUE | expressive_B == TRUE) %>%
+  filter(is_expressive_trial == TRUE) %>%
   mutate(
     total_round = (generation - 1) * 10 + round) %>%
   group_by(simulation, generation, total_round, type, referent) %>%
@@ -433,19 +459,17 @@ d.expressive.agents <- d.simulation %>%
     .groups = "drop")
 ```
 
-```{r iconicity-plot, fig.width=base.width*5, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:iconicity-plot)", warning=FALSE}
-# #iconicity trajectories - remove model with only learning since that was added to compare against old model
-# d.learned.iconicity <- d.iconicity %>%
-#   filter(process == "learned", parameter_space != "onlyLearning") %>%
-#   group_by(parameter_space, bins, sim) %>% 
-#   summarise(iconicity = mean(iconicity)) %>%
-#   # rename parameters in a transparent way please
-#   mutate(parameter_space = recode(parameter_space,
-#                                   allParams = "All parameters",
-#                                   noArticulatoryProductionBias = "No production bias",
-#                                   noCorrectiveRate = "No adaptive comm bias",
-#                                   noIconicity = "No iconicity learning boost",
-#                                   noLearning = "No free learning"))
+
+```{r}
+#| label: fig-iconicity-plot
+#| fig-cap: "Evolution of iconicity for stored tokens across simulation time. Iconicity is averaged in bins of 100 rounds and showed separately for each parameter setting (facets). Light lines trace individual simulations, the bold line denotes the average across simulations. The dashed horizontal line represents baseline iconicity expected from random signals without structure or learning."
+#| fig-align: "center"
+#| fig-height: 6
+#| fig-width: 10
+#| out-width: "100%"
+#| message: false
+#| warning: false
+#| echo: false
 
 # plot
 d.iconicity |> 
@@ -465,20 +489,24 @@ d.iconicity |>
   geom_path(data = d.iconicity.mean, 
             aes(group = 1), size = 1) +  
   # Add lines at generational overturn
-  geom_vline(xintercept = seq(0, 100, by = 10), 
+  geom_vline(xintercept = seq(0, 300, by = 30), 
              color = "grey", 
              lty = "dotted") +
   scale_color_viridis_c(begin = 0,
                         end = 1)+
   scale_y_continuous(limits = c(-1,1), breaks = seq(-1,1,0.25)) +
-  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  scale_x_continuous(breaks = seq(0, 300, 30)) +
   labs(title = "Iconicity over generations",
        y = "Iconicity\n(above 0 = iconic,\nbelow zero = anti-iconic)", x = "Generation (each with 10 rounds") +
   theme_minimal()
-
 ```
 
-```{r iconicity-per-generation}
+```{r}
+#| label: iconicity-per-generation
+#| echo: false
+#| warning: false
+#| message: false
+
 # Calculate iconicity per generation
 d.iconicity.gen <- d.simulation %>%
   mutate(
@@ -546,11 +574,9 @@ circle_radius = 0.35
 # Check stability of iconic signals
 d.iconicity.stability <- d.iconicity.signals %>%
   mutate(
-    x = purrr::map_dbl(produced_signal, 1),
-    y = purrr::map_dbl(produced_signal, 2),
     target_x = if_else(type == "small", 0.15, 0.85),
     target_y = if_else(type == "small", 0.85, 0.15),
-    distance_to_target = sqrt((x - target_x)^2 + (y - target_y)^2),
+    distance_to_target = sqrt((produced_signal_x - target_x)^2 + (produced_signal_y - target_y)^2),
     inside_attractor = distance_to_target < circle_radius) %>%
   group_by(simulation, generation) %>%
   summarise(
@@ -561,8 +587,8 @@ d.iconicity.stability <- d.iconicity.signals %>%
     # movement of signals between successive trials; ONLY if enough points exist
     iconic_movement =
       if (sum(signal_type == "iconic") > 1) {
-        x_i <- x[signal_type == "iconic"]
-        y_i <- y[signal_type == "iconic"]
+        x_i <- produced_signal_x[signal_type == "iconic"]
+        y_i <- produced_signal_y[signal_type == "iconic"]
         mean(sqrt(diff(x_i)^2 + diff(y_i)^2))
       } else {
         NA_real_
@@ -613,11 +639,21 @@ ggplot(d.iconicity.stability,
 # d.test2.mean <- d.test2 %>% group_by(round) %>% summarise(evidence = mean(evidence))
 ```
 
-We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no learning strength is applied, see Figure \@ref(fig:accuracy). This seems to suggest that slower development of iconicity is beneficial for learning?
+We also evaluated the models in terms of the overall success rate across time, that is, the communicative accuracy of agents in interaction. Remember that this refers to the listener's strength in beliefs about the lexeme-referent mappings. The accuracy for each of the 6 models is strikingly similar, except for the model where no learning strength is applied, see @fig-accuracy. This seems to suggest that slower development of iconicity is beneficial for learning?
 
-(ref:accuracy) Learning across simulations, black lines correspond to participants' associative strength in beliefs about the form-meaning mappings. The upper panel shows participants' learning progress within each generation, clearly resetting associative strength at generational overturn. Bottom-left panel shows the average learning progress over the 10 rounds, summarised across the 10 generations. Bottom-right panel shows the average learning progress across the 10 generations.
 
-```{r accuracy, fig.width=base.width*5, fig.height=base.height*3, fig.align='center', out.width='100%', fig.cap="(ref:accuracy)"}
+```{r}
+#| label: fig-accuracy
+#| fig-cap: "Learning across simulations, black lines correspond to participants' associative strength in beliefs about the form-meaning mappings. The upper panel shows participants' learning progress within each generation, clearly resetting associative strength at generational overturn. Bottom-left panel shows the average learning progress over the 10 rounds, summarised across the 10 generations. Bottom-right panel shows the average learning progress across the 10 generations."
+#| fig-align: "center"
+#| fig-height: 3
+#| fig-width: 5
+#| out-width: "100%"
+#| message: false
+#| warning: false
+#| echo: false
+
+
 # Plot success rate over time across simulations
 d.simulation_success <- d.simulation %>%
   select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
@@ -724,9 +760,19 @@ p.learning.overturn /
 
 ```
 
-(ref:accuracy-beginning) Success rate at the first round for each generation across simulation rounds. Panels correspond to the ten generations.
 
-```{r accuracy-beginning, fig.width=base.width*5, fig.height=base.height*5, fig.align='center', out.width='100%', fig.cap="(ref:accuracy-beginning)"}
+```{r}
+#| label: accuracy-beginning
+#| fig-cap: "Success rate at the first round for each generation across simulation rounds. Panels correspond to the ten generations."
+#| fig-align: "center"
+#| fig-height: 5
+#| fig-width: 5
+#| out-width: "100%"
+#| message: false
+#| warning: false
+#| echo: false
+
+
 #attempt to look at the very beginning
 d.simulation_success_beginning <- d.simulation %>%
   select(simulation, generation, round, trial, speaker, listener, success, new_guess_A, new_guess_B, prob) %>%
@@ -777,27 +823,37 @@ ggplot(d.simulation_success_beginning,
 #   summarise(min = min(total_round))
 ```
 
-Figure \@ref(fig:signal-space) visualizes the distribution of produced signals across simulations 1, 5 and 10, for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge strongly, e.g., the model without corrective rate (third row).
+@fig-signal-space visualizes the distribution of produced signals across simulations 1, 5 and 10, for each of the 6 model types. The figure seems to suggest that categories separate even for the model where iconicity does not emerge strongly, e.g., the model without corrective rate (third row).
 
-(ref:signal-space) Distribution of produced signals for simulation 1, 5 and 10, along the y-dimension (encoding iconicity). Each point represents a signal token in signal space; colors denote referent type (small vs. large). Columns correspond to simulation replicates and rows to parameter settings.
 
-```{r signal-space, fig.width=base.width*5, fig.height=base.height*4, fig.align='center', out.width='90%', fig.cap="(ref:signal-space)"}
+```{r}
+#| label: fig-signal-space
+#| fig-cap: "Distribution of produced signals for simulation 1, 5 and 10, along the y-dimension (encoding iconicity). Each point represents a signal token in signal space; colors denote referent type (small vs. large). Columns correspond to simulation replicates and rows to parameter settings."
+#| fig-align: "center"
+#| fig-height: 4
+#| fig-width: 5
+#| out-width: "90%"
+#| message: false
+#| warning: false
+#| echo: false
+
+
 # Signal space use
 d_signal <- d.simulation %>%
   mutate(total_round = (generation - 1) * 10 + round) %>%
   group_by(total_round, type, generation) |> 
-  summarise(produced_y = mean(produced_y, na.rm = T),
+  summarise(produced_signal_y = mean(produced_signal_y, na.rm = T),
             .groups = "drop") 
 
 d_signal_sim <- d.simulation %>%
   mutate(total_round = (generation - 1) * 10 + round) %>%
   group_by(total_round, type, generation, simulation) |> 
-  summarise(produced_y = mean(produced_y, na.rm = T),
+  summarise(produced_signal_y = mean(produced_signal_y, na.rm = T),
             .groups = "drop") 
 
 ggplot(d_signal,
        aes(x = total_round,
-           y = produced_y,
+           y = produced_signal_y,
            colour = type)) +
   geom_path(data = d_signal_sim,
             aes(group = type),
@@ -821,9 +877,18 @@ ggplot(d_signal,
 
 ```
 
-(ref:signal-space-across-sims) Distribution of produced signals across simulation rounds along the y-dimension (encoding iconicity) for the main model including all parameters. Each point represents a signal token in signal space; colors denote referent type (small vs. large).
 
-```{r signal-space-across-sims, fig.width=base.width*4, fig.height=base.height*4, fig.align='center', out.width='70%', fig.cap="(ref:signal-space-across-sims)"}
+```{r}
+#| label: signal-space-across-sims
+#| fig-cap: "Distribution of produced signals across simulation rounds along the y-dimension (encoding iconicity) for the main model including all parameters. Each point represents a signal token in signal space; colors denote referent type (small vs. large)."
+#| fig-align: "center"
+#| fig-height: 4
+#| fig-width: 4
+#| out-width: "70%"
+#| message: false
+#| warning: false
+#| echo: false
+
 # p.produced.signals +
 #   (d.simulation %>%
 #      filter(parameter_space == "allParams") %>%
@@ -843,7 +908,9 @@ Visualizing the learned and produced signal spaces further suggested that catego
 
 In order to investigate what parameter settings generate the largest increase in iconicity across trials and simulations, we generated a grid search over the five model parameters: articulatory production bias, prototype weighting, reinforcement rate, learning rate, and corrective rate. The grid search explored the following values for each of the parameters.
 
-```{r echo=TRUE, eval=FALSE}
+```{r}
+#| echo: true
+#| eval: false
 # Set sequences to include baseline in main model
 articulatory production bias = c(0, 0.1, 0.15, 0.2)
 iconicity weight = c(0, 0.0004, 0.0008, 0.0012, 0.0016)
@@ -852,15 +919,15 @@ corrective rate = c(0, 0.0004, 0.0008, 0.0012, 0.0016)
 learning strength = c(0, 0.0004, 0.0008, 0.0012, 0.0016)
 ```
 
-Similarly to the figures presented above, each panel of Figure \@ref(fig:grid-search) visualizes iconicity across the parameter space for when one of the parameters is switched off. Replicating previous figures, Figure \@ref(fig:grid-search) shows that 1) iconicity struggles to emerge when corrective rate is switched off, 2) learning strength does not seem to support the emergence of iconicity, and 3) switching off the other three parameters (reinforcement rate, articulatory production bias, prototype weighting) generates highly similar patterns of iconicity, suggesting that these might play less of a role in the model.
+Similarly to the figures presented above, each panel of @fig-grid-search visualizes iconicity across the parameter space for when one of the parameters is switched off. Replicating previous figures, @fig-grid-search) shows that 1) iconicity struggles to emerge when corrective rate is switched off, 2) learning strength does not seem to support the emergence of iconicity, and 3) switching off the other three parameters (reinforcement rate, articulatory production bias, prototype weighting) generates highly similar patterns of iconicity, suggesting that these might play less of a role in the model.
 
-For most combinations of parameters, the trade-off between learning strength and iconicity is evident---iconicity is higher for when learning strength = 0, suggesting that the more I learn for free, the less iconic I become (upper two panels, and bottom-right panel, Figure \@ref(fig:grid-search)). This would suggest that iconicity might not continue to grow in a language, at least not as a learning mechanism, but perhaps as a strategy to make the language more recognizable for the interlocutor.
+For most combinations of parameters, the trade-off between learning strength and iconicity is evident---iconicity is higher for when learning strength = 0, suggesting that the more I learn for free, the less iconic I become (upper two panels, and bottom-right panel, @fig-grid-search). This would suggest that iconicity might not continue to grow in a language, at least not as a learning mechanism, but perhaps as a strategy to make the language more recognizable for the interlocutor.
 
-We also note that under some conditions, iconicity still emerges when corrective rate is switched off (bottom-left panel, Figure \@ref(fig:grid-search)). This suggests that failure-based drift is not strictly necessary but is normally the dominant pathway (error-driven vs. success-driven iconicity). If this mechanism is not available, iconicity can still emerge by generating a positive feedback-loop of biased production--higher success--reinforcement--more biased learned signals--higher success.
+We also note that under some conditions, iconicity still emerges when corrective rate is switched off (bottom-left panel, @fig-grid-search). This suggests that failure-based drift is not strictly necessary but is normally the dominant pathway (error-driven vs. success-driven iconicity). If this mechanism is not available, iconicity can still emerge by generating a positive feedback-loop of biased production--higher success--reinforcement--more biased learned signals--higher success.
 
-(ref:grid-search) Heatmaps of iconicity across the parameter space for different model configurations. Each panel shows simulations where one parameter is disabled: no reinforcement, no articulatory production bias, no signal drift, no learning, or no prototype weighting. Color indicates mean iconicity; yellow outlines mark the iconicity baseline (\~.37) and black crosses indicate the parameter values that generates maximum iconicity.
 
 ```{r}
+#| echo: false
 if(RESET_MODELS || !file.exists("../models/grid-search.rds")) {
   
   # Generate a parameter grid to explore
@@ -984,7 +1051,17 @@ d.events.first <- d.events %>%
 #d.events.first %>% group_by(drift_sd_y) %>% tally()
 ```
 
-```{r grid-search, fig.width=base.width*5, fig.height=base.height*5, fig.align='center', out.width='100%', fig.cap="(ref:grid-search)"}
+```{r}
+#| label: fig-grid-search
+#| fig-cap: "Heatmaps of iconicity across the parameter space for different model configurations. Each panel shows simulations where one parameter is disabled: no reinforcement, no articulatory production bias, no signal drift, no learning, or no prototype weighting. Color indicates mean iconicity; yellow outlines mark the iconicity baseline (~.37) and black crosses indicate the parameter values that generates maximum iconicity."
+#| fig-align: "center"
+#| fig-height: 5
+#| fig-width: 5
+#| out-width: "100%"
+#| message: false
+#| warning: false
+#| echo: false
+
 # Grid plots for when one of the three parameters are set
 p.grid.sd.set <- d.grid_results %>%
   filter(drift_sd_y == 0.266) %>%
