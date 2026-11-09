@@ -34,8 +34,22 @@ source("functions.R")
 
 # TO DO
 
-  * Lapse rate?
-  * Edit overview figure
+  * Make edits throughout text and plots according to model submitted to ICPhS
+  * Go baby-Bayesian for signal updating: instead of integrating over stored and updated, change the representation according to the one previously successfully guessed integrated with the likelihood of the signal just heard.
+  * Implement a basic reinforcement learning mechanism: if representation strength is low, a successful trial is high surprisal and there is strong adaptation; the stronger the representation, the less of a surprise is a successful trial.
+  * Explore a larger range of parameter values; generate interaction plot where the shape of the trajectory changes as parameters change (identify plateaus).
+  * Assess potential threshold--what needs to happen for iconicity to emerge?
+  * Possible to implement optionality of iconicity as a strategy as a function of increased learning? When there is systematicity?
+  * Discriminability: each f-m mapping needs a distinct category.
+  * Assess different parameter values for attractor strength--a conventionalized system will presumably not drift.
+  * Comments from Uppsala workshop:
+    * Where is semantics? Is there a corresponding meaning space connecting the two (signal and iconicity)?
+    * Explore other types of learning (instead of only reinforcement learning)
+    * Attractors as a moving target: depending on the signal produced, the attractors would dynamically change their positions in the space.
+    * Meeting w MP on treadmill hypothesis: 
+      * Forms/signals become more reduced with usage (noise increases along the y-axis); meaning become more arbitrary with usage/bleaching of meaning (grammaticalization along the x-axis).
+      * Effects of frequency of use and its conventionalization.
+      * Potential effects of alignment in meaning (more so in the beginning then later)
   * Revisit the question of linear noise in a bounded system
   
 ```{r}
